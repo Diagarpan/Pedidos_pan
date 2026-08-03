@@ -216,7 +216,10 @@ function pintarPedidos(pedidos) {
 
 async function cambiarEstadoPedido(idPedido, accion) {
   const action = accion === 'entregado' ? 'marcarEntregado' : 'marcarCobrado';
-  await apiPost(action, { idPedido }).catch(() => ({ ok: false }));
+  const r = await apiPost(action, { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) {
+    alert('No se pudo actualizar: ' + (r.error || 'error desconocido'));
+  }
   cargarPedidos();
 }
 

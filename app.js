@@ -1,6 +1,8 @@
 /* ============ CONFIG (se guarda en el propio móvil, no en el código) ============ */
 let WEB_APP_URL = localStorage.getItem('webAppUrl') || '';
 let API_KEY = localStorage.getItem('apiKey') || '';
+let ROL = localStorage.getItem('rol') || 'admin'; // 'admin' | 'repartidor'
+let RUTA = localStorage.getItem('ruta') || '';
 
 let productosCache = [];
 let clientesCache = [];
@@ -14,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   cablearAjustes();
   cablearNuevoPedido();
   cablearClientes();
+  aplicarModoUI();
 
   document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
 
@@ -23,6 +26,21 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarTabActual();
   }
 });
+
+// Repartidor: solo ve Reparto y Pedidos (de su ruta), sin crear pedidos ni ver clientes
+function aplicarModoUI() {
+  const esRepartidor = ROL === 'repartidor';
+  document.querySelectorAll('.tabbar__item').forEach((btn) => {
+    if (btn.dataset.tab === 'nuevo' || btn.dataset.tab === 'clientes') {
+      btn.classList.toggle('tab--hidden', esRepartidor);
+      btn.style.display = esRepartidor ? 'none' : '';
+    }
+  });
+  const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
+  if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
+    cambiarTab('reparto');
+  }
+}
 
 function pintarFecha() {
   const hoy = new Date();
@@ -79,19 +97,36 @@ function cargarTabActual(nombre) {
 /* ============ AJUSTES / CONEXIÓN ============ */
 function cablearAjustes() {
   document.getElementById('btnAjustes').addEventListener('click', abrirAjustes);
+
+  document.getElementById('selectModo').addEventListener('change', (e) => {
+    document.getElementById('campoRutaRepartidor').classList.toggle('tab--hidden', e.target.value !== 'repartidor');
+  });
+
   document.getElementById('btnGuardarAjustes').addEventListener('click', async () => {
     const url = document.getElementById('inputUrl').value.trim();
     const key = document.getElementById('inputKey').value.trim();
+    const modo = document.getElementById('selectModo').value;
+    const ruta = document.getElementById('inputRuta').value.trim();
     const msg = document.getElementById('ajustesMsg');
     if (!url || !key) {
       msg.textContent = 'Rellena la URL y la clave.';
       msg.className = 'form-msg is-error';
       return;
     }
+    if (modo === 'repartidor' && !ruta) {
+      msg.textContent = 'Indica tu ruta.';
+      msg.className = 'form-msg is-error';
+      return;
+    }
     WEB_APP_URL = url;
     API_KEY = key;
+    ROL = modo;
+    RUTA = modo === 'repartidor' ? ruta : '';
     localStorage.setItem('webAppUrl', url);
     localStorage.setItem('apiKey', key);
+    localStorage.setItem('rol', ROL);
+    localStorage.setItem('ruta', RUTA);
+    aplicarModoUI();
 
     msg.textContent = 'Comprobando conexión…';
     msg.className = 'form-msg';
@@ -113,6 +148,9 @@ function cablearAjustes() {
 function abrirAjustes() {
   document.getElementById('inputUrl').value = WEB_APP_URL;
   document.getElementById('inputKey').value = API_KEY;
+  document.getElementById('selectModo').value = ROL;
+  document.getElementById('inputRuta').value = RUTA;
+  document.getElementById('campoRutaRepartidor').classList.toggle('tab--hidden', ROL !== 'repartidor');
   document.getElementById('modalAjustes').classList.remove('tab--hidden');
 }
 
@@ -121,7 +159,7 @@ async function cargarReparto() {
   const contProductos = document.getElementById('repartoProductos');
   const contClientes = document.getElementById('repartoClientes');
 
-  const r = await apiGet('reparto').catch(() => null);
+  const r = await apiGet('reparto', ROL === 'repartidor' ? { ruta: RUTA } : {}).catch(() => null);
   if (!r || !r.ok) {
     contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
@@ -153,7 +191,7 @@ function pintarReparto(data) {
         <div class="card__top">
           <div>
             <div class="card__name">${escapeHtml(c.cliente)}</div>
-            ${c.ruta ? `<div class="card__route">Ruta: ${escapeHtml(c.ruta)}</div>` : ''}
+            <div class="card__meta">${escapeHtml(c.fecha || '')}${c.ruta ? ' · Ruta: ' + escapeHtml(c.ruta) : ''}</div>
           </div>
           <div style="display:flex; gap:6px;">
             ${stampHtml(c.entregado ? 'Entregado' : 'Pendiente')}
@@ -169,7 +207,7 @@ function pintarReparto(data) {
 /* ============ PEDIDOS DEL DÍA ============ */
 async function cargarPedidos() {
   const cont = document.getElementById('listaPedidos');
-  const r = await apiGet('pedidosHoy').catch(() => null);
+  const r = await apiGet('pedidosHoy', ROL === 'repartidor' ? { ruta: RUTA } : {}).catch(() => null);
   if (!r || !r.ok) {
     cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;

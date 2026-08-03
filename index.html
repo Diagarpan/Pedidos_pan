@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pedidos Pan</title>
+<meta name="theme-color" content="#A8632B">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__brand">
+    <span class="topbar__loaf">🍞</span>
+    <div>
+      <div class="topbar__title">Pedidos Pan</div>
+      <div class="topbar__date" id="fechaHoy">—</div>
+    </div>
+  </div>
+  <div class="topbar__actions">
+    <button class="icon-btn" id="btnRefrescar" title="Actualizar" aria-label="Actualizar">↻</button>
+    <button class="icon-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">⚙</button>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- REPARTO -->
+  <section class="tab" id="tab-reparto">
+    <div class="section-label">Total a preparar hoy</div>
+    <div class="ticket" id="repartoProductos">
+      <div class="empty-state">Cargando reparto…</div>
+    </div>
+
+    <div class="section-label">Por ruta / cliente</div>
+    <div id="repartoClientes" class="stack">
+      <div class="empty-state">Cargando…</div>
+    </div>
+  </section>
+
+  <!-- PEDIDOS -->
+  <section class="tab tab--hidden" id="tab-pedidos">
+    <input type="search" id="buscarPedido" class="search-input" placeholder="Buscar cliente…">
+    <div id="listaPedidos" class="stack">
+      <div class="empty-state">Cargando pedidos…</div>
+    </div>
+  </section>
+
+  <!-- NUEVO PEDIDO -->
+  <section class="tab tab--hidden" id="tab-nuevo">
+    <label class="field-label" for="selectCliente">Cliente</label>
+    <select id="selectCliente" class="select-input">
+      <option value="">Selecciona un cliente…</option>
+    </select>
+
+    <div class="section-label">Productos</div>
+    <div id="listaProductosNuevo" class="stack"></div>
+
+    <div class="new-order-total">
+      <span>Total</span>
+      <span id="nuevoTotal">0,00 €</span>
+    </div>
+
+    <button class="btn-primary" id="btnCrearPedido">Crear pedido</button>
+    <div class="form-msg" id="nuevoMsg"></div>
+  </section>
+
+  <!-- CLIENTES -->
+  <section class="tab tab--hidden" id="tab-clientes">
+    <input type="search" id="buscarCliente" class="search-input" placeholder="Buscar cliente…">
+    <div id="listaClientes" class="stack"></div>
+
+    <div id="detalleCliente" class="client-detail tab--hidden">
+      <button class="link-btn" id="btnCerrarDetalle">← Volver</button>
+      <h2 id="detalleClienteNombre"></h2>
+
+      <div class="section-label">Historial reciente</div>
+      <div id="historialPedidos" class="stack"></div>
+
+      <div class="section-label">Facturas por periodo</div>
+      <div class="date-range">
+        <input type="date" id="fechaIni">
+        <span>—</span>
+        <input type="date" id="fechaFin">
+        <button class="btn-secondary" id="btnBuscarFacturas">Buscar</button>
+      </div>
+      <div id="listaFacturas" class="stack"></div>
+      <div class="period-total" id="periodoTotal"></div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tabbar__item is-active" data-tab="reparto">
+    <span class="tabbar__icon">🚚</span><span>Reparto</span>
+  </button>
+  <button class="tabbar__item" data-tab="pedidos">
+    <span class="tabbar__icon">📋</span><span>Pedidos</span>
+  </button>
+  <button class="tabbar__item" data-tab="nuevo">
+    <span class="tabbar__icon">➕</span><span>Nuevo</span>
+  </button>
+  <button class="tabbar__item" data-tab="clientes">
+    <span class="tabbar__icon">👥</span><span>Clientes</span>
+  </button>
+</nav>
+
+<!-- MODAL AJUSTES / CONFIGURACIÓN INICIAL -->
+<div class="modal-backdrop tab--hidden" id="modalAjustes">
+  <div class="modal">
+    <h2>Conexión con tu Google Sheet</h2>
+    <p class="modal-help">Pega aquí la URL de tu Web App de Apps Script (termina en <code>/exec</code>) y la clave que pusiste en <code>CONFIG.API_KEY</code>.</p>
+    <label class="field-label" for="inputUrl">URL del Web App</label>
+    <input type="text" id="inputUrl" class="text-input" placeholder="https://script.google.com/macros/s/…/exec">
+    <label class="field-label" for="inputKey">Clave (API_KEY)</label>
+    <input type="text" id="inputKey" class="text-input" placeholder="tu-clave-secreta">
+    <button class="btn-primary" id="btnGuardarAjustes">Guardar y conectar</button>
+    <div class="form-msg" id="ajustesMsg"></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

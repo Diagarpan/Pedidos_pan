@@ -155,7 +155,10 @@ function pintarReparto(data) {
             <div class="card__name">${escapeHtml(c.cliente)}</div>
             ${c.ruta ? `<div class="card__route">Ruta: ${escapeHtml(c.ruta)}</div>` : ''}
           </div>
-          ${stampHtml(c.estado)}
+          <div style="display:flex; gap:6px;">
+            ${stampHtml(c.entregado ? 'Entregado' : 'Pendiente')}
+            ${stampHtml(c.cobrado ? 'Cobrado' : 'Sin cobrar')}
+          </div>
         </div>
         <div class="card__products">${escapeHtml(c.productos)}</div>
       </div>
@@ -200,6 +203,7 @@ function pintarPedidos(pedidos) {
         </div>
       </div>
       <div class="card__products">${escapeHtml(p.pedido)}</div>
+      ${p.entregado && p.horaEntrega ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(p.horaEntrega)}</div>` : ''}
       ${p.observaciones ? `<div class="card__meta" style="color:var(--stamp-red); margin-top:6px;">${escapeHtml(p.observaciones)}</div>` : ''}
       <div class="card__actions">
         ${!p.entregado ? `<button class="chip-btn" data-accion="entregado" data-id="${p.id}">Marcar entregado</button>` : ''}
@@ -216,7 +220,7 @@ function pintarPedidos(pedidos) {
 
 async function cambiarEstadoPedido(idPedido, accion) {
   const action = accion === 'entregado' ? 'marcarEntregado' : 'marcarCobrado';
-  const r = await apiPost(action, { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
+  const r = await apiGet(action, { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) {
     alert('No se pudo actualizar: ' + (r.error || 'error desconocido'));
   }
@@ -307,7 +311,7 @@ async function crearPedidoManual() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiPost('nuevoPedido', { clienteId, items }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (r.ok) {
     msg.textContent = `Pedido #${r.idPedido} creado (${formatoEuros(r.total)}).`;
     msg.className = 'form-msg is-ok';

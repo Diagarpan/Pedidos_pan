@@ -120,18 +120,8 @@
     <p class="modal-help">Pega aquí la URL de tu Web App de Apps Script (termina en <code>/exec</code>) y la clave que pusiste en <code>CONFIG.API_KEY</code>.</p>
     <label class="field-label" for="inputUrl">URL del Web App</label>
     <input type="text" id="inputUrl" class="text-input" placeholder="https://script.google.com/macros/s/…/exec">
-    <label class="field-label" for="inputKey">Clave (API_KEY)</label>
+    <label class="field-label" for="inputKey">Clave (tu clave personal)</label>
     <input type="text" id="inputKey" class="text-input" placeholder="tu-clave-secreta">
-
-    <label class="field-label" for="selectModo">Modo de acceso</label>
-    <select id="selectModo" class="select-input">
-      <option value="admin">Administración (ver todo)</option>
-      <option value="repartidor">Repartidor (solo mi ruta)</option>
-    </select>
-    <div id="campoRutaRepartidor" class="tab--hidden">
-      <label class="field-label" for="inputRuta">Tu ruta</label>
-      <input type="text" id="inputRuta" class="text-input" placeholder="Ej: 1">
-    </div>
 
     <button class="btn-primary" id="btnGuardarAjustes">Guardar y conectar</button>
     <div class="form-msg" id="ajustesMsg"></div>

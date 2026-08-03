@@ -9,23 +9,53 @@ let clientesCache = [];
 let pedidoNuevo = {}; // { productoId: cantidad }
 
 /* ============ ARRANQUE ============ */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  aplicarConfigDesdeURL();
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
   cablearAjustes();
   cablearNuevoPedido();
   cablearClientes();
-  aplicarModoUI();
 
   document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
 
   if (!WEB_APP_URL || !API_KEY) {
     abrirAjustes();
-  } else {
+    return;
+  }
+
+  const r = await apiGet('quienSoy').catch(() => ({ ok: false }));
+  if (r.ok) {
+    ROL = r.data.rol;
+    RUTA = r.data.ruta || '';
+    localStorage.setItem('rol', ROL);
+    localStorage.setItem('ruta', RUTA);
+    aplicarModoUI();
     cargarTabActual();
+  } else {
+    abrirAjustes();
   }
 });
+
+// Si la app se abre con ?url=...&key=... en el enlace, guarda esa
+// configuración sola (para compartir un "enlace mágico" por WhatsApp
+// sin que nadie tenga que escribir nada a mano). El rol y la ruta los
+// decide el servidor según la clave, no hace falta ponerlos en el enlace.
+function aplicarConfigDesdeURL() {
+  const params = new URLSearchParams(window.location.search);
+  const url = params.get('url');
+  const key = params.get('key');
+  if (!url || !key) return;
+
+  WEB_APP_URL = url;
+  API_KEY = key;
+  localStorage.setItem('webAppUrl', WEB_APP_URL);
+  localStorage.setItem('apiKey', API_KEY);
+
+  // limpia la URL para no dejar la clave visible en el historial del navegador
+  window.history.replaceState({}, '', window.location.pathname);
+}
 
 // Repartidor: solo ve Reparto y Pedidos (de su ruta), sin crear pedidos ni ver clientes
 function aplicarModoUI() {
@@ -98,46 +128,36 @@ function cargarTabActual(nombre) {
 function cablearAjustes() {
   document.getElementById('btnAjustes').addEventListener('click', abrirAjustes);
 
-  document.getElementById('selectModo').addEventListener('change', (e) => {
-    document.getElementById('campoRutaRepartidor').classList.toggle('tab--hidden', e.target.value !== 'repartidor');
-  });
-
   document.getElementById('btnGuardarAjustes').addEventListener('click', async () => {
     const url = document.getElementById('inputUrl').value.trim();
     const key = document.getElementById('inputKey').value.trim();
-    const modo = document.getElementById('selectModo').value;
-    const ruta = document.getElementById('inputRuta').value.trim();
     const msg = document.getElementById('ajustesMsg');
     if (!url || !key) {
       msg.textContent = 'Rellena la URL y la clave.';
       msg.className = 'form-msg is-error';
       return;
     }
-    if (modo === 'repartidor' && !ruta) {
-      msg.textContent = 'Indica tu ruta.';
-      msg.className = 'form-msg is-error';
-      return;
-    }
     WEB_APP_URL = url;
     API_KEY = key;
-    ROL = modo;
-    RUTA = modo === 'repartidor' ? ruta : '';
     localStorage.setItem('webAppUrl', url);
     localStorage.setItem('apiKey', key);
-    localStorage.setItem('rol', ROL);
-    localStorage.setItem('ruta', RUTA);
-    aplicarModoUI();
 
     msg.textContent = 'Comprobando conexión…';
     msg.className = 'form-msg';
-    const r = await apiGet('clientes').catch(() => ({ ok: false, error: 'Sin respuesta' }));
+    const r = await apiGet('quienSoy').catch(() => ({ ok: false, error: 'Sin respuesta' }));
     if (r.ok) {
-      msg.textContent = '¡Conectado!';
+      ROL = r.data.rol;
+      RUTA = r.data.ruta || '';
+      localStorage.setItem('rol', ROL);
+      localStorage.setItem('ruta', RUTA);
+      aplicarModoUI();
+
+      msg.textContent = ROL === 'repartidor' ? `¡Conectado como repartidor (ruta ${RUTA})!` : '¡Conectado como administración!';
       msg.className = 'form-msg is-ok';
       setTimeout(() => {
         document.getElementById('modalAjustes').classList.add('tab--hidden');
         cargarTabActual();
-      }, 500);
+      }, 700);
     } else {
       msg.textContent = 'No se pudo conectar: ' + (r.error || 'revisa la URL y la clave');
       msg.className = 'form-msg is-error';
@@ -148,9 +168,6 @@ function cablearAjustes() {
 function abrirAjustes() {
   document.getElementById('inputUrl').value = WEB_APP_URL;
   document.getElementById('inputKey').value = API_KEY;
-  document.getElementById('selectModo').value = ROL;
-  document.getElementById('inputRuta').value = RUTA;
-  document.getElementById('campoRutaRepartidor').classList.toggle('tab--hidden', ROL !== 'repartidor');
   document.getElementById('modalAjustes').classList.remove('tab--hidden');
 }
 
@@ -159,7 +176,7 @@ async function cargarReparto() {
   const contProductos = document.getElementById('repartoProductos');
   const contClientes = document.getElementById('repartoClientes');
 
-  const r = await apiGet('reparto', ROL === 'repartidor' ? { ruta: RUTA } : {}).catch(() => null);
+  const r = await apiGet('reparto').catch(() => null);
   if (!r || !r.ok) {
     contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
@@ -207,7 +224,7 @@ function pintarReparto(data) {
 /* ============ PEDIDOS DEL DÍA ============ */
 async function cargarPedidos() {
   const cont = document.getElementById('listaPedidos');
-  const r = await apiGet('pedidosHoy', ROL === 'repartidor' ? { ruta: RUTA } : {}).catch(() => null);
+  const r = await apiGet('pedidosHoy').catch(() => null);
   if (!r || !r.ok) {
     cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
+  cablearNavegacionFecha();
   cablearAjustes();
   cablearNuevoPedido();
   cablearClientes();
@@ -65,9 +66,12 @@ function aplicarModoUI() {
       btn.style.display = esRepartidor ? 'none' : '';
     }
   });
+  document.querySelectorAll('.home-btn[data-solo-admin]').forEach((btn) => {
+    btn.style.display = esRepartidor ? 'none' : '';
+  });
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
-    cambiarTab('reparto');
+    cambiarTab('inicio');
   }
 }
 
@@ -105,6 +109,9 @@ function cablearNavegacion() {
   document.querySelectorAll('.tabbar__item').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
+  document.querySelectorAll('.home-btn').forEach((btn) => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+  });
 }
 
 function cambiarTab(nombre) {
@@ -115,12 +122,18 @@ function cambiarTab(nombre) {
 }
 
 function cargarTabActual(nombre) {
-  const activo = nombre || document.querySelector('.tabbar__item.is-active')?.dataset.tab || 'reparto';
+  const activo = nombre || document.querySelector('.tabbar__item.is-active')?.dataset.tab || 'inicio';
   if (!WEB_APP_URL || !API_KEY) return;
+  if (activo === 'inicio') pintarInicio();
   if (activo === 'reparto') cargarReparto();
   if (activo === 'pedidos') cargarPedidos();
   if (activo === 'nuevo') cargarFormularioNuevo();
   if (activo === 'clientes') cargarClientes();
+}
+
+function pintarInicio() {
+  document.getElementById('homeSub').textContent =
+    ROL === 'repartidor' ? `Repartidor · Ruta ${RUTA}` : 'Administración';
 }
 
 /* ============ AJUSTES / CONEXIÓN ============ */
@@ -171,11 +184,47 @@ function abrirAjustes() {
 }
 
 /* ============ REPARTO ============ */
+/* ============ REPARTO ============ */
+let offsetRepartoSeleccionado = 0; // 0 = hoy, -1 = ayer, 1 = mañana...
+
+function cablearNavegacionFecha() {
+  document.getElementById('btnRepartoAnterior').addEventListener('click', () => {
+    offsetRepartoSeleccionado -= 1;
+    cargarReparto();
+  });
+  document.getElementById('btnRepartoSiguiente').addEventListener('click', () => {
+    offsetRepartoSeleccionado += 1;
+    cargarReparto();
+  });
+  document.getElementById('btnRepartoHoy').addEventListener('click', () => {
+    offsetRepartoSeleccionado = 0;
+    cargarReparto();
+  });
+}
+
+function etiquetaFechaOffset(offset) {
+  if (offset === 0) return 'Hoy';
+  if (offset === -1) return 'Ayer';
+  if (offset === 1) return 'Mañana';
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+}
+
+function fechaOffsetDDMMYYYY(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
 async function cargarReparto() {
   const contProductos = document.getElementById('repartoProductos');
   const contClientes = document.getElementById('repartoClientes');
+  document.getElementById('btnRepartoHoy').textContent = etiquetaFechaOffset(offsetRepartoSeleccionado);
 
-  const r = await apiGet('reparto').catch(() => null);
+  const r = await apiGet('reparto', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch(() => null);
   if (!r || !r.ok) {
     contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
@@ -207,7 +256,7 @@ function pintarReparto(data) {
         <div class="card__top">
           <div>
             <div class="card__name">${escapeHtml(c.cliente)}</div>
-            <div class="card__meta">${escapeHtml(c.fecha || '')}${c.ruta ? ' · Ruta: ' + escapeHtml(c.ruta) : ''}</div>
+            <div class="card__meta">${c.ruta ? 'Ruta: ' + escapeHtml(c.ruta) : ''}</div>
           </div>
           <div style="display:flex; gap:6px;">
             ${stampHtml(c.entregado ? 'Entregado' : 'Pendiente')}
@@ -329,8 +378,18 @@ document.addEventListener('input', (e) => {
 });
 
 /* ============ NUEVO PEDIDO ============ */
+let fechaPedidoSeleccion = 'hoy';
+
 function cablearNuevoPedido() {
   document.getElementById('btnCrearPedido').addEventListener('click', crearPedidoManual);
+  document.getElementById('btnPedidoHoy').addEventListener('click', () => seleccionarFechaPedido('hoy'));
+  document.getElementById('btnPedidoManana').addEventListener('click', () => seleccionarFechaPedido('manana'));
+}
+
+function seleccionarFechaPedido(valor) {
+  fechaPedidoSeleccion = valor;
+  document.getElementById('btnPedidoHoy').classList.toggle('is-active', valor === 'hoy');
+  document.getElementById('btnPedidoManana').classList.toggle('is-active', valor === 'manana');
 }
 
 async function cargarFormularioNuevo() {
@@ -375,6 +434,7 @@ async function cargarFormularioNuevo() {
   });
 
   recalcularTotalNuevo();
+  seleccionarFechaPedido('hoy');
   document.getElementById('nuevoMsg').textContent = '';
 }
 
@@ -402,7 +462,7 @@ async function crearPedidoManual() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (r.ok) {
     msg.textContent = `Pedido #${r.idPedido} creado (${formatoEuros(r.total)}).`;
     msg.className = 'form-msg is-ok';
@@ -460,6 +520,13 @@ async function abrirDetalleCliente(id) {
   document.getElementById('detalleCliente').classList.remove('tab--hidden');
   document.getElementById('listaFacturas').innerHTML = '';
   document.getElementById('periodoTotal').textContent = '';
+
+  const info = [];
+  if (clienteSeleccionado.telefono) info.push('📞 ' + clienteSeleccionado.telefono);
+  if (clienteSeleccionado.direccion) info.push('📍 ' + clienteSeleccionado.direccion);
+  if (clienteSeleccionado.ruta) info.push('Ruta ' + clienteSeleccionado.ruta);
+  if (clienteSeleccionado.descuento > 0) info.push(`Descuento: ${(clienteSeleccionado.descuento * 100).toFixed(0)}%`);
+  document.getElementById('detalleClienteInfo').innerHTML = info.map((l) => `<div>${escapeHtml(l)}</div>`).join('');
 
   const hoy = new Date();
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);

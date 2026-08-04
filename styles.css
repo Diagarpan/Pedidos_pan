@@ -320,6 +320,72 @@ main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }
 .modal-help { font-size: 13px; color: var(--ink-muted); line-height: 1.5; margin-bottom: 14px; }
 .modal-help code { background: var(--wheat); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
+/* ---------- INICIO ---------- */
+.home-welcome { text-align: center; padding: 28px 0 8px; }
+.home-emoji { font-size: 44px; }
+.home-title { font-weight: 700; font-size: 19px; margin-top: 8px; }
+.home-sub { font-family: var(--font-data); font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+.home-btn {
+  background: var(--paper-raised);
+  border: 1px solid var(--wheat-line);
+  border-radius: var(--radius);
+  padding: 22px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+.home-btn:active { background: var(--wheat); }
+.home-btn__icon { font-size: 26px; }
+
+/* ---------- SELECTOR DE FECHA (Reparto) ---------- */
+.date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+.date-nav__btn {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--wheat-line);
+  background: var(--paper-raised);
+  font-size: 16px;
+  color: var(--crust-dark);
+}
+.date-nav__label {
+  min-width: 100px;
+  text-align: center;
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 14px;
+  background: none;
+  border: none;
+  color: var(--ink);
+}
+
+/* ---------- TOGGLE HOY/MAÑANA ---------- */
+.date-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+.date-toggle .chip-btn.is-active { background: var(--crust); color: var(--paper-raised); border-color: var(--crust); }
+
+/* ---------- INFO DE CLIENTE ---------- */
+.client-info {
+  font-size: 13.5px;
+  color: var(--ink-muted);
+  line-height: 1.7;
+  margin: 4px 0 6px;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .card, .ticket-row, .client-row { transition: background-color 0.15s ease; }
 }

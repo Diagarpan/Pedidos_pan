@@ -32,9 +32,30 @@
 
 <main id="app">
 
+  <!-- INICIO -->
+  <section class="tab" id="tab-inicio">
+    <div class="home-welcome">
+      <div class="home-emoji">🍞</div>
+      <div class="home-title">¿Qué quieres hacer?</div>
+      <div class="home-sub" id="homeSub"></div>
+    </div>
+    <div class="home-grid">
+      <button class="home-btn" data-tab="reparto"><span class="home-btn__icon">🚚</span>Reparto</button>
+      <button class="home-btn" data-tab="pedidos"><span class="home-btn__icon">📋</span>Pedidos</button>
+      <button class="home-btn" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon">➕</span>Nuevo pedido</button>
+      <button class="home-btn" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon">👥</span>Clientes</button>
+    </div>
+  </section>
+
   <!-- REPARTO -->
-  <section class="tab" id="tab-reparto">
-    <div class="section-label">Total a preparar hoy</div>
+  <section class="tab tab--hidden" id="tab-reparto">
+    <div class="date-nav">
+      <button class="date-nav__btn" id="btnRepartoAnterior">←</button>
+      <button class="date-nav__label" id="btnRepartoHoy"></button>
+      <button class="date-nav__btn" id="btnRepartoSiguiente">→</button>
+    </div>
+
+    <div class="section-label">Total a preparar</div>
     <div class="ticket" id="repartoProductos">
       <div class="empty-state">Cargando reparto…</div>
     </div>
@@ -60,6 +81,12 @@
       <option value="">Selecciona un cliente…</option>
     </select>
 
+    <label class="field-label">Pedido para</label>
+    <div class="date-toggle">
+      <button class="chip-btn is-active" id="btnPedidoHoy" data-valor="hoy">Hoy</button>
+      <button class="chip-btn" id="btnPedidoManana" data-valor="manana">Mañana</button>
+    </div>
+
     <div class="section-label">Productos</div>
     <div id="listaProductosNuevo" class="stack"></div>
 
@@ -80,6 +107,7 @@
     <div id="detalleCliente" class="client-detail tab--hidden">
       <button class="link-btn" id="btnCerrarDetalle">← Volver</button>
       <h2 id="detalleClienteNombre"></h2>
+      <div class="client-info" id="detalleClienteInfo"></div>
 
       <div class="section-label">Historial reciente</div>
       <div id="historialPedidos" class="stack"></div>
@@ -99,7 +127,10 @@
 </main>
 
 <nav class="tabbar">
-  <button class="tabbar__item is-active" data-tab="reparto">
+  <button class="tabbar__item is-active" data-tab="inicio">
+    <span class="tabbar__icon">🏠</span><span>Inicio</span>
+  </button>
+  <button class="tabbar__item" data-tab="reparto">
     <span class="tabbar__icon">🚚</span><span>Reparto</span>
   </button>
   <button class="tabbar__item" data-tab="pedidos">

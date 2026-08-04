@@ -262,13 +262,22 @@ function pintarPedidos(pedidos) {
       <div class="card__actions">
         ${!p.entregado ? `<button class="chip-btn" data-accion="entregado" data-id="${p.id}">Marcar entregado</button>` : ''}
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
+        <button class="chip-btn" data-accion="albaran" data-id="${p.id}">Albarán PDF</button>
+        ${ROL === 'admin' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
       </div>
     </div>
   `;
   }).join('');
 
   cont.querySelectorAll('[data-accion]').forEach((btn) => {
-    btn.addEventListener('click', () => cambiarEstadoPedido(btn.dataset.id, btn.dataset.accion));
+    btn.addEventListener('click', () => {
+      const accion = btn.dataset.accion;
+      if (accion === 'entregado' || accion === 'cobrado') {
+        cambiarEstadoPedido(btn.dataset.id, accion);
+      } else {
+        generarDocumento(btn.dataset.id, accion);
+      }
+    });
   });
 }
 
@@ -279,6 +288,34 @@ async function cambiarEstadoPedido(idPedido, accion) {
     alert('No se pudo actualizar: ' + (r.error || 'error desconocido'));
   }
   cargarPedidos();
+}
+
+async function generarDocumento(idPedido, tipo) {
+  const action = tipo === 'factura' ? 'facturaPdf' : 'albaranPdf';
+  const r = await apiGet(action, { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) {
+    alert('No se pudo generar el PDF: ' + (r.error || 'error desconocido'));
+    return;
+  }
+  descargarPDF(r.base64, r.nombre);
+}
+
+function descargarPDF(base64, nombreArchivo) {
+  const byteChars = atob(base64);
+  const byteNumbers = new Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+  const byteArray = new Uint8Array(byteNumbers);
+  const blob = new Blob([byteArray], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+
+  // Abre el PDF en una pestaña nueva (desde ahí se puede imprimir o guardar)
+  window.open(url, '_blank');
+
+  // Y además dispara la descarga directa
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  a.click();
 }
 
 document.addEventListener('input', (e) => {

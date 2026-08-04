@@ -10,7 +10,7 @@ let pedidoNuevo = {}; // { productoId: cantidad }
 
 /* ============ ARRANQUE ============ */
 document.addEventListener('DOMContentLoaded', async () => {
-  aplicarConfigDesdeURL();
+  const vinoDeEnlace = aplicarConfigDesdeURL();
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
 
-  if (!WEB_APP_URL || !API_KEY) {
+  if (!WEB_APP_URL || !API_KEY || vinoDeEnlace) {
     abrirAjustes();
     return;
   }
@@ -38,23 +38,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Si la app se abre con ?url=...&key=... en el enlace, guarda esa
-// configuración sola (para compartir un "enlace mágico" por WhatsApp
-// sin que nadie tenga que escribir nada a mano). El rol y la ruta los
-// decide el servidor según la clave, no hace falta ponerlos en el enlace.
+// El enlace solo lleva la URL del Web App (para no tener que teclear esa
+// parte larga y complicada). La clave NUNCA va en el enlace — así que
+// cada vez que alguien lo pulsa, la app le pide su clave personal a mano.
+// Si abre la app luego desde el icono (sin pasar por el enlace), sí
+// recuerda la última clave que puso.
 function aplicarConfigDesdeURL() {
   const params = new URLSearchParams(window.location.search);
   const url = params.get('url');
-  const key = params.get('key');
-  if (!url || !key) return;
+  if (!url) return false;
 
   WEB_APP_URL = url;
-  API_KEY = key;
+  API_KEY = '';
   localStorage.setItem('webAppUrl', WEB_APP_URL);
-  localStorage.setItem('apiKey', API_KEY);
 
-  // limpia la URL para no dejar la clave visible en el historial del navegador
   window.history.replaceState({}, '', window.location.pathname);
+  return true;
 }
 
 // Repartidor: solo ve Reparto y Pedidos (de su ruta), sin crear pedidos ni ver clientes

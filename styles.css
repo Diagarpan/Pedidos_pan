@@ -286,6 +286,9 @@ main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }
   border-top: 1px solid var(--wheat-line);
   padding-bottom: env(safe-area-inset-bottom);
   z-index: 10;
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: 0 0 0 1px var(--wheat-line);
 }
 .tabbar__item {
   flex: 1;

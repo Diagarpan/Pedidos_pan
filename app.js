@@ -18,7 +18,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearNuevoPedido();
   cablearFacturaDirecta();
   cablearClientes();
+  cablearClientesForm();
   cablearEmpresa();
+  cablearHojaRuta();
+  cablearProductos();
+  cablearEstadisticas();
+  cablearBusquedaGlobal();
 
   document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
 
@@ -134,9 +139,10 @@ function cablearNavegacion() {
 // el menú lateral y en la barra inferior, no un ítem propio (no existe).
 function claveMenuPadre(nombre) {
   if (nombre.startsWith('pedidos')) return 'pedidos';
-  if (nombre.startsWith('clientes')) return 'clientes';
+  if (nombre.startsWith('clientes') || nombre === 'cliente-form') return 'clientes';
   if (nombre.startsWith('factura')) return 'factura';
   if (nombre.startsWith('reparto')) return 'reparto';
+  if (nombre.startsWith('producto')) return 'productos';
   return nombre;
 }
 
@@ -162,6 +168,8 @@ function cargarTabActual(nombre) {
   if (activo === 'factura-resumen') prepararResumenFacturas();
   if (activo === 'factura-por-cliente') prepararFacturaPorCliente();
   if (activo === 'empresa') cargarEmpresa();
+  if (activo === 'productos') cargarProductosGestion();
+  if (activo === 'estadisticas') prepararEstadisticas();
 }
 
 function pintarInicio() {
@@ -298,8 +306,8 @@ async function cargarFaltanManana() {
   const cont = document.getElementById('repartoFaltan');
   cont.innerHTML = '<div class="empty-state">Comprobando…</div>';
 
-  const r = await apiGet('resumenManana').catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo comprobar.</div>'; return; }
+  const r = await apiGet('resumenManana').catch((err) => ({ ok: false, error: String(err) }));
+  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo comprobar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
   const d = r.data;
   if (d.sinPedido.length === 0) {
@@ -367,6 +375,7 @@ function pintarPedidos(pedidos) {
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
         <button class="chip-btn" data-accion="albaran" data-id="${p.id}">Albarán PDF</button>
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
+        ${ROL === 'admin' ? `<button class="chip-btn" data-accion="anular" data-id="${p.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Anular</button>` : ''}
       </div>
     </div>
   `;
@@ -377,6 +386,8 @@ function pintarPedidos(pedidos) {
       const accion = btn.dataset.accion;
       if (accion === 'entregado' || accion === 'cobrado') {
         cambiarEstadoPedido(btn.dataset.id, accion);
+      } else if (accion === 'anular') {
+        anularPedido(btn.dataset.id);
       } else {
         generarDocumento(btn.dataset.id, accion);
       }
@@ -403,17 +414,28 @@ async function generarDocumento(idPedido, tipo) {
   descargarPDF(r.base64, r.nombre);
 }
 
-function descargarPDF(base64, nombreArchivo) {
+async function descargarPDF(base64, nombreArchivo) {
   const byteChars = atob(base64);
   const byteNumbers = new Array(byteChars.length);
   for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
   const byteArray = new Uint8Array(byteNumbers);
   const blob = new Blob([byteArray], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
 
+  // En móvil, si el navegador lo soporta, ofrece compartir directamente
+  // (WhatsApp, Mail, etc.) usando el panel nativo de compartir.
+  try {
+    const archivo = new File([blob], nombreArchivo, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: nombreArchivo });
+      return;
+    }
+  } catch (e) {
+    // el usuario canceló el panel de compartir, o no está soportado: seguimos con la descarga normal
+  }
+
+  const url = URL.createObjectURL(blob);
   // Abre el PDF en una pestaña nueva (desde ahí se puede imprimir o guardar)
   window.open(url, '_blank');
-
   // Y además dispara la descarga directa
   const a = document.createElement('a');
   a.href = url;
@@ -974,4 +996,258 @@ function guardarCache(clave, data) {
 }
 function leerCache(clave) {
   try { return JSON.parse(localStorage.getItem('cache_' + clave)); } catch (e) { return null; }
+}
+
+/* ============ ANULAR PEDIDO ============ */
+async function anularPedido(idPedido) {
+  if (!confirm('¿Seguro que quieres anular este pedido? Se borrará también su factura. Esto no se puede deshacer.')) return;
+  const r = await apiGet('anularPedido', { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { alert('No se pudo anular: ' + (r.error || 'error')); return; }
+  cargarPedidos();
+}
+
+/* ============ HOJA DE RUTA ============ */
+function cablearHojaRuta() {
+  document.getElementById('btnHojaRuta').addEventListener('click', async () => {
+    const r = await apiGet('hojaRutaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+    descargarPDF(r.base64, r.nombre);
+  });
+}
+
+/* ============ PRODUCTOS (alta/edición) ============ */
+let productosGestionCache = [];
+
+function cablearProductos() {
+  document.getElementById('btnNuevoProducto').addEventListener('click', () => abrirFormularioProducto(null));
+  document.getElementById('btnGuardarProducto').addEventListener('click', guardarProducto);
+}
+
+async function cargarProductosGestion() {
+  const cont = document.getElementById('listaProductosGestion');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const r = await apiGet('todosProductos').catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  productosGestionCache = r.data;
+  productosCache = []; // fuerza a refrescar el caché de productos activos en otras pantallas
+
+  if (!r.data.length) { cont.innerHTML = '<div class="empty-state">Sin productos todavía.</div>'; return; }
+
+  cont.innerHTML = r.data.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.nombre)}</div>
+          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
+        </div>
+        ${stampHtml(p.activo ? 'Activo' : 'Inactivo')}
+      </div>
+      <div class="card__actions">
+        <button class="chip-btn" data-editar-producto="${p.id}">Editar</button>
+      </div>
+    </div>
+  `).join('');
+
+  cont.querySelectorAll('[data-editar-producto]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = productosGestionCache.find((x) => String(x.id) === String(btn.dataset.editarProducto));
+      abrirFormularioProducto(p);
+    });
+  });
+}
+
+function abrirFormularioProducto(producto) {
+  document.getElementById('productoFormTitulo').textContent = producto ? 'Editar producto' : 'Nuevo producto';
+  document.getElementById('prFormId').value = producto ? producto.id : '';
+  document.getElementById('prFormNombre').value = producto ? producto.nombre : '';
+  document.getElementById('prFormCodigo').value = producto ? producto.codigo : '';
+  document.getElementById('prFormPrecio').value = producto ? producto.precio : '';
+  document.getElementById('prFormIva').value = producto ? Math.round(producto.iva * 100) : '';
+  document.getElementById('prFormActivo').value = producto ? String(producto.activo) : 'true';
+  document.getElementById('productoFormMsg').textContent = '';
+  cambiarTab('producto-form');
+}
+
+async function guardarProducto() {
+  const msg = document.getElementById('productoFormMsg');
+  const nombre = document.getElementById('prFormNombre').value.trim();
+  if (!nombre) { msg.textContent = 'Pon un nombre.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('guardarProducto', {
+    id: document.getElementById('prFormId').value,
+    nombre: nombre,
+    codigo: document.getElementById('prFormCodigo').value.trim(),
+    precio: document.getElementById('prFormPrecio').value || '0',
+    iva: String((Number(document.getElementById('prFormIva').value) || 0) / 100),
+    activo: document.getElementById('prFormActivo').value,
+  }).catch((err) => ({ ok: false, error: String(err) }));
+
+  if (r.ok) {
+    msg.textContent = 'Producto guardado.';
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('productos'), 500);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+/* ============ CLIENTES (alta/edición) ============ */
+function cablearClientesForm() {
+  document.getElementById('btnNuevoCliente').addEventListener('click', () => abrirFormularioCliente(null));
+  document.getElementById('btnEditarCliente').addEventListener('click', () => abrirFormularioCliente(clienteSeleccionado));
+  document.getElementById('btnGuardarCliente').addEventListener('click', guardarCliente);
+}
+
+function abrirFormularioCliente(cliente) {
+  document.getElementById('clienteFormTitulo').textContent = cliente ? 'Editar cliente' : 'Nuevo cliente';
+  document.getElementById('clFormId').value = cliente ? cliente.id : '';
+  document.getElementById('clFormNombre').value = cliente ? cliente.nombre || '' : '';
+  document.getElementById('clFormTelefono').value = cliente ? cliente.telefono || '' : '';
+  document.getElementById('clFormDireccion').value = cliente ? cliente.direccion || '' : '';
+  document.getElementById('clFormNif').value = cliente ? cliente.nif || '' : '';
+  document.getElementById('clFormRuta').value = cliente ? cliente.ruta || '' : '';
+  document.getElementById('clFormFormaPago').value = cliente ? cliente.formaPago || '' : '';
+  document.getElementById('clFormDescuento').value = cliente && cliente.descuento ? Math.round(cliente.descuento * 100) : '';
+  document.getElementById('clFormActivo').value = 'true';
+  document.getElementById('clienteFormMsg').textContent = '';
+  cambiarTab('cliente-form');
+}
+
+async function guardarCliente() {
+  const msg = document.getElementById('clienteFormMsg');
+  const nombre = document.getElementById('clFormNombre').value.trim();
+  if (!nombre) { msg.textContent = 'Pon un nombre.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('guardarCliente', {
+    id: document.getElementById('clFormId').value,
+    nombre: nombre,
+    telefono: document.getElementById('clFormTelefono').value.trim(),
+    direccion: document.getElementById('clFormDireccion').value.trim(),
+    nif: document.getElementById('clFormNif').value.trim(),
+    ruta: document.getElementById('clFormRuta').value.trim(),
+    formaPago: document.getElementById('clFormFormaPago').value.trim(),
+    descuento: String((Number(document.getElementById('clFormDescuento').value) || 0) / 100),
+    activo: document.getElementById('clFormActivo').value,
+  }).catch((err) => ({ ok: false, error: String(err) }));
+
+  if (r.ok) {
+    msg.textContent = 'Cliente guardado.';
+    msg.className = 'form-msg is-ok';
+    clientesCache = []; // fuerza a refrescar el caché en otras pantallas
+    setTimeout(() => cambiarTab('clientes-lista'), 500);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+/* ============ ESTADÍSTICAS ============ */
+function cablearEstadisticas() {
+  document.getElementById('btnVerEstadisticas').addEventListener('click', buscarEstadisticas);
+}
+
+function prepararEstadisticas() {
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  if (!document.getElementById('statsFechaIni').value) document.getElementById('statsFechaIni').valueAsDate = inicioMes;
+  if (!document.getElementById('statsFechaFin').value) document.getElementById('statsFechaFin').valueAsDate = hoy;
+}
+
+async function buscarEstadisticas() {
+  const cont = document.getElementById('statsResumen');
+  const ini = document.getElementById('statsFechaIni').value;
+  const fin = document.getElementById('statsFechaFin').value;
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Calculando…</div>';
+  const r = await apiGet('estadisticas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  const d = r.data;
+  let html = `
+    <div class="card">
+      <div class="card__top"><div class="card__name">Pedidos del periodo</div><div class="card__total">${d.totalPedidos}</div></div>
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Ventas totales</div><div class="card__total">${formatoEuros(d.totalVentas)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Cobrado</div><div class="card__total" style="color:var(--ok-green);">${formatoEuros(d.totalCobrado)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Pendiente de cobro</div><div class="card__total" style="color:var(--warn-red);">${formatoEuros(d.totalPendiente)}</div></div>
+    </div>
+  `;
+
+  html += '<div class="section-label">Productos más vendidos</div>';
+  html += d.topProductos.length
+    ? '<div class="ticket">' + d.topProductos.map((p) => `<div class="ticket-row"><span>${escapeHtml(p.nombre)}</span><span class="ticket-row__qty">${p.cantidad}</span></div>`).join('') + '</div>'
+    : '<div class="empty-state">Sin datos.</div>';
+
+  html += '<div class="section-label">Clientes con más pedidos</div>';
+  html += d.topClientes.length
+    ? '<div class="ticket">' + d.topClientes.map((c) => `<div class="ticket-row"><span>${escapeHtml(c.nombre)}</span><span class="ticket-row__qty">${c.pedidos}</span></div>`).join('') + '</div>'
+    : '<div class="empty-state">Sin datos.</div>';
+
+  cont.innerHTML = html;
+}
+
+/* ============ BÚSQUEDA GLOBAL (desde Inicio) ============ */
+let temporizadorBusqueda = null;
+
+function cablearBusquedaGlobal() {
+  document.getElementById('buscarGlobal').addEventListener('input', (e) => {
+    clearTimeout(temporizadorBusqueda);
+    const termino = e.target.value.trim();
+    if (!termino) { document.getElementById('resultadosBusquedaGlobal').innerHTML = ''; return; }
+    temporizadorBusqueda = setTimeout(() => buscarGlobal(termino), 350);
+  });
+}
+
+async function buscarGlobal(termino) {
+  const cont = document.getElementById('resultadosBusquedaGlobal');
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('busquedaGlobal', { termino }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo buscar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  const d = r.data;
+  const sinResultados = !d.clientes.length && !d.pedidos.length && !d.facturas.length;
+  if (sinResultados) { cont.innerHTML = '<div class="empty-state">Sin resultados.</div>'; return; }
+
+  let html = '';
+  if (d.clientes.length) {
+    html += '<div class="section-label">Clientes</div><div class="stack">' + d.clientes.map((c) => `
+      <div class="client-row"><span>${escapeHtml(c.nombre)}</span><span class="client-row__ruta">${escapeHtml(c.telefono || '')}</span></div>
+    `).join('') + '</div>';
+  }
+  if (d.pedidos.length) {
+    html += '<div class="section-label">Pedidos</div><div class="stack">' + d.pedidos.map((p) => `
+      <div class="card">
+        <div class="card__top">
+          <div><div class="card__name">${escapeHtml(p.cliente)}</div><div class="card__meta">${escapeHtml(p.fecha)}</div></div>
+          <div class="card__total">${formatoEuros(p.total)}</div>
+        </div>
+        <div class="card__products">${escapeHtml(p.pedido)}</div>
+      </div>
+    `).join('') + '</div>';
+  }
+  if (d.facturas.length) {
+    html += '<div class="section-label">Facturas</div><div class="stack">' + d.facturas.map((f) => `
+      <div class="card">
+        <div class="card__top">
+          <div class="card__meta">${escapeHtml(f.cliente)} · Factura #${f.idFactura} · ${escapeHtml(f.fecha)}</div>
+          <div style="text-align:right"><div class="card__total">${formatoEuros(f.total)}</div>${stampHtml(f.estado)}</div>
+        </div>
+      </div>
+    `).join('') + '</div>';
+  }
+  cont.innerHTML = html;
 }

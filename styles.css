@@ -467,3 +467,9 @@ select.select-input {
 .home-btn--clientes { background: #EDF3FB; border-left-color: #6D93C7; }
 .home-btn--factura { background: #E8EFFA; border-left-color: #1E5AA8; }
 .home-btn--empresa { background: #EAEEF6; border-left-color: var(--ink); }
+.home-btn--productos { background: #E9F2F6; border-left-color: #2C7A93; }
+.home-btn--stats { background: #EEF0FA; border-left-color: #4B3F8C; }
+
+/* ---------- BÚSQUEDA GLOBAL (Inicio) ---------- */
+.global-search { margin: 18px 0 4px; }
+#resultadosBusquedaGlobal:not(:empty) { margin-top: 10px; }

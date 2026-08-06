@@ -68,7 +68,15 @@
 
   <!-- PEDIDOS -->
   <section class="tab tab--hidden" id="tab-pedidos">
-    <input type="search" id="buscarPedido" class="search-input" placeholder="Buscar cliente…">
+    <div class="filtros-pedidos">
+      <input type="search" id="buscarPedido" class="search-input" placeholder="Buscar cliente…">
+      <select id="filtroEstadoPedido" class="select-input select-input--auto">
+        <option value="todos">Todos</option>
+        <option value="pendiente">Pendientes</option>
+        <option value="entregado">Entregados</option>
+        <option value="cobrado">Cobrados</option>
+      </select>
+    </div>
     <div id="listaPedidos" class="stack">
       <div class="empty-state">Cargando pedidos…</div>
     </div>
@@ -81,11 +89,11 @@
       <option value="">Selecciona un cliente…</option>
     </select>
 
-    <label class="field-label">Pedido para</label>
-    <div class="date-toggle">
-      <button class="chip-btn is-active" id="btnPedidoHoy" data-valor="hoy">Hoy</button>
-      <button class="chip-btn" id="btnPedidoManana" data-valor="manana">Mañana</button>
-    </div>
+    <label class="field-label" for="selectFechaPedido">Pedido para</label>
+    <select id="selectFechaPedido" class="select-input">
+      <option value="hoy">Hoy</option>
+      <option value="manana">Mañana</option>
+    </select>
 
     <div class="section-label">Productos</div>
     <div id="listaProductosNuevo" class="stack"></div>

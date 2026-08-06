@@ -283,8 +283,15 @@ async function cargarPedidos() {
 
 function pintarPedidos(pedidos) {
   const cont = document.getElementById('listaPedidos');
-  const filtro = (document.getElementById('buscarPedido').value || '').toLowerCase();
-  const filtrados = pedidos.filter((p) => p.cliente.toLowerCase().includes(filtro));
+  const filtroTexto = (document.getElementById('buscarPedido').value || '').toLowerCase();
+  const filtroEstado = document.getElementById('filtroEstadoPedido').value;
+
+  const filtrados = pedidos.filter((p) => {
+    if (!p.cliente.toLowerCase().includes(filtroTexto)) return false;
+    if (filtroEstado === 'todos') return true;
+    const estado = p.cobrado ? 'cobrado' : p.entregado ? 'entregado' : 'pendiente';
+    return estado === filtroEstado;
+  });
 
   if (!filtrados.length) {
     cont.innerHTML = '<div class="empty-state">No hay pedidos que coincidan.</div>';
@@ -377,19 +384,21 @@ document.addEventListener('input', (e) => {
   }
 });
 
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'filtroEstadoPedido') {
+    const cache = leerCache('pedidosHoy');
+    if (cache) pintarPedidos(cache);
+  }
+});
+
 /* ============ NUEVO PEDIDO ============ */
 let fechaPedidoSeleccion = 'hoy';
 
 function cablearNuevoPedido() {
   document.getElementById('btnCrearPedido').addEventListener('click', crearPedidoManual);
-  document.getElementById('btnPedidoHoy').addEventListener('click', () => seleccionarFechaPedido('hoy'));
-  document.getElementById('btnPedidoManana').addEventListener('click', () => seleccionarFechaPedido('manana'));
-}
-
-function seleccionarFechaPedido(valor) {
-  fechaPedidoSeleccion = valor;
-  document.getElementById('btnPedidoHoy').classList.toggle('is-active', valor === 'hoy');
-  document.getElementById('btnPedidoManana').classList.toggle('is-active', valor === 'manana');
+  document.getElementById('selectFechaPedido').addEventListener('change', (e) => {
+    fechaPedidoSeleccion = e.target.value;
+  });
 }
 
 async function cargarFormularioNuevo() {
@@ -434,7 +443,8 @@ async function cargarFormularioNuevo() {
   });
 
   recalcularTotalNuevo();
-  seleccionarFechaPedido('hoy');
+  fechaPedidoSeleccion = 'hoy';
+  document.getElementById('selectFechaPedido').value = 'hoy';
   document.getElementById('nuevoMsg').textContent = '';
 }
 

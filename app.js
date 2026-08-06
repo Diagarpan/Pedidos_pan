@@ -10,11 +10,13 @@ let pedidoNuevo = {}; // { productoId: cantidad }
 
 /* ============ ARRANQUE ============ */
 document.addEventListener('DOMContentLoaded', async () => {
+  aplicarTemaGuardado();
   const vinoDeEnlace = aplicarConfigDesdeURL();
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
   cablearAjustes();
+  cablearTema();
   cablearNuevoPedido();
   cablearFacturaDirecta();
   cablearClientes();
@@ -44,6 +46,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     abrirAjustes();
   }
 });
+
+/* ============ MODO OSCURO ============ */
+function aplicarTemaGuardado() {
+  const tema = localStorage.getItem('tema') || 'claro';
+  document.documentElement.setAttribute('data-tema', tema);
+}
+
+function cablearTema() {
+  document.getElementById('btnTema').addEventListener('click', alternarTema);
+  document.getElementById('btnTemaSidebar').addEventListener('click', alternarTema);
+}
+
+function alternarTema() {
+  const actual = document.documentElement.getAttribute('data-tema') || 'claro';
+  const nuevo = actual === 'oscuro' ? 'claro' : 'oscuro';
+  document.documentElement.setAttribute('data-tema', nuevo);
+  localStorage.setItem('tema', nuevo);
+}
 
 // El enlace solo lleva la URL del Web App (para no tener que teclear esa
 // parte larga y complicada). La clave NUNCA va en el enlace — así que
@@ -1010,6 +1030,11 @@ async function anularPedido(idPedido) {
 function cablearHojaRuta() {
   document.getElementById('btnHojaRuta').addEventListener('click', async () => {
     const r = await apiGet('hojaRutaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+    descargarPDF(r.base64, r.nombre);
+  });
+  document.getElementById('btnResumenDia').addEventListener('click', async () => {
+    const r = await apiGet('resumenDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
     if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
     descargarPDF(r.base64, r.nombre);
   });

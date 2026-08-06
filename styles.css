@@ -9,9 +9,43 @@
   --wheat-line: #C3D3E6;
   --ok-green: #2E7D4F;
   --warn-red: #B23A3A;
+  --shadow-card: 0 1px 2px rgba(22,35,58,0.06), 0 1px 1px rgba(22,35,58,0.04);
   --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
   --font-data: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
   --radius: 4px;
+}
+
+html[data-tema="oscuro"] {
+  --paper: #0F1520;
+  --paper-raised: #1A2130;
+  --ink: #E7ECF5;
+  --ink-muted: #8B96AC;
+  --crust: #5B8FE0;
+  --crust-dark: #7FA6EA;
+  --wheat: #232C40;
+  --wheat-line: #2C3650;
+  --ok-green: #4CAF6D;
+  --warn-red: #E3665F;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.35);
+}
+html[data-tema="oscuro"] .home-btn--reparto,
+html[data-tema="oscuro"] .home-btn--pedidos,
+html[data-tema="oscuro"] .home-btn--nuevo,
+html[data-tema="oscuro"] .home-btn--clientes,
+html[data-tema="oscuro"] .home-btn--factura,
+html[data-tema="oscuro"] .home-btn--productos,
+html[data-tema="oscuro"] .home-btn--stats,
+html[data-tema="oscuro"] .home-btn--empresa {
+  background: var(--paper-raised);
+}
+html[data-tema="oscuro"] .topbar__logo,
+html[data-tema="oscuro"] .sidebar__brand {
+  background: #FFFFFF;
+}
+html[data-tema="oscuro"] .home-logo {
+  background: #FFFFFF;
+  padding: 8px 14px;
+  border-radius: var(--radius);
 }
 
 * { box-sizing: border-box; }
@@ -28,6 +62,10 @@ html, body {
 body {
   padding-bottom: calc(72px + env(safe-area-inset-bottom));
   min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.card, .ticket, .home-btn, .sidebar, .topbar, .tabbar, .modal, .client-row, .product-row {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 button, input, select { font-family: inherit; }
@@ -94,6 +132,7 @@ main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }
   border: 1px solid var(--wheat-line);
   border-radius: var(--radius);
   overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 .ticket-row {
   display: flex;
@@ -120,6 +159,7 @@ main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }
   border: 1px solid var(--wheat-line);
   border-radius: var(--radius);
   padding: 12px 14px;
+  box-shadow: var(--shadow-card);
 }
 .card__top {
   display: flex;
@@ -364,6 +404,7 @@ select.select-input {
   font-weight: 600;
   font-size: 13.5px;
   color: var(--ink);
+  box-shadow: var(--shadow-card);
 }
 .home-btn:active { background: var(--wheat); }
 .home-btn__icon { font-size: 24px; }

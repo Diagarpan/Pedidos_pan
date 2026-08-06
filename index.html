@@ -33,6 +33,7 @@
       <button class="sidebar__item" data-tab="empresa" data-solo-admin="1"><span class="sidebar__icon">🏢</span>Empresa</button>
     </nav>
     <button class="sidebar__item sidebar__item--settings" id="btnAjustesSidebar"><span class="sidebar__icon">⚙</span>Ajustes</button>
+    <button class="sidebar__item" id="btnTemaSidebar"><span class="sidebar__icon">🌙</span>Modo oscuro</button>
   </aside>
 
   <div class="main-col">
@@ -42,6 +43,7 @@
         <div class="topbar__date" id="fechaHoy">—</div>
       </div>
       <div class="topbar__actions">
+        <button class="icon-btn" id="btnTema" title="Modo oscuro" aria-label="Modo oscuro">🌙</button>
         <button class="icon-btn" id="btnRefrescar" title="Actualizar" aria-label="Actualizar">↻</button>
         <button class="icon-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">⚙</button>
       </div>
@@ -103,6 +105,7 @@
     </div>
 
     <button class="btn-secondary" id="btnHojaRuta" style="width:100%; margin-top:14px;">📄 Imprimir hoja de ruta</button>
+    <button class="btn-secondary" id="btnResumenDia" style="width:100%; margin-top:8px;">📊 Resumen del día (reparto + facturas)</button>
 
     <div id="bloqueFaltanManana" class="tab--hidden">
       <div class="section-label">Todavía no han pedido</div>

@@ -17,7 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearNavegacionFecha();
   cablearAjustes();
   cablearNuevoPedido();
+  cablearFacturaDirecta();
   cablearClientes();
+  cablearEmpresa();
 
   document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
 
@@ -69,6 +71,9 @@ function aplicarModoUI() {
   document.querySelectorAll('.home-btn[data-solo-admin]').forEach((btn) => {
     btn.style.display = esRepartidor ? 'none' : '';
   });
+  document.querySelectorAll('.sidebar__item[data-solo-admin]').forEach((btn) => {
+    btn.style.display = esRepartidor ? 'none' : '';
+  });
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
     cambiarTab('inicio');
@@ -112,12 +117,29 @@ function cablearNavegacion() {
   document.querySelectorAll('.home-btn').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
+  document.querySelectorAll('.sidebar__item[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+  });
+  document.querySelectorAll('[data-volver]').forEach((btn) => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.volver));
+  });
+}
+
+// Las subpáginas (ej. "pedidos-hoy") resaltan el menú padre ("pedidos") en
+// el menú lateral y en la barra inferior, no un ítem propio (no existe).
+function claveMenuPadre(nombre) {
+  if (nombre.startsWith('pedidos')) return 'pedidos';
+  if (nombre.startsWith('clientes')) return 'clientes';
+  if (nombre.startsWith('factura')) return 'factura';
+  return nombre;
 }
 
 function cambiarTab(nombre) {
   document.querySelectorAll('.tab').forEach((t) => t.classList.add('tab--hidden'));
   document.getElementById(`tab-${nombre}`).classList.remove('tab--hidden');
-  document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === nombre));
+  const clave = claveMenuPadre(nombre);
+  document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
+  document.querySelectorAll('.sidebar__item[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   cargarTabActual(nombre);
 }
 
@@ -126,9 +148,14 @@ function cargarTabActual(nombre) {
   if (!WEB_APP_URL || !API_KEY) return;
   if (activo === 'inicio') pintarInicio();
   if (activo === 'reparto') cargarReparto();
-  if (activo === 'pedidos') cargarPedidos();
+  if (activo === 'pedidos-hoy') cargarPedidos();
+  if (activo === 'pedidos-historial') prepararHistorialPedidos();
   if (activo === 'nuevo') cargarFormularioNuevo();
-  if (activo === 'clientes') cargarClientes();
+  if (activo === 'clientes-lista') cargarClientes();
+  if (activo === 'factura-crear') cargarFormularioFactura();
+  if (activo === 'factura-resumen') prepararResumenFacturas();
+  if (activo === 'factura-por-cliente') prepararFacturaPorCliente();
+  if (activo === 'empresa') cargarEmpresa();
 }
 
 function pintarInicio() {
@@ -139,6 +166,7 @@ function pintarInicio() {
 /* ============ AJUSTES / CONEXIÓN ============ */
 function cablearAjustes() {
   document.getElementById('btnAjustes').addEventListener('click', abrirAjustes);
+  document.getElementById('btnAjustesSidebar').addEventListener('click', abrirAjustes);
 
   document.getElementById('btnGuardarAjustes').addEventListener('click', async () => {
     const url = document.getElementById('inputUrl').value.trim();
@@ -394,6 +422,185 @@ document.addEventListener('change', (e) => {
 /* ============ NUEVO PEDIDO ============ */
 let fechaPedidoSeleccion = 'hoy';
 
+/* ============ HISTORIAL DE PEDIDOS (rango de fechas) ============ */
+function prepararHistorialPedidos() {
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  if (!document.getElementById('histFechaIni').value) document.getElementById('histFechaIni').valueAsDate = inicioMes;
+  if (!document.getElementById('histFechaFin').value) document.getElementById('histFechaFin').valueAsDate = hoy;
+}
+
+async function buscarHistorialPedidos() {
+  const cont = document.getElementById('listaHistorialPedidos');
+  const ini = document.getElementById('histFechaIni').value;
+  const fin = document.getElementById('histFechaFin').value;
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('pedidosPorRango', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+
+  if (!r.data.length) {
+    cont.innerHTML = '<div class="empty-state">Sin pedidos en ese periodo.</div>';
+    return;
+  }
+
+  cont.innerHTML = r.data.map((p) => {
+    const estado = p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
+    return `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.cliente)}</div>
+          <div class="card__meta">${escapeHtml(p.fecha)} · ${escapeHtml(p.hora || '')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="card__total">${formatoEuros(p.total)}</div>
+          ${stampHtml(estado)}
+        </div>
+      </div>
+      <div class="card__products">${escapeHtml(p.pedido)}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ============ RESUMEN DE FACTURAS (todas, por rango) ============ */
+function prepararResumenFacturas() {
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  if (!document.getElementById('resFechaIni').value) document.getElementById('resFechaIni').valueAsDate = inicioMes;
+  if (!document.getElementById('resFechaFin').value) document.getElementById('resFechaFin').valueAsDate = hoy;
+}
+
+async function buscarResumenFacturas() {
+  const cont = document.getElementById('listaResumenFacturas');
+  const ini = document.getElementById('resFechaIni').value;
+  const fin = document.getElementById('resFechaFin').value;
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('resumenFacturas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+
+  if (!r.data.facturas.length) {
+    cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
+    document.getElementById('resumenFacturasTotal').textContent = '';
+    return;
+  }
+
+  cont.innerHTML = r.data.facturas.map((f) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(f.cliente)}</div>
+          <div class="card__meta">Factura #${f.idFactura} · ${escapeHtml(f.fecha)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="card__total">${formatoEuros(f.total)}</div>
+          ${stampHtml(f.estado)}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('resumenFacturasTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
+}
+
+/* ============ VER FACTURA POR CLIENTE (desde el menú Facturas) ============ */
+async function prepararFacturaPorCliente() {
+  const select = document.getElementById('selectClienteBuscarFactura');
+  if (!clientesCache.length) {
+    const rc = await apiGet('clientes').catch(() => null);
+    if (rc && rc.ok) clientesCache = rc.data;
+  }
+  if (select.options.length <= 1) {
+    select.innerHTML = '<option value="">Selecciona un cliente…</option>' +
+      clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  }
+  const hoy = new Date();
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  if (!document.getElementById('pcFechaIni').value) document.getElementById('pcFechaIni').valueAsDate = inicioMes;
+  if (!document.getElementById('pcFechaFin').value) document.getElementById('pcFechaFin').valueAsDate = hoy;
+}
+
+async function buscarFacturaPorCliente() {
+  const cont = document.getElementById('listaFacturaPorCliente');
+  const clienteId = document.getElementById('selectClienteBuscarFactura').value;
+  const ini = document.getElementById('pcFechaIni').value;
+  const fin = document.getElementById('pcFechaFin').value;
+  if (!clienteId) { cont.innerHTML = '<div class="empty-state">Selecciona un cliente.</div>'; return; }
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('facturasCliente', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+
+  if (!r.data.facturas.length) {
+    cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
+    document.getElementById('facturaPorClienteTotal').textContent = '';
+    return;
+  }
+
+  cont.innerHTML = r.data.facturas.map((f) => `
+    <div class="card">
+      <div class="card__top">
+        <div class="card__meta">Factura #${f.idFactura} · ${escapeHtml(f.fecha)}</div>
+        <div style="text-align:right">
+          <div class="card__total">${formatoEuros(f.total)}</div>
+          ${stampHtml(f.estado)}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('facturaPorClienteTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
+}
+
+/* ============ DATOS DE LA EMPRESA ============ */
+function cablearEmpresa() {
+  document.getElementById('btnGuardarEmpresa').addEventListener('click', guardarEmpresa);
+  document.getElementById('btnBuscarHistorialPedidos').addEventListener('click', buscarHistorialPedidos);
+  document.getElementById('btnBuscarResumenFacturas').addEventListener('click', buscarResumenFacturas);
+  document.getElementById('btnBuscarFacturaPorCliente').addEventListener('click', buscarFacturaPorCliente);
+}
+
+async function cargarEmpresa() {
+  const msg = document.getElementById('empresaMsg');
+  msg.textContent = 'Cargando…';
+  msg.className = 'form-msg';
+  const r = await apiGet('empresa').catch(() => ({ ok: false }));
+  if (!r.ok) { msg.textContent = 'No se pudo cargar.'; msg.className = 'form-msg is-error'; return; }
+
+  document.getElementById('empNombre').value = r.data.nombre || '';
+  document.getElementById('empNif').value = r.data.nif || '';
+  document.getElementById('empDireccion').value = r.data.direccion || '';
+  document.getElementById('empTelefono').value = r.data.telefono || '';
+  document.getElementById('empEmail').value = r.data.email || '';
+  document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
+  msg.textContent = '';
+}
+
+async function guardarEmpresa() {
+  const msg = document.getElementById('empresaMsg');
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('guardarEmpresa', {
+    nombre: document.getElementById('empNombre').value.trim(),
+    nif: document.getElementById('empNif').value.trim(),
+    direccion: document.getElementById('empDireccion').value.trim(),
+    telefono: document.getElementById('empTelefono').value.trim(),
+    email: document.getElementById('empEmail').value.trim(),
+    logoFileId: document.getElementById('empLogoFileId').value.trim(),
+  }).catch(() => ({ ok: false }));
+
+  if (r.ok) {
+    msg.textContent = 'Datos guardados.';
+    msg.className = 'form-msg is-ok';
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
 function cablearNuevoPedido() {
   document.getElementById('btnCrearPedido').addEventListener('click', crearPedidoManual);
   document.getElementById('selectFechaPedido').addEventListener('change', (e) => {
@@ -478,6 +685,101 @@ async function crearPedidoManual() {
     msg.className = 'form-msg is-ok';
     document.getElementById('selectCliente').value = '';
     cargarFormularioNuevo();
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+/* ============ FACTURAS DIRECTAS (sin pedido) ============ */
+let facturaNueva = {};
+
+function cablearFacturaDirecta() {
+  document.getElementById('btnCrearFactura').addEventListener('click', crearFacturaDirecta);
+}
+
+async function cargarFormularioFactura() {
+  const selectCliente = document.getElementById('selectClienteFactura');
+  const contProductos = document.getElementById('listaProductosFactura');
+
+  if (!clientesCache.length) {
+    const rc = await apiGet('clientes').catch(() => null);
+    if (rc && rc.ok) clientesCache = rc.data;
+  }
+  if (!productosCache.length) {
+    const rp = await apiGet('productos').catch(() => null);
+    if (rp && rp.ok) productosCache = rp.data;
+  }
+
+  selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
+    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+
+  facturaNueva = {};
+  contProductos.innerHTML = productosCache.map((p) => `
+    <div class="product-row">
+      <div>
+        <div class="product-row__name">${escapeHtml(p.nombre)}</div>
+        <div class="product-row__price">${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
+      </div>
+      <div class="stepper">
+        <button class="stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
+        <span class="stepper__val" id="cant-f-${p.id}">0</span>
+        <button class="stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
+      </div>
+    </div>
+  `).join('');
+
+  contProductos.querySelectorAll('[data-accion]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const delta = btn.dataset.accion === 'mas' ? 1 : -1;
+      facturaNueva[id] = Math.max(0, (facturaNueva[id] || 0) + delta);
+      document.getElementById(`cant-f-${id}`).textContent = facturaNueva[id];
+      recalcularTotalFactura();
+    });
+  });
+
+  recalcularTotalFactura();
+  document.getElementById('facturaMsg').textContent = '';
+}
+
+function recalcularTotalFactura() {
+  let total = 0;
+  Object.entries(facturaNueva).forEach(([id, cant]) => {
+    if (cant > 0) {
+      const p = productosCache.find((pr) => String(pr.id) === String(id));
+      if (p) total += p.precio * cant * (1 + p.iva);
+    }
+  });
+  document.getElementById('facturaTotal').textContent = formatoEuros(total);
+}
+
+async function crearFacturaDirecta() {
+  const msg = document.getElementById('facturaMsg');
+  const clienteId = document.getElementById('selectClienteFactura').value;
+  const items = Object.entries(facturaNueva)
+    .filter(([, cant]) => cant > 0)
+    .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+
+  if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
+  if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('nuevaFactura', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}). Generando PDF…`;
+    msg.className = 'form-msg is-ok';
+
+    const rPdf = await apiGet('facturaDirectaPdf', { idFactura: r.idFactura }).catch(() => ({ ok: false }));
+    if (rPdf.ok) {
+      descargarPDF(rPdf.base64, rPdf.nombre);
+      msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}).`;
+    }
+
+    document.getElementById('selectClienteFactura').value = '';
+    cargarFormularioFactura();
   } else {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
     msg.className = 'form-msg is-error';

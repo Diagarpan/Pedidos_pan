@@ -1,14 +1,14 @@
 :root {
-  --paper: #F0EBDD;
+  --paper: #EEF3FA;
   --paper-raised: #FFFFFF;
-  --ink: #262220;
-  --ink-muted: #6B6055;
-  --crust: #A8632B;
-  --crust-dark: #7E4A1F;
-  --wheat: #E4D9BC;
-  --wheat-line: #D3C6A4;
-  --ok-green: #3F7A46;
-  --warn-red: #B14338;
+  --ink: #16233A;
+  --ink-muted: #5C6B80;
+  --crust: #2456A6;
+  --crust-dark: #17396F;
+  --wheat: #DCE6F4;
+  --wheat-line: #C3D3E6;
+  --ok-green: #2E7D4F;
+  --warn-red: #B23A3A;
   --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
   --font-data: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
   --radius: 4px;
@@ -45,7 +45,7 @@ button, input, select { font-family: inherit; }
   color: var(--paper-raised);
 }
 .topbar__brand { display: flex; align-items: center; gap: 10px; }
-.topbar__loaf { font-size: 24px; }
+.topbar__logo { height: 30px; width: auto; background: #FFFFFF; padding: 3px 6px; border-radius: var(--radius); }
 .topbar__title { font-weight: 700; font-size: 16px; letter-spacing: 0.2px; }
 .topbar__date { font-family: var(--font-data); font-size: 11px; opacity: 0.75; text-transform: capitalize; }
 .topbar__actions { display: flex; gap: 6px; }
@@ -342,7 +342,7 @@ select.select-input {
 
 /* ---------- INICIO ---------- */
 .home-welcome { text-align: center; padding: 24px 0 4px; }
-.home-emoji { font-size: 40px; }
+.home-logo { height: 64px; width: auto; }
 .home-title { font-weight: 700; font-size: 18px; margin-top: 6px; }
 .home-sub { font-family: var(--font-data); font-size: 11.5px; color: var(--ink-muted); margin-top: 4px; }
 .home-grid {
@@ -412,3 +412,58 @@ select.select-input {
   border: 1px solid var(--wheat-line);
   border-radius: var(--radius);
 }
+
+/* ---------- LAYOUT DE ESCRITORIO (menú lateral) ---------- */
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { display: none; }
+.main-col { flex: 1; min-width: 0; }
+
+@media (min-width: 900px) {
+  body { padding-bottom: 0; }
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--ink);
+    padding: 18px 12px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .sidebar__brand { display: flex; align-items: center; background: #FFFFFF; margin: -18px -12px 18px; padding: 14px 16px; }
+  .sidebar__logo { height: 34px; width: auto; }
+  .sidebar__nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .sidebar__item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 10px;
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: rgba(255,255,255,0.65);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: left;
+    border-left: 3px solid transparent;
+    width: 100%;
+  }
+  .sidebar__item:hover { background: rgba(255,255,255,0.06); color: #FFFFFF; }
+  .sidebar__item.is-active { background: rgba(168,99,43,0.25); color: #FFFFFF; border-left-color: var(--crust); }
+  .sidebar__icon { font-size: 17px; width: 20px; text-align: center; }
+  .sidebar__item--settings { margin-top: auto; }
+
+  .topbar { display: none; }
+  main { max-width: 880px; padding: 28px 32px; }
+  .tabbar { display: none; }
+
+  .home-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .home-welcome { padding: 6px 0 4px; text-align: left; }
+}
+
+/* ---------- INICIO: tarjetas a color por sección ---------- */
+.home-btn--reparto { background: #EAF1FB; border-left-color: var(--crust); }
+.home-btn--pedidos { background: #E6EEFA; border-left-color: #3D74C4; }
+.home-btn--nuevo { background: #E3ECFA; border-left-color: var(--crust-dark); }
+.home-btn--clientes { background: #EDF3FB; border-left-color: #6D93C7; }
+.home-btn--factura { background: #E8EFFA; border-left-color: #1E5AA8; }
+.home-btn--empresa { background: #EAEEF6; border-left-color: var(--ink); }

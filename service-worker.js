@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pedidos-pan-v1';
+const CACHE_NAME = 'pedidos-pan-v2';
 const APP_SHELL = [
   './index.html',
   './styles.css',
@@ -6,6 +6,7 @@ const APP_SHELL = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './logo.png',
 ];
 
 self.addEventListener('install', (event) => {

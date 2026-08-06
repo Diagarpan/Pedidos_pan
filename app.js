@@ -519,12 +519,15 @@ async function buscarResumenFacturas() {
           ${stampHtml(f.estado)}
         </div>
       </div>
-      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : ''}
+      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : `<div class="card__actions"><button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button></div>`}
     </div>
   `).join('');
   document.getElementById('resumenFacturasTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
   cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarResumenFacturas));
+  });
+  cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
+    btn.addEventListener('click', () => verFacturaPDF(btn.dataset.verFactura));
   });
 }
 
@@ -572,13 +575,25 @@ async function buscarFacturaPorCliente() {
           ${stampHtml(f.estado)}
         </div>
       </div>
-      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : ''}
+      <div class="card__actions">
+        <button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button>
+        ${f.estado !== 'Cobrado' ? `<button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button>` : ''}
+      </div>
     </div>
   `).join('');
   document.getElementById('facturaPorClienteTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
   cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarFacturaPorCliente));
   });
+  cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
+    btn.addEventListener('click', () => verFacturaPDF(btn.dataset.verFactura));
+  });
+}
+
+async function verFacturaPDF(idFactura) {
+  const r = await apiGet('facturaDirectaPdf', { idFactura }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { alert('No se pudo abrir la factura: ' + (r.error || 'error')); return; }
+  descargarPDF(r.base64, r.nombre);
 }
 
 async function marcarFacturaCobrada(idFactura, recargar) {

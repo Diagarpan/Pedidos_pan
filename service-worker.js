@@ -7,6 +7,7 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './logo.png',
+  './logo-full.png',
 ];
 
 self.addEventListener('install', (event) => {

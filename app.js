@@ -228,6 +228,38 @@ function cablearNavegacionFecha() {
     offsetRepartoSeleccionado = 0;
     cargarReparto();
   });
+  document.getElementById('btnComprobarManana').addEventListener('click', comprobarPedidosManana);
+}
+
+async function comprobarPedidosManana() {
+  const cont = document.getElementById('resumenManana');
+  cont.innerHTML = '<div class="empty-state">Comprobando…</div>';
+
+  const r = await apiGet('resumenManana').catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo comprobar.</div>'; return; }
+
+  const d = r.data;
+  let html = `<div class="card__meta" style="margin:10px 0;">${d.conPedido} de ${d.totalClientes} clientes han pedido para mañana (${escapeHtml(d.fecha)})</div>`;
+
+  if (d.sinPedido.length === 0) {
+    html += '<div class="empty-state">¡Están todos! Puedes dar el reparto de mañana por cerrado.</div>';
+  } else {
+    html += `<div class="section-label" style="margin-top:14px;">Todavía no han pedido (${d.sinPedido.length})</div>`;
+    html += '<div class="stack">' + d.sinPedido.map((c) => `
+      <div class="client-row">
+        <span>${escapeHtml(c.nombre)}</span>
+        ${c.telefono ? `<a class="chip-btn" href="https://wa.me/34${String(c.telefono).replace(/\\D/g, '')}" target="_blank" rel="noopener">Avisar por WhatsApp</a>` : ''}
+      </div>
+    `).join('') + '</div>';
+  }
+
+  html += `<button class="btn-primary" id="btnVerRepartoManana" style="margin-top:14px;">Ver reparto de mañana</button>`;
+  cont.innerHTML = html;
+
+  document.getElementById('btnVerRepartoManana').addEventListener('click', () => {
+    offsetRepartoSeleccionado = 1;
+    cargarReparto();
+  });
 }
 
 function etiquetaFechaOffset(offset) {
@@ -500,9 +532,13 @@ async function buscarResumenFacturas() {
           ${stampHtml(f.estado)}
         </div>
       </div>
+      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : ''}
     </div>
   `).join('');
   document.getElementById('resumenFacturasTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
+  cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
+    btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarResumenFacturas));
+  });
 }
 
 /* ============ VER FACTURA POR CLIENTE (desde el menú Facturas) ============ */
@@ -549,9 +585,19 @@ async function buscarFacturaPorCliente() {
           ${stampHtml(f.estado)}
         </div>
       </div>
+      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : ''}
     </div>
   `).join('');
   document.getElementById('facturaPorClienteTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
+  cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
+    btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarFacturaPorCliente));
+  });
+}
+
+async function marcarFacturaCobrada(idFactura, recargar) {
+  const r = await apiGet('marcarFacturaCobrada', { idFactura }).catch(() => ({ ok: false }));
+  if (!r.ok) { alert('No se pudo marcar: ' + (r.error || 'error')); return; }
+  recargar();
 }
 
 /* ============ DATOS DE LA EMPRESA ============ */

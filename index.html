@@ -66,26 +66,35 @@
 
   <!-- REPARTO (directo, sin submenú) -->
   <section class="tab tab--hidden" id="tab-reparto">
-    <div class="date-nav">
-      <button class="date-nav__btn" id="btnRepartoAnterior">←</button>
-      <button class="date-nav__label" id="btnRepartoHoy"></button>
-      <button class="date-nav__btn" id="btnRepartoSiguiente">→</button>
+    <div class="home-welcome">
+      <div class="home-title">Reparto</div>
+    </div>
+    <div class="home-grid">
+      <button class="home-btn home-btn--reparto" data-reparto-offset="0"><span class="home-btn__icon">🚚</span>Reparto de hoy</button>
+      <button class="home-btn home-btn--reparto" data-reparto-offset="1"><span class="home-btn__icon">📦</span>Reparto de mañana</button>
+      <button class="home-btn home-btn--reparto" data-reparto-offset="-1"><span class="home-btn__icon">🕓</span>Reparto de ayer</button>
+    </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-reparto-dia">
+    <button class="link-btn" data-volver="reparto">← Reparto</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title" id="repartoDiaTitulo"></div>
     </div>
 
     <div class="section-label">Total a preparar</div>
     <div class="ticket" id="repartoProductos">
-      <div class="empty-state">Cargando reparto…</div>
+      <div class="empty-state">Cargando…</div>
     </div>
 
-    <div class="section-label">Por ruta / cliente</div>
+    <div class="section-label">Pedidos</div>
     <div id="repartoClientes" class="stack">
       <div class="empty-state">Cargando…</div>
     </div>
 
-    <div class="section-label">Reparto de mañana</div>
-    <div class="card">
-      <button class="btn-secondary" id="btnComprobarManana" style="width:100%;">Comprobar pedidos recibidos hasta ahora</button>
-      <div id="resumenManana"></div>
+    <div id="bloqueFaltanManana" class="tab--hidden">
+      <div class="section-label">Todavía no han pedido</div>
+      <div id="repartoFaltan" class="stack"></div>
     </div>
   </section>
 

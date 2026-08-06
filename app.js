@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
-  cablearNavegacionFecha();
   cablearAjustes();
   cablearNuevoPedido();
   cablearFacturaDirecta();
@@ -114,7 +113,7 @@ function cablearNavegacion() {
   document.querySelectorAll('.tabbar__item').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
-  document.querySelectorAll('.home-btn').forEach((btn) => {
+  document.querySelectorAll('.home-btn[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((btn) => {
@@ -122,6 +121,12 @@ function cablearNavegacion() {
   });
   document.querySelectorAll('[data-volver]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.volver));
+  });
+  document.querySelectorAll('[data-reparto-offset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      offsetRepartoSeleccionado = Number(btn.dataset.repartoOffset);
+      cambiarTab('reparto-dia');
+    });
   });
 }
 
@@ -131,6 +136,7 @@ function claveMenuPadre(nombre) {
   if (nombre.startsWith('pedidos')) return 'pedidos';
   if (nombre.startsWith('clientes')) return 'clientes';
   if (nombre.startsWith('factura')) return 'factura';
+  if (nombre.startsWith('reparto')) return 'reparto';
   return nombre;
 }
 
@@ -147,7 +153,7 @@ function cargarTabActual(nombre) {
   const activo = nombre || document.querySelector('.tabbar__item.is-active')?.dataset.tab || 'inicio';
   if (!WEB_APP_URL || !API_KEY) return;
   if (activo === 'inicio') pintarInicio();
-  if (activo === 'reparto') cargarReparto();
+  if (activo === 'reparto-dia') cargarReparto();
   if (activo === 'pedidos-hoy') cargarPedidos();
   if (activo === 'pedidos-historial') prepararHistorialPedidos();
   if (activo === 'nuevo') cargarFormularioNuevo();
@@ -212,63 +218,16 @@ function abrirAjustes() {
 }
 
 /* ============ REPARTO ============ */
-/* ============ REPARTO ============ */
-let offsetRepartoSeleccionado = 0; // 0 = hoy, -1 = ayer, 1 = mañana...
-
-function cablearNavegacionFecha() {
-  document.getElementById('btnRepartoAnterior').addEventListener('click', () => {
-    offsetRepartoSeleccionado -= 1;
-    cargarReparto();
-  });
-  document.getElementById('btnRepartoSiguiente').addEventListener('click', () => {
-    offsetRepartoSeleccionado += 1;
-    cargarReparto();
-  });
-  document.getElementById('btnRepartoHoy').addEventListener('click', () => {
-    offsetRepartoSeleccionado = 0;
-    cargarReparto();
-  });
-  document.getElementById('btnComprobarManana').addEventListener('click', comprobarPedidosManana);
-}
-
-async function comprobarPedidosManana() {
-  const cont = document.getElementById('resumenManana');
-  cont.innerHTML = '<div class="empty-state">Comprobando…</div>';
-
-  const r = await apiGet('resumenManana').catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo comprobar.</div>'; return; }
-
-  const d = r.data;
-  let html = `<div class="card__meta" style="margin:10px 0;">${d.conPedido} de ${d.totalClientes} clientes han pedido para mañana (${escapeHtml(d.fecha)})</div>`;
-
-  if (d.sinPedido.length === 0) {
-    html += '<div class="empty-state">¡Están todos! Puedes dar el reparto de mañana por cerrado.</div>';
-  } else {
-    html += `<div class="section-label" style="margin-top:14px;">Todavía no han pedido (${d.sinPedido.length})</div>`;
-    html += '<div class="stack">' + d.sinPedido.map((c) => `
-      <div class="client-row">
-        <span>${escapeHtml(c.nombre)}</span>
-        ${c.telefono ? `<a class="chip-btn" href="https://wa.me/34${String(c.telefono).replace(/\\D/g, '')}" target="_blank" rel="noopener">Avisar por WhatsApp</a>` : ''}
-      </div>
-    `).join('') + '</div>';
-  }
-
-  html += `<button class="btn-primary" id="btnVerRepartoManana" style="margin-top:14px;">Ver reparto de mañana</button>`;
-  cont.innerHTML = html;
-
-  document.getElementById('btnVerRepartoManana').addEventListener('click', () => {
-    offsetRepartoSeleccionado = 1;
-    cargarReparto();
-  });
-}
+let offsetRepartoSeleccionado = 0; // 0 = hoy, -1 = ayer, 1 = mañana
 
 function etiquetaFechaOffset(offset) {
-  if (offset === 0) return 'Hoy';
-  if (offset === -1) return 'Ayer';
-  if (offset === 1) return 'Mañana';
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const fecha = d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  if (offset === 0) return `Reparto de hoy — ${fecha}`;
+  if (offset === -1) return `Reparto de ayer — ${fecha}`;
+  if (offset === 1) return `Reparto de mañana — ${fecha}`;
+  return `Reparto — ${fecha}`;
 }
 
 function fechaOffsetDDMMYYYY(offset) {
@@ -281,16 +240,22 @@ function fechaOffsetDDMMYYYY(offset) {
 
 async function cargarReparto() {
   const contProductos = document.getElementById('repartoProductos');
-  const contClientes = document.getElementById('repartoClientes');
-  document.getElementById('btnRepartoHoy').textContent = etiquetaFechaOffset(offsetRepartoSeleccionado);
+  document.getElementById('repartoDiaTitulo').textContent = etiquetaFechaOffset(offsetRepartoSeleccionado);
 
   const r = await apiGet('reparto', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch(() => null);
   if (!r || !r.ok) {
     contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
   }
-  guardarCache('reparto', r.data);
   pintarReparto(r.data);
+
+  const bloqueFaltan = document.getElementById('bloqueFaltanManana');
+  if (offsetRepartoSeleccionado === 1) {
+    bloqueFaltan.classList.remove('tab--hidden');
+    cargarFaltanManana();
+  } else {
+    bloqueFaltan.classList.add('tab--hidden');
+  }
 }
 
 function pintarReparto(data) {
@@ -298,7 +263,7 @@ function pintarReparto(data) {
   const contClientes = document.getElementById('repartoClientes');
 
   if (!data.productos.length) {
-    contProductos.innerHTML = '<div class="empty-state">Todavía no hay pedidos hoy.</div>';
+    contProductos.innerHTML = '<div class="empty-state">Todavía no hay pedidos para este día.</div>';
   } else {
     contProductos.innerHTML = data.productos.map((p) => `
       <div class="ticket-row">
@@ -310,23 +275,45 @@ function pintarReparto(data) {
 
   if (!data.clientes.length) {
     contClientes.innerHTML = '<div class="empty-state">Sin pedidos todavía.</div>';
-  } else {
-    contClientes.innerHTML = data.clientes.map((c) => `
-      <div class="card">
-        <div class="card__top">
-          <div>
-            <div class="card__name">${escapeHtml(c.cliente)}</div>
-            <div class="card__meta">${c.ruta ? 'Ruta: ' + escapeHtml(c.ruta) : ''}</div>
-          </div>
-          <div style="display:flex; gap:6px;">
-            ${stampHtml(c.entregado ? 'Entregado' : 'Pendiente')}
-            ${stampHtml(c.cobrado ? 'Cobrado' : 'Sin cobrar')}
-          </div>
+    return;
+  }
+
+  const esAyer = offsetRepartoSeleccionado < 0;
+  contClientes.innerHTML = data.clientes.map((c) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(c.cliente)}</div>
+          <div class="card__meta">${escapeHtml(c.fecha || '')}${c.hora ? ' · ' + escapeHtml(c.hora) : ''}${c.ruta ? ' · Ruta ' + escapeHtml(c.ruta) : ''}</div>
         </div>
-        <div class="card__products">${escapeHtml(c.productos)}</div>
+        ${esAyer ? stampHtml(c.entregado ? 'Entregado' : 'No entregado') : ''}
+      </div>
+      <div class="card__products">${escapeHtml(c.productos)}</div>
+      ${esAyer && c.entregado && c.horaEntrega ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(c.horaEntrega)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function cargarFaltanManana() {
+  const cont = document.getElementById('repartoFaltan');
+  cont.innerHTML = '<div class="empty-state">Comprobando…</div>';
+
+  const r = await apiGet('resumenManana').catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo comprobar.</div>'; return; }
+
+  const d = r.data;
+  if (d.sinPedido.length === 0) {
+    cont.innerHTML = '<div class="empty-state">¡Están todos! Ya ha pedido toda la cartera de clientes activa.</div>';
+    return;
+  }
+
+  cont.innerHTML = `<div class="card__meta" style="margin-bottom:8px;">${d.conPedido} de ${d.totalClientes} clientes ya han pedido</div>` +
+    d.sinPedido.map((c) => `
+      <div class="client-row">
+        <span>${escapeHtml(c.nombre)}</span>
+        ${c.telefono ? `<a class="chip-btn" href="https://wa.me/34${String(c.telefono).replace(/\D/g, '')}" target="_blank" rel="noopener">Avisar</a>` : ''}
       </div>
     `).join('');
-  }
 }
 
 /* ============ PEDIDOS DEL DÍA ============ */
@@ -469,8 +456,8 @@ async function buscarHistorialPedidos() {
   if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
 
   cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('pedidosPorRango', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+  const r = await apiGet('pedidosPorRango', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
   if (!r.data.length) {
     cont.innerHTML = '<div class="empty-state">Sin pedidos en ese periodo.</div>';
@@ -511,8 +498,8 @@ async function buscarResumenFacturas() {
   if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
 
   cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('resumenFacturas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+  const r = await apiGet('resumenFacturas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
   if (!r.data.facturas.length) {
     cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
@@ -567,8 +554,8 @@ async function buscarFacturaPorCliente() {
   if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
 
   cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('facturasCliente', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+  const r = await apiGet('facturasCliente', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
   if (!r.data.facturas.length) {
     cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';

@@ -136,7 +136,6 @@ function pintarFecha() {
   const texto = hoy.toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
-  document.getElementById('fechaHoy').textContent = texto;
   document.getElementById('fechaHoySidebar').textContent = texto;
 }
 

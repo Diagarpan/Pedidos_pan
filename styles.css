@@ -40,7 +40,6 @@ html[data-tema="oscuro"] .home-btn--stats,
 html[data-tema="oscuro"] .home-btn--empresa {
   background: var(--paper-raised);
 }
-html[data-tema="oscuro"] .topbar__logo,
 html[data-tema="oscuro"] .sidebar__brand {
   background: #FFFFFF;
 }
@@ -86,7 +85,7 @@ button, input, select { font-family: inherit; }
   color: #FFFFFF;
 }
 .topbar__brand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.topbar__logo { height: 100px; width: auto; background: #FFFFFF; padding: 10px 22px; border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+.topbar__logo { height: 118px; width: auto; }
 .topbar__title { font-weight: 700; font-size: 16px; letter-spacing: 0.2px; }
 .topbar__date { font-family: var(--font-data); font-size: 11px; opacity: 0.85; text-transform: capitalize; }
 .topbar__actions {
@@ -483,7 +482,7 @@ select.select-input {
     height: 100vh;
   }
   .sidebar__brand { display: flex; align-items: center; background: #FFFFFF; margin: -18px -12px 18px; padding: 14px 16px; }
-  .sidebar__logo { height: 34px; width: auto; }
+  .sidebar__logo { height: 42px; width: auto; }
   .sidebar__nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
   .sidebar__item {
     display: flex; align-items: center; gap: 10px;

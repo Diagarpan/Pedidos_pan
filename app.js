@@ -617,7 +617,7 @@ async function buscarHistorialPedidos() {
   }
 
   cont.innerHTML = r.data.map((p) => {
-    const estado = p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
+    const estado = p.anulado ? 'Anulado' : p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
     return `
     <div class="card">
       <div class="card__top">
@@ -671,10 +671,15 @@ async function buscarResumenFacturas() {
           ${stampHtml(f.estado)}
         </div>
       </div>
-      ${f.estado !== 'Cobrado' ? `<div class="card__actions"><button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button><button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button></div>` : `<div class="card__actions"><button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button></div>`}
+      <div class="card__actions">
+        <button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button>
+        ${(f.estado !== 'Cobrado' && f.estado !== 'Anulada') ? `<button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button>` : ''}
+      </div>
     </div>
   `).join('');
-  document.getElementById('resumenFacturasTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
+  document.getElementById('resumenFacturasTotal').textContent =
+    `Facturado: ${formatoEuros(r.data.total)}  ·  Cobrado: ${formatoEuros(r.data.totalCobrado)}  ·  Pendiente: ${formatoEuros(r.data.totalPendiente)}` +
+    (r.data.numAnuladas ? `  ·  ${r.data.numAnuladas} anulada(s)` : '');
   cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarResumenFacturas));
   });
@@ -1103,7 +1108,9 @@ async function buscarFacturasCliente() {
 
 /* ============ UTILIDADES ============ */
 function stampHtml(estado) {
-  const clase = estado === 'Cobrado' ? 'stamp--cobrado' : estado === 'Entregado' ? 'stamp--entregado' : 'stamp--pendiente';
+  let clase = 'stamp--pendiente';
+  if (estado === 'Cobrado' || estado === 'Entregado') clase = 'stamp--cobrado';
+  else if (estado === 'Anulado' || estado === 'Anulada') clase = 'stamp--anulado';
   return `<span class="stamp ${clase}">${escapeHtml(estado || 'Pendiente')}</span>`;
 }
 

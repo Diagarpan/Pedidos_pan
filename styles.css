@@ -213,6 +213,7 @@ main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }
 .stamp--pendiente { background: var(--warn-red); }
 .stamp--entregado { background: var(--ok-green); }
 .stamp--cobrado { background: var(--ok-green); }
+.stamp--anulado { background: var(--ink-muted); }
 
 .card__actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
 .chip-btn {

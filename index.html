@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -22,30 +22,30 @@
       <img src="logo.png" alt="Logo" class="sidebar__logo">
     </div>
     <nav class="sidebar__nav">
-      <button class="sidebar__item is-active" data-tab="inicio"><span class="sidebar__icon">🏠</span>Inicio</button>
-      <button class="sidebar__item" data-tab="reparto"><span class="sidebar__icon">🚚</span>Reparto</button>
-      <button class="sidebar__item" data-tab="pedidos"><span class="sidebar__icon">📋</span>Pedidos</button>
-      <button class="sidebar__item" data-tab="nuevo" data-solo-admin="1"><span class="sidebar__icon">➕</span>Nuevo pedido</button>
-      <button class="sidebar__item" data-tab="factura" data-solo-admin="1"><span class="sidebar__icon">🧾</span>Facturas</button>
-      <button class="sidebar__item" data-tab="clientes" data-solo-admin="1"><span class="sidebar__icon">👥</span>Clientes</button>
-      <button class="sidebar__item" data-tab="productos" data-solo-admin="1"><span class="sidebar__icon">🍞</span>Productos</button>
-      <button class="sidebar__item" data-tab="estadisticas" data-solo-admin="1"><span class="sidebar__icon">📊</span>Estadísticas</button>
-      <button class="sidebar__item" data-tab="empresa" data-solo-admin="1"><span class="sidebar__icon">🏢</span>Empresa</button>
+      <button class="sidebar__item is-active" data-tab="inicio"><span class="sidebar__icon" data-icon="inicio"></span>Inicio</button>
+      <button class="sidebar__item" data-tab="reparto"><span class="sidebar__icon" data-icon="reparto"></span>Reparto</button>
+      <button class="sidebar__item" data-tab="pedidos"><span class="sidebar__icon" data-icon="pedidos"></span>Pedidos</button>
+      <button class="sidebar__item" data-tab="nuevo" data-solo-admin="1"><span class="sidebar__icon" data-icon="nuevo"></span>Nuevo pedido</button>
+      <button class="sidebar__item" data-tab="factura" data-solo-admin="1"><span class="sidebar__icon" data-icon="facturas"></span>Facturas</button>
+      <button class="sidebar__item" data-tab="clientes" data-solo-admin="1"><span class="sidebar__icon" data-icon="clientes"></span>Clientes</button>
+      <button class="sidebar__item" data-tab="productos" data-solo-admin="1"><span class="sidebar__icon" data-icon="productos"></span>Productos</button>
+      <button class="sidebar__item" data-tab="estadisticas" data-solo-admin="1"><span class="sidebar__icon" data-icon="estadisticas"></span>Estadísticas</button>
+      <button class="sidebar__item" data-tab="empresa" data-solo-admin="1"><span class="sidebar__icon" data-icon="empresa"></span>Empresa</button>
     </nav>
-    <button class="sidebar__item sidebar__item--settings" id="btnAjustesSidebar"><span class="sidebar__icon">⚙</span>Ajustes</button>
-    <button class="sidebar__item" id="btnTemaSidebar"><span class="sidebar__icon">🌙</span>Modo oscuro</button>
+    <button class="sidebar__item sidebar__item--settings" id="btnAjustesSidebar"><span class="sidebar__icon" data-icon="ajustes"></span>Ajustes</button>
+    <button class="sidebar__item" id="btnTemaSidebar"><span class="sidebar__icon" data-icon="tema"></span>Modo oscuro</button>
   </aside>
 
   <div class="main-col">
     <header class="topbar">
       <div class="topbar__brand">
-        <img src="logo.png" alt="Logo" class="topbar__logo">
+        <img src="logo-full.png" alt="Logo" class="topbar__logo">
         <div class="topbar__date" id="fechaHoy">—</div>
       </div>
       <div class="topbar__actions">
-        <button class="icon-btn" id="btnTema" title="Modo oscuro" aria-label="Modo oscuro">🌙</button>
-        <button class="icon-btn" id="btnRefrescar" title="Actualizar" aria-label="Actualizar">↻</button>
-        <button class="icon-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes">⚙</button>
+        <button class="icon-btn" id="btnTema" title="Modo oscuro" aria-label="Modo oscuro"><span data-icon="tema"></span></button>
+        <button class="icon-btn" id="btnRefrescar" title="Actualizar" aria-label="Actualizar"><span data-icon="refrescar"></span></button>
+        <button class="icon-btn" id="btnAjustes" title="Ajustes" aria-label="Ajustes"><span data-icon="ajustes"></span></button>
       </div>
     </header>
 
@@ -65,14 +65,14 @@
     <div id="resultadosBusquedaGlobal"></div>
 
     <div class="home-grid">
-      <button class="home-btn home-btn--reparto" data-tab="reparto"><span class="home-btn__icon">🚚</span>Reparto</button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos"><span class="home-btn__icon">📋</span>Pedidos</button>
-      <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon">➕</span>Nuevo pedido</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon">👥</span>Clientes</button>
-      <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1"><span class="home-btn__icon">🧾</span>Facturas</button>
-      <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1"><span class="home-btn__icon">🍞</span>Productos</button>
-      <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1"><span class="home-btn__icon">📊</span>Estadísticas</button>
-      <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1"><span class="home-btn__icon">🏢</span>Empresa</button>
+      <button class="home-btn home-btn--reparto" data-tab="reparto"><span class="home-btn__icon" data-icon="reparto"></span>Reparto</button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos</button>
+      <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
+      <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon" data-icon="clientes"></span>Clientes</button>
+      <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Facturas</button>
+      <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1"><span class="home-btn__icon" data-icon="productos"></span>Productos</button>
+      <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1"><span class="home-btn__icon" data-icon="estadisticas"></span>Estadísticas</button>
+      <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1"><span class="home-btn__icon" data-icon="empresa"></span>Empresa</button>
     </div>
   </section>
 
@@ -82,9 +82,9 @@
       <div class="home-title">Reparto</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--reparto" data-reparto-offset="0"><span class="home-btn__icon">🚚</span>Reparto de hoy</button>
-      <button class="home-btn home-btn--reparto" data-reparto-offset="1"><span class="home-btn__icon">📦</span>Reparto de mañana</button>
-      <button class="home-btn home-btn--reparto" data-reparto-offset="-1"><span class="home-btn__icon">🕓</span>Reparto de ayer</button>
+      <button class="home-btn home-btn--reparto" data-reparto-offset="0"><span class="home-btn__icon" data-icon="reparto"></span>Reparto de hoy</button>
+      <button class="home-btn home-btn--reparto" data-reparto-offset="1"><span class="home-btn__icon" data-icon="manana"></span>Reparto de mañana</button>
+      <button class="home-btn home-btn--reparto" data-reparto-offset="-1"><span class="home-btn__icon" data-icon="ayer"></span>Reparto de ayer</button>
     </div>
   </section>
 
@@ -119,8 +119,8 @@
       <div class="home-title">Pedidos</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon">📋</span>Pedidos de hoy</button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon">🗂️</span>Historial de pedidos</button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos de hoy</button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
     </div>
   </section>
 
@@ -184,8 +184,8 @@
       <div class="home-title">Clientes</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon">👥</span>Ver clientes</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon">🗂️</span>Historial de pedidos</button>
+      <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="clientes"></span>Ver clientes</button>
+      <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
     </div>
   </section>
 
@@ -253,9 +253,9 @@
       <div class="home-title">Facturas</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--factura" data-tab="factura-resumen"><span class="home-btn__icon">📊</span>Resumen de facturas</button>
-      <button class="home-btn home-btn--factura" data-tab="factura-por-cliente"><span class="home-btn__icon">🔎</span>Ver factura por cliente</button>
-      <button class="home-btn home-btn--factura" data-tab="factura-crear"><span class="home-btn__icon">➕</span>Generar factura</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-resumen"><span class="home-btn__icon" data-icon="estadisticas"></span>Resumen de facturas</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-por-cliente"><span class="home-btn__icon" data-icon="buscar"></span>Ver factura por cliente</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-crear"><span class="home-btn__icon" data-icon="nuevo"></span>Generar factura</button>
     </div>
   </section>
 
@@ -396,19 +396,19 @@
 
 <nav class="tabbar">
   <button class="tabbar__item is-active" data-tab="inicio">
-    <span class="tabbar__icon">🏠</span><span>Inicio</span>
+    <span class="tabbar__icon" data-icon="inicio"></span><span>Inicio</span>
   </button>
   <button class="tabbar__item" data-tab="reparto">
-    <span class="tabbar__icon">🚚</span><span>Reparto</span>
+    <span class="tabbar__icon" data-icon="reparto"></span><span>Reparto</span>
   </button>
   <button class="tabbar__item" data-tab="pedidos">
-    <span class="tabbar__icon">📋</span><span>Pedidos</span>
+    <span class="tabbar__icon" data-icon="pedidos"></span><span>Pedidos</span>
   </button>
   <button class="tabbar__item" data-tab="nuevo">
-    <span class="tabbar__icon">➕</span><span>Nuevo</span>
+    <span class="tabbar__icon" data-icon="nuevo"></span><span>Nuevo</span>
   </button>
   <button class="tabbar__item" data-tab="clientes">
-    <span class="tabbar__icon">👥</span><span>Clientes</span>
+    <span class="tabbar__icon" data-icon="clientes"></span><span>Clientes</span>
   </button>
 </nav>
 

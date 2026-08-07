@@ -51,6 +51,8 @@
 
     <main id="app">
 
+  <nav class="breadcrumb tab--hidden" id="breadcrumb"></nav>
+
   <!-- INICIO -->
   <section class="tab" id="tab-inicio">
     <div class="home-welcome">
@@ -65,8 +67,8 @@
     <div id="resultadosBusquedaGlobal"></div>
 
     <div class="home-grid">
-      <button class="home-btn home-btn--reparto" data-tab="reparto"><span class="home-btn__icon" data-icon="reparto"></span>Reparto</button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos</button>
+      <button class="home-btn home-btn--reparto" data-tab="reparto"><span class="home-btn__icon" data-icon="reparto"></span>Reparto<span class="home-btn__badge" id="badgeReparto"></span></button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos<span class="home-btn__badge" id="badgePedidos"></span></button>
       <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon" data-icon="clientes"></span>Clientes</button>
       <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Facturas</button>
@@ -80,6 +82,7 @@
   <section class="tab tab--hidden" id="tab-reparto">
     <div class="home-welcome">
       <div class="home-title">Reparto</div>
+      <div class="home-sub">Consulta y organiza el reparto diario por rutas</div>
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--reparto" data-reparto-offset="0"><span class="home-btn__icon" data-icon="reparto"></span>Reparto de hoy</button>
@@ -117,6 +120,7 @@
   <section class="tab tab--hidden" id="tab-pedidos">
     <div class="home-welcome">
       <div class="home-title">Pedidos</div>
+      <div class="home-sub">Consulta el estado de los pedidos y su historial</div>
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos de hoy</button>
@@ -182,6 +186,7 @@
   <section class="tab tab--hidden" id="tab-clientes">
     <div class="home-welcome">
       <div class="home-title">Clientes</div>
+      <div class="home-sub">Consulta, edita y da de alta clientes</div>
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="clientes"></span>Ver clientes</button>
@@ -251,6 +256,7 @@
   <section class="tab tab--hidden" id="tab-factura">
     <div class="home-welcome">
       <div class="home-title">Facturas</div>
+      <div class="home-sub">Genera, consulta y gestiona el cobro de facturas</div>
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--factura" data-tab="factura-resumen"><span class="home-btn__icon" data-icon="estadisticas"></span>Resumen de facturas</button>
@@ -344,6 +350,7 @@
   <section class="tab tab--hidden" id="tab-productos">
     <div class="home-welcome">
       <div class="home-title">Productos</div>
+      <div class="home-sub">Gestiona el catálogo y los precios</div>
     </div>
     <button class="btn-primary" id="btnNuevoProducto" style="margin-bottom:12px;">+ Nuevo producto</button>
     <div id="listaProductosGestion" class="stack">
@@ -378,6 +385,7 @@
   <section class="tab tab--hidden" id="tab-estadisticas">
     <div class="home-welcome">
       <div class="home-title">Estadísticas</div>
+      <div class="home-sub">Ventas, productos y clientes por periodo</div>
     </div>
     <div class="date-range">
       <input type="date" id="statsFechaIni">

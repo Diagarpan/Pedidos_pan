@@ -160,6 +160,48 @@ async function apiPost(action, payload) {
   return res.json();
 }
 
+/* ============ MIGAS DE PAN ============ */
+const BREADCRUMBS = {
+  reparto: [{ label: 'Reparto', tab: 'reparto' }],
+  'reparto-dia': [{ label: 'Reparto', tab: 'reparto' }, { label: 'Detalle', tab: 'reparto-dia' }],
+  pedidos: [{ label: 'Pedidos', tab: 'pedidos' }],
+  'pedidos-hoy': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }],
+  'pedidos-historial': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Historial', tab: 'pedidos-historial' }],
+  nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
+  clientes: [{ label: 'Clientes', tab: 'clientes' }],
+  'clientes-lista': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }],
+  'cliente-form': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }, { label: 'Cliente', tab: 'cliente-form' }],
+  factura: [{ label: 'Facturas', tab: 'factura' }],
+  'factura-resumen': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen', tab: 'factura-resumen' }],
+  'factura-por-cliente': [{ label: 'Facturas', tab: 'factura' }, { label: 'Por cliente', tab: 'factura-por-cliente' }],
+  'factura-crear': [{ label: 'Facturas', tab: 'factura' }, { label: 'Generar factura', tab: 'factura-crear' }],
+  productos: [{ label: 'Productos', tab: 'productos' }],
+  'producto-form': [{ label: 'Productos', tab: 'productos' }, { label: 'Producto', tab: 'producto-form' }],
+  estadisticas: [{ label: 'Estadísticas', tab: 'estadisticas' }],
+  empresa: [{ label: 'Empresa', tab: 'empresa' }],
+};
+
+function pintarBreadcrumb(nombre) {
+  const cont = document.getElementById('breadcrumb');
+  if (nombre === 'inicio' || !BREADCRUMBS[nombre]) {
+    cont.classList.add('tab--hidden');
+    cont.innerHTML = '';
+    return;
+  }
+  cont.classList.remove('tab--hidden');
+  const segmentos = BREADCRUMBS[nombre];
+  let html = `<button data-tab="inicio">Inicio</button>`;
+  segmentos.forEach((s, i) => {
+    html += `<span class="breadcrumb__sep">›</span>`;
+    html += (i === segmentos.length - 1)
+      ? `<span class="breadcrumb__current">${escapeHtml(s.label)}</span>`
+      : `<button data-tab="${s.tab}">${escapeHtml(s.label)}</button>`;
+  });
+  cont.innerHTML = html;
+  cont.querySelectorAll('button[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+  });
+}
 /* ============ NAVEGACIÓN POR PESTAÑAS ============ */
 function cablearNavegacion() {
   document.querySelectorAll('.tabbar__item').forEach((btn) => {
@@ -199,6 +241,7 @@ function cambiarTab(nombre) {
   const clave = claveMenuPadre(nombre);
   document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
+  pintarBreadcrumb(nombre);
   cargarTabActual(nombre);
 }
 
@@ -222,6 +265,22 @@ function cargarTabActual(nombre) {
 function pintarInicio() {
   document.getElementById('homeSub').textContent =
     ROL === 'repartidor' ? `Repartidor · Ruta ${RUTA}` : 'Administración';
+  cargarBadgesInicio();
+}
+
+async function cargarBadgesInicio() {
+  const badgeReparto = document.getElementById('badgeReparto');
+  const badgePedidos = document.getElementById('badgePedidos');
+  badgeReparto.textContent = '';
+  badgePedidos.textContent = '';
+
+  const r = await apiGet('pedidosHoy').catch(() => null);
+  if (!r || !r.ok) return;
+
+  const total = r.data.length;
+  const pendientes = r.data.filter((p) => !p.entregado).length;
+  badgeReparto.textContent = total ? `${total} hoy` : '';
+  badgePedidos.textContent = pendientes ? `${pendientes} pendientes` : (total ? 'Al día' : '');
 }
 
 /* ============ AJUSTES / CONEXIÓN ============ */

@@ -201,6 +201,7 @@ function pintarInicio() {
 function cablearAjustes() {
   document.getElementById('btnAjustes').addEventListener('click', abrirAjustes);
   document.getElementById('btnAjustesSidebar').addEventListener('click', abrirAjustes);
+  document.getElementById('btnCopiarEnlace').addEventListener('click', copiarEnlaceCompartir);
 
   document.getElementById('btnGuardarAjustes').addEventListener('click', async () => {
     const url = document.getElementById('inputUrl').value.trim();
@@ -239,9 +240,31 @@ function cablearAjustes() {
   });
 }
 
+async function copiarEnlaceCompartir() {
+  const msg = document.getElementById('enlaceMsg');
+  const url = document.getElementById('inputUrl').value.trim();
+  if (!url) {
+    msg.textContent = 'Primero pon la URL del Web App arriba.';
+    msg.className = 'form-msg is-error';
+    return;
+  }
+
+  const enlace = `${window.location.origin}${window.location.pathname}?url=${encodeURIComponent(url)}`;
+
+  try {
+    await navigator.clipboard.writeText(enlace);
+    msg.textContent = '¡Enlace copiado! Pégalo donde quieras mandarlo (la clave no va incluida, cada uno pone la suya).';
+    msg.className = 'form-msg is-ok';
+  } catch (e) {
+    msg.textContent = 'No se pudo copiar automáticamente. Enlace: ' + enlace;
+    msg.className = 'form-msg is-error';
+  }
+}
+
 function abrirAjustes() {
   document.getElementById('inputUrl').value = WEB_APP_URL;
   document.getElementById('inputKey').value = API_KEY;
+  document.getElementById('enlaceMsg').textContent = '';
   document.getElementById('modalAjustes').classList.remove('tab--hidden');
 }
 

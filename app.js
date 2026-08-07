@@ -133,9 +133,11 @@ function aplicarModoUI() {
 
 function pintarFecha() {
   const hoy = new Date();
-  document.getElementById('fechaHoy').textContent = hoy.toLocaleDateString('es-ES', {
+  const texto = hoy.toLocaleDateString('es-ES', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+  document.getElementById('fechaHoy').textContent = texto;
+  document.getElementById('fechaHoySidebar').textContent = texto;
 }
 
 function registrarServiceWorker() {

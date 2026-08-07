@@ -34,13 +34,14 @@
     </nav>
     <button class="sidebar__item sidebar__item--settings" id="btnAjustesSidebar"><span class="sidebar__icon" data-icon="ajustes"></span>Ajustes</button>
     <button class="sidebar__item" id="btnTemaSidebar"><span class="sidebar__icon" data-icon="tema"></span>Modo oscuro</button>
+    <div class="sidebar__date" id="fechaHoySidebar">—</div>
   </aside>
 
   <div class="main-col">
     <header class="topbar">
+      <div class="topbar__date topbar__date--side" id="fechaHoy">—</div>
       <div class="topbar__brand">
         <img src="logo-full.png" alt="Logo" class="topbar__logo">
-        <div class="topbar__date" id="fechaHoy">—</div>
       </div>
       <div class="topbar__actions">
         <button class="icon-btn" id="btnTema" title="Modo oscuro" aria-label="Modo oscuro"><span data-icon="tema"></span></button>
@@ -56,7 +57,6 @@
   <!-- INICIO -->
   <section class="tab" id="tab-inicio">
     <div class="home-welcome">
-      <img src="logo-full.png" alt="Logo" class="home-logo">
       <div class="home-title">¿Qué quieres hacer?</div>
       <div class="home-sub" id="homeSub"></div>
     </div>

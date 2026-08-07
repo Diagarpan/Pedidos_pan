@@ -80,14 +80,27 @@ button, input, select { font-family: inherit; }
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: calc(22px + env(safe-area-inset-top)) 18px 22px;
+  padding: calc(20px + env(safe-area-inset-top)) 18px 20px;
   background: var(--crust);
   color: #FFFFFF;
 }
 .topbar__brand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.topbar__logo { height: 118px; width: auto; }
+.topbar__logo { height: 148px; width: auto; }
 .topbar__title { font-weight: 700; font-size: 16px; letter-spacing: 0.2px; }
-.topbar__date { font-family: var(--font-data); font-size: 11px; opacity: 0.85; text-transform: capitalize; }
+.topbar__date {
+  font-family: var(--font-data);
+  font-size: 11px;
+  opacity: 0.85;
+  text-transform: capitalize;
+}
+.topbar__date--side {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 90px;
+  line-height: 1.4;
+}
 .topbar__actions {
   display: flex;
   gap: 6px;
@@ -558,3 +571,20 @@ select.select-input {
   color: #FFFFFF;
 }
 .home-btn__badge:empty { display: none; }
+
+/* ---------- FECHA EN EL MENÚ LATERAL (debajo de Modo oscuro) ---------- */
+.sidebar__date {
+  font-family: var(--font-data);
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+  text-transform: capitalize;
+  padding: 10px 8px 4px;
+}
+
+/* En móviles muy estrechos, el logo grande + fecha lateral no caben bien */
+@media (max-width: 380px) {
+  .topbar__logo { height: 110px; }
+  .topbar__date--side { font-size: 10px; max-width: 68px; left: 8px; }
+  .topbar__actions { right: 8px; }
+}

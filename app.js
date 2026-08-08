@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearFacturaDirecta();
   cablearClientes();
   cablearClientesForm();
+  cablearPreciosEspeciales();
   cablearEmpresa();
   cablearHojaRuta();
   cablearProductos();
@@ -1045,6 +1046,8 @@ async function abrirDetalleCliente(id) {
   if (clienteSeleccionado.descuento > 0) info.push(`Descuento: ${(clienteSeleccionado.descuento * 100).toFixed(0)}%`);
   document.getElementById('detalleClienteInfo').innerHTML = info.map((l) => `<div>${escapeHtml(l)}</div>`).join('');
 
+  cargarPreciosEspeciales(id);
+
   const hoy = new Date();
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   document.getElementById('fechaIni').valueAsDate = inicioMes;
@@ -1154,6 +1157,12 @@ function cablearHojaRuta() {
     const r = await apiGet('resumenDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
     if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
     descargarPDF(r.base64, r.nombre);
+  });
+  document.getElementById('btnFacturasDia').addEventListener('click', async () => {
+    const r = await apiGet('facturasDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+    descargarPDF(r.base64, r.nombre);
+    if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
   });
 }
 
@@ -1392,4 +1401,74 @@ async function buscarGlobal(termino) {
     `).join('') + '</div>';
   }
   cont.innerHTML = html;
+}
+
+/* ============ PRECIOS ESPECIALES (por cliente + producto) ============ */
+function cablearPreciosEspeciales() {
+  document.getElementById('btnAnadirPrecioEspecial').addEventListener('click', anadirPrecioEspecial);
+}
+
+async function cargarPreciosEspeciales(idCliente) {
+  const cont = document.getElementById('listaPreciosEspeciales');
+  const select = document.getElementById('peSelectProducto');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+
+  if (!productosCache.length) {
+    const rp = await apiGet('productos').catch(() => null);
+    if (rp && rp.ok) productosCache = rp.data;
+  }
+  select.innerHTML = '<option value="">Producto…</option>' +
+    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+
+  const r = await apiGet('preciosEspecialesCliente', { clienteId: idCliente }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  if (!r.data.length) {
+    cont.innerHTML = '<div class="empty-state">Este cliente paga el precio normal en todos los productos.</div>';
+    return;
+  }
+
+  cont.innerHTML = r.data.map((pe) => `
+    <div class="client-row">
+      <span>${escapeHtml(pe.producto)}</span>
+      <span style="display:flex; align-items:center; gap:8px;">
+        <span class="card__total">${formatoEuros(pe.precio)}</span>
+        <button class="chip-btn" data-quitar-precio="${pe.idProducto}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
+      </span>
+    </div>
+  `).join('');
+
+  cont.querySelectorAll('[data-quitar-precio]').forEach((btn) => {
+    btn.addEventListener('click', () => quitarPrecioEspecial(idCliente, btn.dataset.quitarPrecio));
+  });
+}
+
+async function anadirPrecioEspecial() {
+  if (!clienteSeleccionado) return;
+  const idProducto = document.getElementById('peSelectProducto').value;
+  const precio = document.getElementById('peInputPrecio').value;
+  if (!idProducto) { alert('Selecciona un producto.'); return; }
+  if (precio === '' || Number(precio) < 0) { alert('Pon un precio válido.'); return; }
+
+  const producto = productosCache.find((p) => String(p.id) === String(idProducto));
+
+  const r = await apiGet('guardarPrecioEspecial', {
+    idCliente: clienteSeleccionado.id,
+    clienteNombre: clienteSeleccionado.nombre,
+    idProducto: idProducto,
+    productoNombre: producto ? producto.nombre : '',
+    precio: precio,
+  }).catch((err) => ({ ok: false, error: String(err) }));
+
+  if (!r.ok) { alert('No se pudo guardar: ' + (r.error || 'error')); return; }
+
+  document.getElementById('peInputPrecio').value = '';
+  document.getElementById('peSelectProducto').value = '';
+  cargarPreciosEspeciales(clienteSeleccionado.id);
+}
+
+async function quitarPrecioEspecial(idCliente, idProducto) {
+  const r = await apiGet('eliminarPrecioEspecial', { idCliente, idProducto }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { alert('No se pudo quitar: ' + (r.error || 'error')); return; }
+  cargarPreciosEspeciales(idCliente);
 }

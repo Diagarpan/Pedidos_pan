@@ -108,6 +108,7 @@
 
     <button class="btn-secondary" id="btnHojaRuta" style="width:100%; margin-top:14px;">📄 Imprimir hoja de ruta</button>
     <button class="btn-secondary" id="btnResumenDia" style="width:100%; margin-top:8px;">📊 Resumen del día (reparto + facturas)</button>
+    <button class="btn-secondary" id="btnFacturasDia" style="width:100%; margin-top:8px;">🧾 Descargar todas las facturas del día</button>
 
     <div id="bloqueFaltanManana" class="tab--hidden">
       <div class="section-label">Todavía no han pedido</div>
@@ -206,6 +207,16 @@
         <button class="chip-btn" id="btnEditarCliente">Editar</button>
       </div>
       <div class="client-info" id="detalleClienteInfo"></div>
+
+      <div class="section-label">Precios especiales</div>
+      <div id="listaPreciosEspeciales" class="stack"></div>
+      <div class="product-row" style="margin-top:8px; gap:8px;">
+        <select id="peSelectProducto" class="select-input" style="margin-bottom:0; flex:1;">
+          <option value="">Producto…</option>
+        </select>
+        <input type="number" id="peInputPrecio" class="text-input" style="margin-bottom:0; width:90px;" step="0.01" min="0" placeholder="€">
+        <button class="chip-btn" id="btnAnadirPrecioEspecial">Añadir</button>
+      </div>
 
       <div class="section-label">Historial reciente</div>
       <div id="historialPedidos" class="stack"></div>

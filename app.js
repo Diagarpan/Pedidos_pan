@@ -996,6 +996,7 @@ async function crearFacturaDirecta() {
 function cablearClientes() {
   document.getElementById('btnCerrarDetalle').addEventListener('click', () => {
     document.getElementById('detalleCliente').classList.add('tab--hidden');
+    document.getElementById('clientesListaVista').classList.remove('tab--hidden');
   });
   document.getElementById('btnBuscarFacturas').addEventListener('click', buscarFacturasCliente);
 }
@@ -1003,6 +1004,8 @@ function cablearClientes() {
 let clienteSeleccionado = null;
 
 async function cargarClientes() {
+  document.getElementById('detalleCliente').classList.add('tab--hidden');
+  document.getElementById('clientesListaVista').classList.remove('tab--hidden');
   if (!clientesCache.length) {
     const r = await apiGet('clientes').catch(() => null);
     if (r && r.ok) clientesCache = r.data;
@@ -1035,7 +1038,9 @@ async function abrirDetalleCliente(id) {
   if (!clienteSeleccionado) return;
 
   document.getElementById('detalleClienteNombre').textContent = clienteSeleccionado.nombre;
+  document.getElementById('clientesListaVista').classList.add('tab--hidden');
   document.getElementById('detalleCliente').classList.remove('tab--hidden');
+  window.scrollTo({ top: 0, behavior: 'instant' });
   document.getElementById('listaFacturas').innerHTML = '';
   document.getElementById('periodoTotal').textContent = '';
 

@@ -447,12 +447,18 @@ async function cargarFaltanManana() {
   }
 
   cont.innerHTML = `<div class="card__meta" style="margin-bottom:8px;">${d.conPedido} de ${d.totalClientes} clientes ya han pedido</div>` +
-    d.sinPedido.map((c) => `
+    d.sinPedido.map((c) => {
+      const mensaje = `Hola ${c.nombre}! 👋 Te escribimos porque todavía no hemos recibido tu pedido de pan para mañana. Si quieres que te llevemos mañana, no olvides rellenar el formulario antes de las 21:00. ¡Gracias!`;
+      const enlace = c.telefono
+        ? `https://wa.me/34${String(c.telefono).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
+        : '';
+      return `
       <div class="client-row">
         <span>${escapeHtml(c.nombre)}</span>
-        ${c.telefono ? `<a class="chip-btn" href="https://wa.me/34${String(c.telefono).replace(/\D/g, '')}" target="_blank" rel="noopener">Avisar</a>` : ''}
+        ${enlace ? `<a class="chip-btn" href="${enlace}" target="_blank" rel="noopener">Avisar</a>` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 /* ============ PEDIDOS DEL DÍA ============ */
@@ -1289,6 +1295,7 @@ function abrirFormularioCliente(cliente) {
   document.getElementById('clFormRuta').value = cliente ? cliente.ruta || '' : '';
   document.getElementById('clFormFormaPago').value = cliente ? cliente.formaPago || '' : '';
   document.getElementById('clFormDescuento').value = cliente && cliente.descuento ? Math.round(cliente.descuento * 100) : '';
+  document.getElementById('clFormRecargo').value = cliente && cliente.recargoEquivalencia ? 'true' : 'false';
   document.getElementById('clFormActivo').value = 'true';
   document.getElementById('clienteFormMsg').textContent = '';
   cambiarTab('cliente-form');
@@ -1311,6 +1318,7 @@ async function guardarCliente() {
     ruta: document.getElementById('clFormRuta').value.trim(),
     formaPago: document.getElementById('clFormFormaPago').value.trim(),
     descuento: String((Number(document.getElementById('clFormDescuento').value) || 0) / 100),
+    recargoEquivalencia: document.getElementById('clFormRecargo').value,
     activo: document.getElementById('clFormActivo').value,
   }).catch((err) => ({ ok: false, error: String(err) }));
 

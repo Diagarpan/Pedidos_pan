@@ -513,14 +513,14 @@ function pintarPedidos(pedidos) {
   }).join('');
 
   cont.querySelectorAll('[data-accion]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
       const accion = btn.dataset.accion;
       if (accion === 'entregado' || accion === 'cobrado') {
         cambiarEstadoPedido(btn.dataset.id, accion);
       } else if (accion === 'anular') {
         anularPedido(btn.dataset.id);
       } else {
-        generarDocumento(btn.dataset.id, accion);
+        conEstadoCarga(e.target, 'Generando…', () => generarDocumento(btn.dataset.id, accion));
       }
     });
   });
@@ -543,6 +543,20 @@ async function generarDocumento(idPedido, tipo) {
     return;
   }
   descargarPDF(r.base64, r.nombre);
+}
+
+// Desactiva el botón y le cambia el texto mientras dura la tarea (evita
+// que le den varias veces seguidas mientras espera, ej. generando un PDF).
+async function conEstadoCarga(boton, textoCarga, tarea) {
+  const textoOriginal = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = textoCarga;
+  try {
+    await tarea();
+  } finally {
+    boton.disabled = false;
+    boton.textContent = textoOriginal;
+  }
 }
 
 async function descargarPDF(base64, nombreArchivo) {
@@ -685,7 +699,7 @@ async function buscarResumenFacturas() {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarResumenFacturas));
   });
   cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
-    btn.addEventListener('click', () => verFacturaPDF(btn.dataset.verFactura));
+    btn.addEventListener('click', (e) => conEstadoCarga(e.target, 'Abriendo…', () => verFacturaPDF(btn.dataset.verFactura)));
   });
 }
 
@@ -744,7 +758,7 @@ async function buscarFacturaPorCliente() {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarFacturaPorCliente));
   });
   cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
-    btn.addEventListener('click', () => verFacturaPDF(btn.dataset.verFactura));
+    btn.addEventListener('click', (e) => conEstadoCarga(e.target, 'Abriendo…', () => verFacturaPDF(btn.dataset.verFactura)));
   });
 }
 
@@ -1153,21 +1167,27 @@ async function anularPedido(idPedido) {
 
 /* ============ HOJA DE RUTA ============ */
 function cablearHojaRuta() {
-  document.getElementById('btnHojaRuta').addEventListener('click', async () => {
-    const r = await apiGet('hojaRutaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-    descargarPDF(r.base64, r.nombre);
+  document.getElementById('btnHojaRuta').addEventListener('click', (e) => {
+    conEstadoCarga(e.target, 'Generando…', async () => {
+      const r = await apiGet('hojaRutaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+      descargarPDF(r.base64, r.nombre);
+    });
   });
-  document.getElementById('btnResumenDia').addEventListener('click', async () => {
-    const r = await apiGet('resumenDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-    descargarPDF(r.base64, r.nombre);
+  document.getElementById('btnResumenDia').addEventListener('click', (e) => {
+    conEstadoCarga(e.target, 'Generando…', async () => {
+      const r = await apiGet('resumenDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+      descargarPDF(r.base64, r.nombre);
+    });
   });
-  document.getElementById('btnFacturasDia').addEventListener('click', async () => {
-    const r = await apiGet('facturasDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-    if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-    descargarPDF(r.base64, r.nombre);
-    if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
+  document.getElementById('btnFacturasDia').addEventListener('click', (e) => {
+    conEstadoCarga(e.target, 'Generando…', async () => {
+      const r = await apiGet('facturasDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+      descargarPDF(r.base64, r.nombre);
+      if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
+    });
   });
 }
 

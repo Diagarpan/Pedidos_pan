@@ -580,3 +580,9 @@ select.select-input {
   .topbar__logo { height: 130px; }
   .topbar__actions { right: 8px; }
 }
+
+/* ---------- BOTONES EN ESTADO "CARGANDO" (mientras generan un PDF) ---------- */
+.btn-primary:disabled, .btn-secondary:disabled, .chip-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}

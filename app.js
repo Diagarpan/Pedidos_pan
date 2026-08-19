@@ -7,6 +7,8 @@ let RUTA = localStorage.getItem('ruta') || '';
 let productosCache = [];
 let clientesCache = [];
 let pedidoNuevo = {}; // { productoId: cantidad }
+let productosLibresNuevo = []; // productos fuera de catálogo para Nuevo pedido
+let productosLibresFactura = []; // productos fuera de catálogo para Generar factura
 
 /* ============ ARRANQUE ============ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -20,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearTema();
   cablearNuevoPedido();
   cablearFacturaDirecta();
+  cablearProductosLibres();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -851,11 +854,12 @@ async function cargarFormularioNuevo() {
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
 
   pedidoNuevo = {};
+  productosLibresNuevo = [];
   contProductos.innerHTML = productosCache.map((p) => `
     <div class="product-row">
       <div>
         <div class="product-row__name">${escapeHtml(p.nombre)}</div>
-        <div class="product-row__price">${formatoEuros(p.precio)} · IVA ${p.iva}%</div>
+        <div class="product-row__price">${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
       </div>
       <div class="stepper">
         <button class="stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
@@ -864,6 +868,7 @@ async function cargarFormularioNuevo() {
       </div>
     </div>
   `).join('');
+  pintarProductosLibres('nuevo');
 
   contProductos.querySelectorAll('[data-accion]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -886,9 +891,10 @@ function recalcularTotalNuevo() {
   Object.entries(pedidoNuevo).forEach(([id, cant]) => {
     if (cant > 0) {
       const p = productosCache.find((pr) => String(pr.id) === String(id));
-      if (p) total += p.precio * cant * (1 + p.iva / 100);
+      if (p) total += p.precio * cant * (1 + p.iva); // p.iva ya es fracción (0.04 = 4%)
     }
   });
+  productosLibresNuevo.forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva / 100); });
   document.getElementById('nuevoTotal').textContent = formatoEuros(total);
 }
 
@@ -897,7 +903,8 @@ async function crearPedidoManual() {
   const clienteId = document.getElementById('selectCliente').value;
   const items = Object.entries(pedidoNuevo)
     .filter(([, cant]) => cant > 0)
-    .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+    .map(([productoId, cantidad]) => ({ productoId, cantidad }))
+    .concat(productosLibresNuevo.map((it) => ({ nombre: it.nombre, precio: it.precio, iva: it.iva / 100, cantidad: it.cantidad })));
 
   if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
@@ -941,6 +948,7 @@ async function cargarFormularioFactura() {
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
 
   facturaNueva = {};
+  productosLibresFactura = [];
   contProductos.innerHTML = productosCache.map((p) => `
     <div class="product-row">
       <div>
@@ -954,6 +962,7 @@ async function cargarFormularioFactura() {
       </div>
     </div>
   `).join('');
+  pintarProductosLibres('factura');
 
   contProductos.querySelectorAll('[data-accion]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -977,6 +986,7 @@ function recalcularTotalFactura() {
       if (p) total += p.precio * cant * (1 + p.iva);
     }
   });
+  productosLibresFactura.forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva / 100); });
   document.getElementById('facturaTotal').textContent = formatoEuros(total);
 }
 
@@ -985,7 +995,8 @@ async function crearFacturaDirecta() {
   const clienteId = document.getElementById('selectClienteFactura').value;
   const items = Object.entries(facturaNueva)
     .filter(([, cant]) => cant > 0)
-    .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+    .map(([productoId, cantidad]) => ({ productoId, cantidad }))
+    .concat(productosLibresFactura.map((it) => ({ nombre: it.nombre, precio: it.precio, iva: it.iva / 100, cantidad: it.cantidad })));
 
   if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
@@ -1504,4 +1515,67 @@ async function quitarPrecioEspecial(idCliente, idProducto) {
   const r = await apiGet('eliminarPrecioEspecial', { idCliente, idProducto }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) { alert('No se pudo quitar: ' + (r.error || 'error')); return; }
   cargarPreciosEspeciales(idCliente);
+}
+
+/* ============ PRODUCTOS FUERA DE CATÁLOGO (Nuevo pedido / Generar factura) ============ */
+function cablearProductosLibres() {
+  document.getElementById('btnAnadirLibreNuevo').addEventListener('click', () => agregarProductoLibre('nuevo'));
+  document.getElementById('btnAnadirLibreFactura').addEventListener('click', () => agregarProductoLibre('factura'));
+}
+
+function agregarProductoLibre(tipo) {
+  const prefijo = tipo === 'nuevo' ? 'n' : 'f';
+  const nombre = document.getElementById(`${prefijo}LibreNombre`).value.trim();
+  const precio = Number(document.getElementById(`${prefijo}LibrePrecio`).value);
+  const iva = Number(document.getElementById(`${prefijo}LibreIva`).value) || 0;
+  const cantidad = Number(document.getElementById(`${prefijo}LibreCantidad`).value) || 1;
+
+  if (!nombre) { alert('Pon un nombre para el producto.'); return; }
+  if (!precio || precio <= 0) { alert('Pon un precio válido.'); return; }
+
+  const item = { id: 'libre-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), nombre, precio, iva, cantidad };
+
+  if (tipo === 'nuevo') {
+    productosLibresNuevo.push(item);
+    pintarProductosLibres('nuevo');
+    recalcularTotalNuevo();
+  } else {
+    productosLibresFactura.push(item);
+    pintarProductosLibres('factura');
+    recalcularTotalFactura();
+  }
+
+  document.getElementById(`${prefijo}LibreNombre`).value = '';
+  document.getElementById(`${prefijo}LibrePrecio`).value = '';
+  document.getElementById(`${prefijo}LibreIva`).value = '';
+  document.getElementById(`${prefijo}LibreCantidad`).value = '1';
+}
+
+function pintarProductosLibres(tipo) {
+  const lista = tipo === 'nuevo' ? productosLibresNuevo : productosLibresFactura;
+  const cont = document.getElementById(tipo === 'nuevo' ? 'listaLibreNuevo' : 'listaLibreFactura');
+  if (!lista.length) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML = lista.map((it) => `
+    <div class="client-row">
+      <span>${it.cantidad}x ${escapeHtml(it.nombre)} — ${formatoEuros(it.precio)} (IVA ${it.iva}%)</span>
+      <button class="chip-btn" data-quitar-libre="${it.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
+    </div>
+  `).join('');
+
+  cont.querySelectorAll('[data-quitar-libre]').forEach((btn) => {
+    btn.addEventListener('click', () => quitarProductoLibre(tipo, btn.dataset.quitarLibre));
+  });
+}
+
+function quitarProductoLibre(tipo, id) {
+  if (tipo === 'nuevo') {
+    productosLibresNuevo = productosLibresNuevo.filter((it) => it.id !== id);
+    pintarProductosLibres('nuevo');
+    recalcularTotalNuevo();
+  } else {
+    productosLibresFactura = productosLibresFactura.filter((it) => it.id !== id);
+    pintarProductosLibres('factura');
+    recalcularTotalFactura();
+  }
 }

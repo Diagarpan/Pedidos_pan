@@ -173,6 +173,16 @@
     <div class="section-label">Productos</div>
     <div id="listaProductosNuevo" class="stack"></div>
 
+    <div class="section-label">Producto fuera de catálogo</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="text" id="nLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 120px;">
+      <input type="number" id="nLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
+      <input type="number" id="nLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
+      <input type="number" id="nLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
+      <button class="chip-btn" id="btnAnadirLibreNuevo">Añadir</button>
+    </div>
+    <div id="listaLibreNuevo" class="stack"></div>
+
     <div class="new-order-total">
       <span>Total</span>
       <span id="nuevoTotal">0,00 €</span>
@@ -324,6 +334,16 @@
 
     <div class="section-label">Productos</div>
     <div id="listaProductosFactura" class="stack"></div>
+
+    <div class="section-label">Producto fuera de catálogo</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="text" id="fLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 120px;">
+      <input type="number" id="fLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
+      <input type="number" id="fLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
+      <input type="number" id="fLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
+      <button class="chip-btn" id="btnAnadirLibreFactura">Añadir</button>
+    </div>
+    <div id="listaLibreFactura" class="stack"></div>
 
     <div class="new-order-total">
       <span>Total</span>

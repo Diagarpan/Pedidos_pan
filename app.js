@@ -1271,7 +1271,7 @@ async function cargarProductosGestion() {
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(p.nombre)}</div>
-          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
+          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}% · ${escapeHtml(p.categoria || 'Panadería')}${p.subcategoria ? ' — ' + escapeHtml(p.subcategoria) : ''}</div>
         </div>
         ${stampHtml(p.activo ? 'Activo' : 'Inactivo')}
       </div>
@@ -1296,6 +1296,8 @@ function abrirFormularioProducto(producto) {
   document.getElementById('prFormCodigo').value = producto ? producto.codigo : '';
   document.getElementById('prFormPrecio').value = producto ? producto.precio : '';
   document.getElementById('prFormIva').value = producto ? Math.round(producto.iva * 100) : '';
+  document.getElementById('prFormCategoria').value = producto && producto.categoria ? producto.categoria : 'Panadería';
+  document.getElementById('prFormSubcategoria').value = producto ? (producto.subcategoria || '') : '';
   document.getElementById('prFormActivo').value = producto ? String(producto.activo) : 'true';
   document.getElementById('productoFormMsg').textContent = '';
   cambiarTab('producto-form');
@@ -1315,6 +1317,8 @@ async function guardarProducto() {
     codigo: document.getElementById('prFormCodigo').value.trim(),
     precio: document.getElementById('prFormPrecio').value || '0',
     iva: String((Number(document.getElementById('prFormIva').value) || 0) / 100),
+    categoria: document.getElementById('prFormCategoria').value,
+    subcategoria: document.getElementById('prFormSubcategoria').value.trim(),
     activo: document.getElementById('prFormActivo').value,
   }).catch((err) => ({ ok: false, error: String(err) }));
 

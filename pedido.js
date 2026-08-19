@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -92,6 +92,9 @@ function olvidarTelefono() {
   mostrarPantalla('telefono');
 }
 
+const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
+const ICONO_CATEGORIA = { 'Panadería': '🥖', 'Dulces': '🍰', 'Hielo': '🧊' };
+
 async function cargarCatalogo() {
   const cont = document.getElementById('listaCatalogo');
   cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
@@ -100,19 +103,40 @@ async function cargarCatalogo() {
   if (!r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>'; return; }
 
   catalogo = r.data;
-  cont.innerHTML = catalogo.map((p) => `
-    <div class="producto-fila">
-      <div>
-        <div class="producto-fila__nombre">${escapeHtml(p.nombre)}</div>
-        <div class="producto-fila__precio">${formatoEuros(p.precio)}</div>
-      </div>
-      <div class="producto-stepper">
-        <button class="producto-stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
-        <span class="producto-stepper__val" id="cant-${p.id}">0</span>
-        <button class="producto-stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
-      </div>
-    </div>
-  `).join('');
+
+  // Agrupar por categoría y, dentro, por subcategoría
+  const grupos = {};
+  catalogo.forEach((p) => {
+    const cat = p.categoria || 'Panadería';
+    const sub = p.subcategoria || '';
+    if (!grupos[cat]) grupos[cat] = {};
+    if (!grupos[cat][sub]) grupos[cat][sub] = [];
+    grupos[cat][sub].push(p);
+  });
+
+  const categorias = Object.keys(grupos).sort((a, b) => {
+    const ia = ORDEN_CATEGORIAS.indexOf(a);
+    const ib = ORDEN_CATEGORIAS.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  let html = '';
+  categorias.forEach((cat) => {
+    html += `<div class="categoria-titulo">${ICONO_CATEGORIA[cat] || '•'} ${escapeHtml(cat)}</div>`;
+    const subcategorias = Object.keys(grupos[cat]).sort((a, b) => {
+      if (!a) return -1; // los productos sin subcategoría van primero
+      if (!b) return 1;
+      return a.localeCompare(b);
+    });
+    subcategorias.forEach((sub) => {
+      if (sub) html += `<div class="subcategoria-titulo">${escapeHtml(sub)}</div>`;
+      html += grupos[cat][sub].map(pintarFilaProducto).join('');
+    });
+  });
+  cont.innerHTML = html;
 
   cont.querySelectorAll('[data-accion]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -125,6 +149,22 @@ async function cargarCatalogo() {
   });
 
   recalcularCarrito();
+}
+
+function pintarFilaProducto(p) {
+  return `
+    <div class="producto-fila">
+      <div>
+        <div class="producto-fila__nombre">${escapeHtml(p.nombre)}</div>
+        <div class="producto-fila__precio">${formatoEuros(p.precio)}</div>
+      </div>
+      <div class="producto-stepper">
+        <button class="producto-stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
+        <span class="producto-stepper__val" id="cant-${p.id}">0</span>
+        <button class="producto-stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
+      </div>
+    </div>
+  `;
 }
 
 function recalcularCarrito() {

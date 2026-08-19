@@ -129,6 +129,9 @@ function aplicarModoUI() {
   document.querySelectorAll('.sidebar__item[data-solo-admin]').forEach((btn) => {
     btn.style.display = esRepartidor ? 'none' : '';
   });
+  document.querySelectorAll('.toolbar-btn[data-solo-admin]').forEach((btn) => {
+    btn.style.display = esRepartidor ? 'none' : '';
+  });
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
     cambiarTab('inicio');
@@ -218,6 +221,9 @@ function cablearNavegacion() {
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
+  document.querySelectorAll('.toolbar-btn[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
+  });
   document.querySelectorAll('[data-volver]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.volver));
   });
@@ -246,6 +252,7 @@ function cambiarTab(nombre) {
   const clave = claveMenuPadre(nombre);
   document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
+  document.querySelectorAll('.toolbar-btn[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   pintarBreadcrumb(nombre);
   cargarTabActual(nombre);
 }

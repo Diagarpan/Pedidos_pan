@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>Diego Avilés · Hacer pedido</title>
 <link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest-pedido.json">
 <meta name="theme-color" content="#2456A6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pedidos DA">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -36,6 +42,10 @@
 
   .saludo { text-align: center; margin-bottom: 18px; }
   .saludo__nombre { font-size: 20px; font-weight: 700; }
+  .aviso-hora {
+    background: var(--wheat); color: var(--crust-dark); font-size: 12.5px; font-weight: 600;
+    padding: 8px 12px; border-radius: var(--radius); margin: 10px 0;
+  }
   .saludo__cambiar { font-size: 12px; color: var(--crust-dark); background: none; border: none; text-decoration: underline; margin-top: 4px; }
 
   .categorias-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
@@ -102,6 +112,7 @@
   <section id="pantallaCatalogo" class="tab--hidden">
     <div class="saludo">
       <div class="saludo__nombre" id="saludoNombre"></div>
+      <div class="aviso-hora">⏰ Envía tu pedido antes de las 21:00 para que te lo llevemos mañana</div>
       <button class="saludo__cambiar" id="btnCambiarTelefono">No soy yo / cambiar teléfono</button>
     </div>
 
@@ -114,7 +125,20 @@
 
     <div class="carrito-barra">
       <div class="carrito-barra__total"><span>Total</span><span id="carritoTotal">0,00 €</span></div>
-      <button class="btn-primary" id="btnEnviarPedido" style="width:100%;">Enviar pedido</button>
+      <button class="btn-primary" id="btnVerPedido" style="width:100%;">Ver mi pedido</button>
+    </div>
+  </section>
+
+  <!-- PASO 2.5: repaso antes de enviar -->
+  <section id="pantallaRepaso" class="tab--hidden">
+    <button class="link-btn" id="btnVolverAlCatalogo">← Seguir añadiendo</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Tu pedido para mañana</div>
+    </div>
+    <div id="listaRepaso" class="stack"></div>
+    <div class="carrito-barra">
+      <div class="carrito-barra__total"><span>Total</span><span id="repasoTotal">0,00 €</span></div>
+      <button class="btn-primary" id="btnEnviarPedido" style="width:100%;">Confirmar y enviar</button>
       <div class="form-msg" id="msgPedido"></div>
     </div>
   </section>
@@ -124,6 +148,7 @@
     <div class="confirmacion__icono">✅</div>
     <h2>¡Pedido enviado!</h2>
     <p id="confirmacionTexto"></p>
+    <div id="confirmacionDetalle" class="stack" style="text-align:left; margin-top:16px;"></div>
     <p class="confirmacion__num" id="confirmacionNum"></p>
     <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Hacer otro pedido</button>
   </section>

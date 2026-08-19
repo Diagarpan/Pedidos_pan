@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -36,6 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('vistaProductos').classList.add('tab--hidden');
     document.getElementById('vistaCategorias').classList.remove('tab--hidden');
   });
+  document.getElementById('btnVerPedido').addEventListener('click', () => {
+    mostrarPantalla('repaso');
+    pintarRepaso();
+  });
+  document.getElementById('btnVolverAlCatalogo').addEventListener('click', () => mostrarPantalla('catalogo'));
   document.getElementById('btnEnviarPedido').addEventListener('click', enviarPedido);
   document.getElementById('btnNuevoPedido').addEventListener('click', () => {
     carrito = {};
@@ -51,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function mostrarPantalla(nombre) {
   document.getElementById('pantallaTelefono').classList.toggle('tab--hidden', nombre !== 'telefono');
   document.getElementById('pantallaCatalogo').classList.toggle('tab--hidden', nombre !== 'catalogo');
+  document.getElementById('pantallaRepaso').classList.toggle('tab--hidden', nombre !== 'repaso');
   document.getElementById('pantallaConfirmacion').classList.toggle('tab--hidden', nombre !== 'confirmacion');
 }
 
@@ -192,23 +198,50 @@ function pintarFilaProducto(p) {
   `;
 }
 
+function itemsCarrito() {
+  return Object.entries(carrito)
+    .filter(([, cant]) => cant > 0)
+    .map(([id, cant]) => ({ producto: catalogo.find((pr) => String(pr.id) === String(id)), cantidad: cant }))
+    .filter((it) => it.producto);
+}
+
 function recalcularCarrito() {
   let total = 0;
-  Object.entries(carrito).forEach(([id, cant]) => {
-    if (cant > 0) {
-      const p = catalogo.find((pr) => String(pr.id) === String(id));
-      if (p) total += p.precio * cant * (1 + p.iva);
-    }
-  });
+  itemsCarrito().forEach((it) => { total += it.producto.precio * it.cantidad * (1 + it.producto.iva); });
   document.getElementById('carritoTotal').textContent = formatoEuros(total);
+  const repasoTotal = document.getElementById('repasoTotal');
+  if (repasoTotal) repasoTotal.textContent = formatoEuros(total);
+}
+
+function pintarRepaso() {
+  const cont = document.getElementById('listaRepaso');
+  const items = itemsCarrito();
+
+  if (!items.length) {
+    cont.innerHTML = '<div class="empty-state">Todavía no has añadido nada.</div>';
+  } else {
+    cont.innerHTML = items.map((it) => `
+      <div class="client-row">
+        <span>${it.cantidad}x ${escapeHtml(it.producto.nombre)} — ${formatoEuros(it.producto.precio * it.cantidad * (1 + it.producto.iva))}</span>
+        <button class="chip-btn" data-quitar-repaso="${it.producto.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
+      </div>
+    `).join('');
+    cont.querySelectorAll('[data-quitar-repaso]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        carrito[btn.dataset.quitarRepaso] = 0;
+        pintarRepaso();
+        recalcularCarrito();
+      });
+    });
+  }
+  recalcularCarrito();
 }
 
 async function enviarPedido() {
   const msg = document.getElementById('msgPedido');
   const boton = document.getElementById('btnEnviarPedido');
-  const items = Object.entries(carrito)
-    .filter(([, cant]) => cant > 0)
-    .map(([productoId, cantidad]) => ({ productoId, cantidad }));
+  const itemsDetalle = itemsCarrito(); // se guarda antes de limpiar, para poder mostrarlo en la confirmación
+  const items = itemsDetalle.map((it) => ({ productoId: it.producto.id, cantidad: it.cantidad }));
 
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
 
@@ -229,6 +262,10 @@ async function enviarPedido() {
     msg.className = 'form-msg is-error';
     return;
   }
+
+  document.getElementById('confirmacionDetalle').innerHTML = itemsDetalle.map((it) => `
+    <div class="client-row"><span>${it.cantidad}x ${escapeHtml(it.producto.nombre)}</span></div>
+  `).join('');
 
   document.getElementById('confirmacionTexto').textContent =
     `Gracias, ${nombreCliente}. Hemos recibido tu pedido para mañana, por un total de ${formatoEuros(r.total)}.`;

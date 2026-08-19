@@ -134,13 +134,18 @@
       <div class="home-sub">Consulta el estado de los pedidos y su historial</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos de hoy</button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Ver pedidos por día</button>
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
     </div>
   </section>
 
   <section class="tab tab--hidden" id="tab-pedidos-hoy">
     <button class="link-btn" data-volver="pedidos">← Pedidos</button>
+    <div class="date-nav">
+      <button class="date-nav__btn" id="btnPedidosDiaAnterior">←</button>
+      <input type="date" id="pedidosFechaSeleccionada" class="date-nav__label" style="border:none; background:none; font-family:var(--font-data); font-weight:700; text-align:center; color:var(--ink); padding:9px 0;">
+      <button class="date-nav__btn" id="btnPedidosDiaSiguiente">→</button>
+    </div>
     <div class="filtros-pedidos">
       <input type="search" id="buscarPedido" class="search-input" placeholder="Buscar cliente…">
       <select id="filtroEstadoPedido" class="select-input select-input--auto">

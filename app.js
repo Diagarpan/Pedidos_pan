@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   pintarFecha();
   registrarServiceWorker();
   cablearNavegacion();
+  cablearNavegacionPedidos();
   cablearAjustes();
   cablearTema();
   cablearNuevoPedido();
@@ -484,13 +485,34 @@ async function cargarFaltanManana() {
 /* ============ PEDIDOS DEL DÍA ============ */
 async function cargarPedidos() {
   const cont = document.getElementById('listaPedidos');
-  const r = await apiGet('pedidosHoy').catch(() => null);
+  const inputFecha = document.getElementById('pedidosFechaSeleccionada');
+  if (!inputFecha.value) inputFecha.valueAsDate = new Date();
+
+  const fecha = formatoFechaES(inputFecha.value);
+  const r = await apiGet('pedidosHoy', { fecha }).catch(() => null);
   if (!r || !r.ok) {
     cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
   }
   guardarCache('pedidosHoy', r.data);
   pintarPedidos(r.data);
+}
+
+function cablearNavegacionPedidos() {
+  const inputFecha = document.getElementById('pedidosFechaSeleccionada');
+  inputFecha.addEventListener('change', cargarPedidos);
+  document.getElementById('btnPedidosDiaAnterior').addEventListener('click', () => {
+    const d = inputFecha.valueAsDate || new Date();
+    d.setDate(d.getDate() - 1);
+    inputFecha.valueAsDate = d;
+    cargarPedidos();
+  });
+  document.getElementById('btnPedidosDiaSiguiente').addEventListener('click', () => {
+    const d = inputFecha.valueAsDate || new Date();
+    d.setDate(d.getDate() + 1);
+    inputFecha.valueAsDate = d;
+    cargarPedidos();
+  });
 }
 
 function pintarPedidos(pedidos) {

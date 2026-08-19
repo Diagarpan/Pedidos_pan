@@ -515,48 +515,6 @@ select.select-input {
   .home-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .home-welcome { padding: 6px 0 4px; text-align: left; }
 
-  /* --- Cabecera de escritorio: se mantiene el banner azul con el logo
-     (más compacto que en móvil), en vez de quitarla del todo --- */
-  .topbar {
-    position: sticky;
-    justify-content: center;
-    padding: 14px 24px;
-    background: var(--crust);
-    color: #FFFFFF;
-  }
-  .topbar__brand { flex-direction: column; }
-  .topbar__logo { height: 74px; background: none; padding: 0; box-shadow: none; }
-  .topbar__actions { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); }
-
-  /* --- Barra de herramientas con iconos de acceso rápido, tipo
-     ContaPlus/programa de gestión, justo debajo de la cabecera --- */
-  .desktop-toolbar {
-    display: flex;
-    gap: 2px;
-    padding: 6px 20px;
-    background: var(--wheat);
-    border-bottom: 1px solid var(--wheat-line);
-    overflow-x: auto;
-  }
-  .toolbar-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    padding: 7px 14px;
-    border: none;
-    border-radius: 6px;
-    background: none;
-    color: var(--ink);
-    font-size: 10.5px;
-    font-weight: 600;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .toolbar-btn [data-icon] svg { width: 19px; height: 19px; }
-  .toolbar-btn:hover { background: rgba(36,86,166,0.08); }
-  .toolbar-btn.is-active { background: rgba(36,86,166,0.16); color: var(--crust-dark); }
-
   /* --- Lienzo gris + contenido como una "hoja" centrada, tipo Word/
      programa de contabilidad, en vez de estirar el diseño de móvil --- */
   body { background: var(--paper); }

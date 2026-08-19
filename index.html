@@ -155,6 +155,40 @@
     </div>
   </section>
 
+  <section class="tab tab--hidden" id="tab-pedido-editar">
+    <button class="link-btn" data-volver="pedidos-hoy">← Pedidos</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Editar pedido</div>
+      <div class="home-sub" id="editarPedidoCliente"></div>
+    </div>
+
+    <div class="section-label">Productos</div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <select id="epProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
+        <option value="">Elige un producto…</option>
+      </select>
+      <input type="number" id="epProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
+      <button class="chip-btn" id="btnAnadirProducto_editarPedido">Añadir</button>
+    </div>
+    <div id="listaEditarPedido" class="stack"></div>
+
+    <div class="section-label">Producto fuera de catálogo</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="text" id="epLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 120px;">
+      <input type="number" id="epLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
+      <input type="number" id="epLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
+      <input type="number" id="epLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
+      <button class="chip-btn" id="btnAnadirLibre_editarPedido">Añadir</button>
+    </div>
+
+    <div class="new-order-total">
+      <span>Total</span>
+      <span id="editarPedidoTotal">0,00 €</span>
+    </div>
+    <button class="btn-primary" id="btnGuardarEdicionPedido">Guardar cambios</button>
+    <div class="form-msg" id="editarPedidoMsg"></div>
+  </section>
+
   <section class="tab tab--hidden" id="tab-pedidos-historial">
     <button class="link-btn" data-volver="pedidos">← Pedidos</button>
     <div class="date-range">
@@ -182,6 +216,13 @@
     </select>
 
     <div class="section-label">Productos</div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <select id="nProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
+        <option value="">Elige un producto…</option>
+      </select>
+      <input type="number" id="nProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
+      <button class="chip-btn" id="btnAnadirProducto_nuevo">Añadir</button>
+    </div>
     <div id="listaProductosNuevo" class="stack"></div>
 
     <div class="section-label">Producto fuera de catálogo</div>
@@ -190,9 +231,8 @@
       <input type="number" id="nLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
       <input type="number" id="nLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
       <input type="number" id="nLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
-      <button class="chip-btn" id="btnAnadirLibreNuevo">Añadir</button>
+      <button class="chip-btn" id="btnAnadirLibre_nuevo">Añadir</button>
     </div>
-    <div id="listaLibreNuevo" class="stack"></div>
 
     <div class="new-order-total">
       <span>Total</span>
@@ -211,8 +251,20 @@
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="clientes"></span>Ver clientes</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
+      <button class="home-btn home-btn--clientes" id="btnNuevoClienteHub"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo cliente</button>
+      <button class="home-btn home-btn--clientes" data-tab="clientes-historial"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos de un cliente</button>
     </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-clientes-historial">
+    <button class="link-btn" data-volver="clientes">← Clientes</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Historial de pedidos de un cliente</div>
+    </div>
+    <select id="selectClienteHistorial" class="select-input">
+      <option value="">Elige un cliente…</option>
+    </select>
+    <div id="historialClienteResultado" class="stack"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-clientes-lista">
@@ -344,6 +396,13 @@
     </select>
 
     <div class="section-label">Productos</div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <select id="fProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
+        <option value="">Elige un producto…</option>
+      </select>
+      <input type="number" id="fProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
+      <button class="chip-btn" id="btnAnadirProducto_factura">Añadir</button>
+    </div>
     <div id="listaProductosFactura" class="stack"></div>
 
     <div class="section-label">Producto fuera de catálogo</div>
@@ -352,9 +411,8 @@
       <input type="number" id="fLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
       <input type="number" id="fLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
       <input type="number" id="fLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
-      <button class="chip-btn" id="btnAnadirLibreFactura">Añadir</button>
+      <button class="chip-btn" id="btnAnadirLibre_factura">Añadir</button>
     </div>
-    <div id="listaLibreFactura" class="stack"></div>
 
     <div class="new-order-total">
       <span>Total</span>
@@ -363,6 +421,40 @@
 
     <button class="btn-primary" id="btnCrearFactura">Crear factura</button>
     <div class="form-msg" id="facturaMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-factura-editar">
+    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Editar factura</div>
+      <div class="home-sub" id="editarFacturaCliente"></div>
+    </div>
+
+    <div class="section-label">Productos</div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <select id="efProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
+        <option value="">Elige un producto…</option>
+      </select>
+      <input type="number" id="efProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
+      <button class="chip-btn" id="btnAnadirProducto_editarFactura">Añadir</button>
+    </div>
+    <div id="listaEditarFactura" class="stack"></div>
+
+    <div class="section-label">Producto fuera de catálogo</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="text" id="efLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 120px;">
+      <input type="number" id="efLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
+      <input type="number" id="efLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
+      <input type="number" id="efLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
+      <button class="chip-btn" id="btnAnadirLibre_editarFactura">Añadir</button>
+    </div>
+
+    <div class="new-order-total">
+      <span>Total</span>
+      <span id="editarFacturaTotal">0,00 €</span>
+    </div>
+    <button class="btn-primary" id="btnGuardarEdicionFactura">Guardar cambios</button>
+    <div class="form-msg" id="editarFacturaMsg"></div>
   </section>
 
   <!-- ==================== EMPRESA (datos fiscales) ==================== -->

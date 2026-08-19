@@ -6,9 +6,12 @@ let RUTA = localStorage.getItem('ruta') || '';
 
 let productosCache = [];
 let clientesCache = [];
-let pedidoNuevo = {}; // { productoId: cantidad }
-let productosLibresNuevo = []; // productos fuera de catálogo para Nuevo pedido
-let productosLibresFactura = []; // productos fuera de catálogo para Generar factura
+let itemsNuevo = []; // { tipo:'catalogo'|'libre', productoId?, nombre, precio, iva (fracción), cantidad, uid }
+let itemsFactura = [];
+let itemsEditarPedido = [];
+let itemsEditarFactura = [];
+let idPedidoEnEdicion = null;
+let idFacturaEnEdicion = null;
 
 /* ============ ARRANQUE ============ */
 document.addEventListener('DOMContentLoaded', async () => {
@@ -23,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearNuevoPedido();
   cablearFacturaDirecta();
   cablearProductosLibres();
+  cablearEdicion();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -174,15 +178,18 @@ const BREADCRUMBS = {
   'reparto-dia': [{ label: 'Reparto', tab: 'reparto' }, { label: 'Detalle', tab: 'reparto-dia' }],
   pedidos: [{ label: 'Pedidos', tab: 'pedidos' }],
   'pedidos-hoy': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }],
+  'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
   'pedidos-historial': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Historial', tab: 'pedidos-historial' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
   'clientes-lista': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }],
+  'clientes-historial': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Historial de pedidos', tab: 'clientes-historial' }],
   'cliente-form': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }, { label: 'Cliente', tab: 'cliente-form' }],
   factura: [{ label: 'Facturas', tab: 'factura' }],
   'factura-resumen': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen', tab: 'factura-resumen' }],
   'factura-por-cliente': [{ label: 'Facturas', tab: 'factura' }, { label: 'Por cliente', tab: 'factura-por-cliente' }],
   'factura-crear': [{ label: 'Facturas', tab: 'factura' }, { label: 'Generar factura', tab: 'factura-crear' }],
+  'factura-editar': [{ label: 'Facturas', tab: 'factura' }, { label: 'Editar factura', tab: 'factura-editar' }],
   productos: [{ label: 'Productos', tab: 'productos' }],
   'producto-form': [{ label: 'Productos', tab: 'productos' }, { label: 'Producto', tab: 'producto-form' }],
   estadisticas: [{ label: 'Estadísticas', tab: 'estadisticas' }],
@@ -266,9 +273,12 @@ function cargarTabActual(nombre) {
   if (activo === 'pedidos-historial') prepararHistorialPedidos();
   if (activo === 'nuevo') cargarFormularioNuevo();
   if (activo === 'clientes-lista') cargarClientes();
+  if (activo === 'clientes-historial') cargarClientesHistorial();
   if (activo === 'factura-crear') cargarFormularioFactura();
   if (activo === 'factura-resumen') prepararResumenFacturas();
   if (activo === 'factura-por-cliente') prepararFacturaPorCliente();
+  if (activo === 'pedido-editar') cargarPedidoParaEditar();
+  if (activo === 'factura-editar') cargarFacturaParaEditar();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -522,6 +532,7 @@ function pintarPedidos(pedidos) {
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
         <button class="chip-btn" data-accion="albaran" data-id="${p.id}">Albarán PDF</button>
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
+        ${ROL === 'admin' ? `<button class="chip-btn" data-accion="editar" data-id="${p.id}">Editar pedido</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="anular" data-id="${p.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Anular</button>` : ''}
       </div>
     </div>
@@ -535,6 +546,9 @@ function pintarPedidos(pedidos) {
         cambiarEstadoPedido(btn.dataset.id, accion);
       } else if (accion === 'anular') {
         anularPedido(btn.dataset.id);
+      } else if (accion === 'editar') {
+        idPedidoEnEdicion = btn.dataset.id;
+        cambiarTab('pedido-editar');
       } else {
         conEstadoCarga(e.target, 'Generando…', () => generarDocumento(btn.dataset.id, accion));
       }
@@ -704,6 +718,7 @@ async function buscarResumenFacturas() {
       </div>
       <div class="card__actions">
         <button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button>
+        ${(!f.idPedido && f.estado !== 'Anulada') ? `<button class="chip-btn" data-editar-factura="${f.idFactura}">Editar factura</button>` : ''}
         ${(f.estado !== 'Cobrado' && f.estado !== 'Anulada') ? `<button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button>` : ''}
       </div>
     </div>
@@ -716,6 +731,12 @@ async function buscarResumenFacturas() {
   });
   cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
     btn.addEventListener('click', (e) => conEstadoCarga(e.target, 'Abriendo…', () => verFacturaPDF(btn.dataset.verFactura)));
+  });
+  cont.querySelectorAll('[data-editar-factura]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      idFacturaEnEdicion = btn.dataset.editarFactura;
+      cambiarTab('factura-editar');
+    });
   });
 }
 
@@ -765,6 +786,7 @@ async function buscarFacturaPorCliente() {
       </div>
       <div class="card__actions">
         <button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button>
+        ${(!f.idPedido && f.estado !== 'Anulada') ? `<button class="chip-btn" data-editar-factura="${f.idFactura}">Editar factura</button>` : ''}
         ${f.estado !== 'Cobrado' ? `<button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button>` : ''}
       </div>
     </div>
@@ -775,6 +797,12 @@ async function buscarFacturaPorCliente() {
   });
   cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
     btn.addEventListener('click', (e) => conEstadoCarga(e.target, 'Abriendo…', () => verFacturaPDF(btn.dataset.verFactura)));
+  });
+  cont.querySelectorAll('[data-editar-factura]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      idFacturaEnEdicion = btn.dataset.editarFactura;
+      cambiarTab('factura-editar');
+    });
   });
 }
 
@@ -846,7 +874,7 @@ function cablearNuevoPedido() {
 
 async function cargarFormularioNuevo() {
   const selectCliente = document.getElementById('selectCliente');
-  const contProductos = document.getElementById('listaProductosNuevo');
+  const selectProducto = document.getElementById('nProductoSelect');
 
   if (!clientesCache.length) {
     const rc = await apiGet('clientes').catch(() => null);
@@ -859,59 +887,26 @@ async function cargarFormularioNuevo() {
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
+    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${formatoEuros(p.precio)}</option>`).join('');
 
-  pedidoNuevo = {};
-  productosLibresNuevo = [];
-  contProductos.innerHTML = productosCache.map((p) => `
-    <div class="product-row">
-      <div>
-        <div class="product-row__name">${escapeHtml(p.nombre)}</div>
-        <div class="product-row__price">${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
-      </div>
-      <div class="stepper">
-        <button class="stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
-        <span class="stepper__val" id="cant-${p.id}">0</span>
-        <button class="stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
-      </div>
-    </div>
-  `).join('');
-  pintarProductosLibres('nuevo');
+  itemsNuevo = [];
+  pintarItems('nuevo');
 
-  contProductos.querySelectorAll('[data-accion]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const delta = btn.dataset.accion === 'mas' ? 1 : -1;
-      pedidoNuevo[id] = Math.max(0, (pedidoNuevo[id] || 0) + delta);
-      document.getElementById(`cant-${id}`).textContent = pedidoNuevo[id];
-      recalcularTotalNuevo();
-    });
-  });
-
-  recalcularTotalNuevo();
   fechaPedidoSeleccion = 'hoy';
   document.getElementById('selectFechaPedido').value = 'hoy';
   document.getElementById('nuevoMsg').textContent = '';
 }
 
-function recalcularTotalNuevo() {
-  let total = 0;
-  Object.entries(pedidoNuevo).forEach(([id, cant]) => {
-    if (cant > 0) {
-      const p = productosCache.find((pr) => String(pr.id) === String(id));
-      if (p) total += p.precio * cant * (1 + p.iva); // p.iva ya es fracción (0.04 = 4%)
-    }
-  });
-  productosLibresNuevo.forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva / 100); });
-  document.getElementById('nuevoTotal').textContent = formatoEuros(total);
-}
+function recalcularTotalNuevo() { recalcularTotal('nuevo'); }
 
 async function crearPedidoManual() {
   const msg = document.getElementById('nuevoMsg');
   const clienteId = document.getElementById('selectCliente').value;
-  const items = Object.entries(pedidoNuevo)
-    .filter(([, cant]) => cant > 0)
-    .map(([productoId, cantidad]) => ({ productoId, cantidad }))
-    .concat(productosLibresNuevo.map((it) => ({ nombre: it.nombre, precio: it.precio, iva: it.iva / 100, cantidad: it.cantidad })));
+  const items = itemsNuevo.map((it) => it.tipo === 'catalogo'
+    ? { productoId: it.productoId, cantidad: it.cantidad }
+    : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
+  );
 
   if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
@@ -932,15 +927,13 @@ async function crearPedidoManual() {
 }
 
 /* ============ FACTURAS DIRECTAS (sin pedido) ============ */
-let facturaNueva = {};
-
 function cablearFacturaDirecta() {
   document.getElementById('btnCrearFactura').addEventListener('click', crearFacturaDirecta);
 }
 
 async function cargarFormularioFactura() {
   const selectCliente = document.getElementById('selectClienteFactura');
-  const contProductos = document.getElementById('listaProductosFactura');
+  const selectProducto = document.getElementById('fProductoSelect');
 
   if (!clientesCache.length) {
     const rc = await apiGet('clientes').catch(() => null);
@@ -953,57 +946,23 @@ async function cargarFormularioFactura() {
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
+    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${formatoEuros(p.precio)}</option>`).join('');
 
-  facturaNueva = {};
-  productosLibresFactura = [];
-  contProductos.innerHTML = productosCache.map((p) => `
-    <div class="product-row">
-      <div>
-        <div class="product-row__name">${escapeHtml(p.nombre)}</div>
-        <div class="product-row__price">${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}%</div>
-      </div>
-      <div class="stepper">
-        <button class="stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
-        <span class="stepper__val" id="cant-f-${p.id}">0</span>
-        <button class="stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
-      </div>
-    </div>
-  `).join('');
-  pintarProductosLibres('factura');
-
-  contProductos.querySelectorAll('[data-accion]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const delta = btn.dataset.accion === 'mas' ? 1 : -1;
-      facturaNueva[id] = Math.max(0, (facturaNueva[id] || 0) + delta);
-      document.getElementById(`cant-f-${id}`).textContent = facturaNueva[id];
-      recalcularTotalFactura();
-    });
-  });
-
-  recalcularTotalFactura();
+  itemsFactura = [];
+  pintarItems('factura');
   document.getElementById('facturaMsg').textContent = '';
 }
 
-function recalcularTotalFactura() {
-  let total = 0;
-  Object.entries(facturaNueva).forEach(([id, cant]) => {
-    if (cant > 0) {
-      const p = productosCache.find((pr) => String(pr.id) === String(id));
-      if (p) total += p.precio * cant * (1 + p.iva);
-    }
-  });
-  productosLibresFactura.forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva / 100); });
-  document.getElementById('facturaTotal').textContent = formatoEuros(total);
-}
+function recalcularTotalFactura() { recalcularTotal('factura'); }
 
 async function crearFacturaDirecta() {
   const msg = document.getElementById('facturaMsg');
   const clienteId = document.getElementById('selectClienteFactura').value;
-  const items = Object.entries(facturaNueva)
-    .filter(([, cant]) => cant > 0)
-    .map(([productoId, cantidad]) => ({ productoId, cantidad }))
-    .concat(productosLibresFactura.map((it) => ({ nombre: it.nombre, precio: it.precio, iva: it.iva / 100, cantidad: it.cantidad })));
+  const items = itemsFactura.map((it) => it.tipo === 'catalogo'
+    ? { productoId: it.productoId, cantidad: it.cantidad }
+    : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
+  );
 
   if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
@@ -1299,8 +1258,48 @@ async function guardarProducto() {
 /* ============ CLIENTES (alta/edición) ============ */
 function cablearClientesForm() {
   document.getElementById('btnNuevoCliente').addEventListener('click', () => abrirFormularioCliente(null));
+  document.getElementById('btnNuevoClienteHub').addEventListener('click', () => abrirFormularioCliente(null));
   document.getElementById('btnEditarCliente').addEventListener('click', () => abrirFormularioCliente(clienteSeleccionado));
   document.getElementById('btnGuardarCliente').addEventListener('click', guardarCliente);
+  document.getElementById('selectClienteHistorial').addEventListener('change', cargarHistorialClientePorSeleccion);
+}
+
+async function cargarClientesHistorial() {
+  const select = document.getElementById('selectClienteHistorial');
+  if (!clientesCache.length) {
+    const r = await apiGet('clientes').catch(() => null);
+    if (r && r.ok) clientesCache = r.data;
+  }
+  select.innerHTML = '<option value="">Elige un cliente…</option>' +
+    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  document.getElementById('historialClienteResultado').innerHTML = '';
+}
+
+async function cargarHistorialClientePorSeleccion() {
+  const clienteId = document.getElementById('selectClienteHistorial').value;
+  const cont = document.getElementById('historialClienteResultado');
+  if (!clienteId) { cont.innerHTML = ''; return; }
+
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const r = await apiGet('historialCliente', { clienteId }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  if (!r.data.pedidos.length) {
+    cont.innerHTML = '<div class="empty-state">Este cliente no tiene pedidos todavía.</div>';
+    return;
+  }
+  cont.innerHTML = r.data.pedidos.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div class="card__meta">${escapeHtml(p.fecha)}</div>
+        <div style="text-align:right">
+          <div class="card__total">${formatoEuros(p.total)}</div>
+          ${stampHtml(p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente')}
+        </div>
+      </div>
+      <div class="card__products">${escapeHtml(p.pedido)}</div>
+    </div>
+  `).join('');
 }
 
 function abrirFormularioCliente(cliente) {
@@ -1524,65 +1523,208 @@ async function quitarPrecioEspecial(idCliente, idProducto) {
   cargarPreciosEspeciales(idCliente);
 }
 
-/* ============ PRODUCTOS FUERA DE CATÁLOGO (Nuevo pedido / Generar factura) ============ */
+/* ============ PRODUCTOS EN NUEVO PEDIDO / GENERAR FACTURA / EDITAR
+   (catálogo + fuera de catálogo, todo en una sola lista por pantalla) ============ */
+const CONFIG_ITEMS = {
+  nuevo: { prefijo: 'n', obtener: () => itemsNuevo, poner: (l) => { itemsNuevo = l; }, listaId: 'listaProductosNuevo', totalId: 'nuevoTotal' },
+  factura: { prefijo: 'f', obtener: () => itemsFactura, poner: (l) => { itemsFactura = l; }, listaId: 'listaProductosFactura', totalId: 'facturaTotal' },
+  editarPedido: { prefijo: 'ep', obtener: () => itemsEditarPedido, poner: (l) => { itemsEditarPedido = l; }, listaId: 'listaEditarPedido', totalId: 'editarPedidoTotal' },
+  editarFactura: { prefijo: 'ef', obtener: () => itemsEditarFactura, poner: (l) => { itemsEditarFactura = l; }, listaId: 'listaEditarFactura', totalId: 'editarFacturaTotal' },
+};
+
 function cablearProductosLibres() {
-  document.getElementById('btnAnadirLibreNuevo').addEventListener('click', () => agregarProductoLibre('nuevo'));
-  document.getElementById('btnAnadirLibreFactura').addEventListener('click', () => agregarProductoLibre('factura'));
+  Object.keys(CONFIG_ITEMS).forEach((tipo) => {
+    const p = CONFIG_ITEMS[tipo].prefijo;
+    document.getElementById(`btnAnadirProducto_${tipo}`)?.addEventListener('click', () => agregarProductoCatalogo(tipo));
+    document.getElementById(`btnAnadirLibre_${tipo}`)?.addEventListener('click', () => agregarProductoLibre(tipo));
+  });
+}
+
+function agregarProductoCatalogo(tipo) {
+  const p = CONFIG_ITEMS[tipo].prefijo;
+  const productoId = document.getElementById(`${p}ProductoSelect`).value;
+  const cantidad = Number(document.getElementById(`${p}ProductoCantidad`).value) || 1;
+  if (!productoId) { alert('Elige un producto.'); return; }
+
+  const producto = productosCache.find((pr) => String(pr.id) === String(productoId));
+  if (!producto) return;
+
+  const lista = CONFIG_ITEMS[tipo].obtener();
+  const existente = lista.find((it) => it.tipo === 'catalogo' && String(it.productoId) === String(productoId));
+  if (existente) {
+    existente.cantidad += cantidad;
+  } else {
+    lista.push({ tipo: 'catalogo', productoId, nombre: producto.nombre, precio: producto.precio, iva: producto.iva, cantidad, uid: 'c-' + productoId });
+  }
+
+  pintarItems(tipo);
+  document.getElementById(`${p}ProductoSelect`).value = '';
+  document.getElementById(`${p}ProductoCantidad`).value = '1';
 }
 
 function agregarProductoLibre(tipo) {
-  const prefijo = tipo === 'nuevo' ? 'n' : 'f';
-  const nombre = document.getElementById(`${prefijo}LibreNombre`).value.trim();
-  const precio = Number(document.getElementById(`${prefijo}LibrePrecio`).value);
-  const iva = Number(document.getElementById(`${prefijo}LibreIva`).value) || 0;
-  const cantidad = Number(document.getElementById(`${prefijo}LibreCantidad`).value) || 1;
+  const p = CONFIG_ITEMS[tipo].prefijo;
+  const nombre = document.getElementById(`${p}LibreNombre`).value.trim();
+  const precio = Number(document.getElementById(`${p}LibrePrecio`).value);
+  const ivaPct = Number(document.getElementById(`${p}LibreIva`).value) || 0;
+  const cantidad = Number(document.getElementById(`${p}LibreCantidad`).value) || 1;
 
   if (!nombre) { alert('Pon un nombre para el producto.'); return; }
   if (!precio || precio <= 0) { alert('Pon un precio válido.'); return; }
 
-  const item = { id: 'libre-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), nombre, precio, iva, cantidad };
+  const lista = CONFIG_ITEMS[tipo].obtener();
+  const uid = 'libre-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  lista.push({ tipo: 'libre', nombre, precio, iva: ivaPct / 100, cantidad, uid });
 
-  if (tipo === 'nuevo') {
-    productosLibresNuevo.push(item);
-    pintarProductosLibres('nuevo');
-    recalcularTotalNuevo();
-  } else {
-    productosLibresFactura.push(item);
-    pintarProductosLibres('factura');
-    recalcularTotalFactura();
-  }
-
-  document.getElementById(`${prefijo}LibreNombre`).value = '';
-  document.getElementById(`${prefijo}LibrePrecio`).value = '';
-  document.getElementById(`${prefijo}LibreIva`).value = '';
-  document.getElementById(`${prefijo}LibreCantidad`).value = '1';
+  pintarItems(tipo);
+  document.getElementById(`${p}LibreNombre`).value = '';
+  document.getElementById(`${p}LibrePrecio`).value = '';
+  document.getElementById(`${p}LibreIva`).value = '';
+  document.getElementById(`${p}LibreCantidad`).value = '1';
 }
 
-function pintarProductosLibres(tipo) {
-  const lista = tipo === 'nuevo' ? productosLibresNuevo : productosLibresFactura;
-  const cont = document.getElementById(tipo === 'nuevo' ? 'listaLibreNuevo' : 'listaLibreFactura');
-  if (!lista.length) { cont.innerHTML = ''; return; }
+function pintarItems(tipo) {
+  const cfg = CONFIG_ITEMS[tipo];
+  const lista = cfg.obtener();
+  const cont = document.getElementById(cfg.listaId);
 
-  cont.innerHTML = lista.map((it) => `
-    <div class="client-row">
-      <span>${it.cantidad}x ${escapeHtml(it.nombre)} — ${formatoEuros(it.precio)} (IVA ${it.iva}%)</span>
-      <button class="chip-btn" data-quitar-libre="${it.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
-    </div>
-  `).join('');
+  if (!lista.length) {
+    cont.innerHTML = '<div class="empty-state">Todavía no has añadido ningún producto.</div>';
+  } else {
+    cont.innerHTML = lista.map((it) => `
+      <div class="client-row">
+        <span>${it.cantidad}x ${escapeHtml(it.nombre)} — ${formatoEuros(it.precio)}${it.tipo === 'libre' ? ' <span class="card__meta">(fuera de catálogo)</span>' : ''}</span>
+        <button class="chip-btn" data-quitar-item="${it.uid}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
+      </div>
+    `).join('');
+    cont.querySelectorAll('[data-quitar-item]').forEach((btn) => {
+      btn.addEventListener('click', () => quitarItem(tipo, btn.dataset.quitarItem));
+    });
+  }
 
-  cont.querySelectorAll('[data-quitar-libre]').forEach((btn) => {
-    btn.addEventListener('click', () => quitarProductoLibre(tipo, btn.dataset.quitarLibre));
-  });
+  recalcularTotal(tipo);
 }
 
-function quitarProductoLibre(tipo, id) {
-  if (tipo === 'nuevo') {
-    productosLibresNuevo = productosLibresNuevo.filter((it) => it.id !== id);
-    pintarProductosLibres('nuevo');
-    recalcularTotalNuevo();
-  } else {
-    productosLibresFactura = productosLibresFactura.filter((it) => it.id !== id);
-    pintarProductosLibres('factura');
-    recalcularTotalFactura();
+function quitarItem(tipo, uid) {
+  const cfg = CONFIG_ITEMS[tipo];
+  cfg.poner(cfg.obtener().filter((it) => it.uid !== uid));
+  pintarItems(tipo);
+}
+
+function recalcularTotal(tipo) {
+  const cfg = CONFIG_ITEMS[tipo];
+  let total = 0;
+  cfg.obtener().forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva); }); // iva ya es fracción en los dos tipos
+  document.getElementById(cfg.totalId).textContent = formatoEuros(total);
+}
+
+// Rellena el desplegable de productos del catálogo de una pantalla dada
+function rellenarSelectProductos(tipo) {
+  const p = CONFIG_ITEMS[tipo].prefijo;
+  const select = document.getElementById(`${p}ProductoSelect`);
+  select.innerHTML = '<option value="">Elige un producto…</option>' +
+    productosCache.map((pr) => `<option value="${pr.id}">${escapeHtml(pr.nombre)} — ${formatoEuros(pr.precio)}</option>`).join('');
+}
+
+// Da formato con uid a los items reconstruidos desde el backend
+// (obtenerItemsPedidoJSON / obtenerItemsFacturaJSON) para poder pintarlos
+function prepararItemsParaEditar(itemsBackend) {
+  return itemsBackend.map((it, i) => ({
+    ...it,
+    uid: it.tipo === 'catalogo' ? 'c-' + it.productoId : 'libre-existente-' + i,
+  }));
+}
+
+/* ============ EDITAR PEDIDO ============ */
+async function cargarPedidoParaEditar() {
+  const cont = document.getElementById('listaEditarPedido');
+  document.getElementById('editarPedidoCliente').textContent = '';
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+
+  if (!productosCache.length) {
+    const rp = await apiGet('productos').catch(() => null);
+    if (rp && rp.ok) productosCache = rp.data;
   }
+  rellenarSelectProductos('editarPedido');
+
+  const r = await apiGet('itemsPedido', { idPedido: idPedidoEnEdicion }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok || !r.data) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml((r && r.error) || 'pedido no encontrado')}</div>`; return; }
+
+  document.getElementById('editarPedidoCliente').textContent = `Pedido #${idPedidoEnEdicion} · ${r.data.cliente}`;
+  itemsEditarPedido = prepararItemsParaEditar(r.data.items);
+  pintarItems('editarPedido');
+  document.getElementById('editarPedidoMsg').textContent = '';
+}
+
+async function guardarEdicionPedido() {
+  const msg = document.getElementById('editarPedidoMsg');
+  const items = itemsEditarPedido.map((it) => it.tipo === 'catalogo'
+    ? { productoId: it.productoId, cantidad: it.cantidad }
+    : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
+  );
+
+  if (!items.length) { msg.textContent = 'El pedido no puede quedarse sin productos.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('editarPedido', { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = `Pedido actualizado (${formatoEuros(r.total)}).`;
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('pedidos-hoy'), 700);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+/* ============ EDITAR FACTURA (solo las que no vienen de un pedido) ============ */
+async function cargarFacturaParaEditar() {
+  const cont = document.getElementById('listaEditarFactura');
+  document.getElementById('editarFacturaCliente').textContent = '';
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+
+  if (!productosCache.length) {
+    const rp = await apiGet('productos').catch(() => null);
+    if (rp && rp.ok) productosCache = rp.data;
+  }
+  rellenarSelectProductos('editarFactura');
+
+  const r = await apiGet('itemsFactura', { idFactura: idFacturaEnEdicion }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok || !r.data) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml((r && r.error) || 'factura no encontrada')}</div>`; return; }
+  if (r.data.error) { cont.innerHTML = `<div class="empty-state">${escapeHtml(r.data.error)}</div>`; return; }
+
+  document.getElementById('editarFacturaCliente').textContent = `Factura #${idFacturaEnEdicion} · ${r.data.cliente}`;
+  itemsEditarFactura = prepararItemsParaEditar(r.data.items);
+  pintarItems('editarFactura');
+  document.getElementById('editarFacturaMsg').textContent = '';
+}
+
+async function guardarEdicionFactura() {
+  const msg = document.getElementById('editarFacturaMsg');
+  const items = itemsEditarFactura.map((it) => it.tipo === 'catalogo'
+    ? { productoId: it.productoId, cantidad: it.cantidad }
+    : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
+  );
+
+  if (!items.length) { msg.textContent = 'La factura no puede quedarse sin productos.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('editarFactura', { idFactura: idFacturaEnEdicion, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = `Factura actualizada (${formatoEuros(r.total)}).`;
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('factura'), 700);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+function cablearEdicion() {
+  document.getElementById('btnGuardarEdicionPedido').addEventListener('click', guardarEdicionPedido);
+  document.getElementById('btnGuardarEdicionFactura').addEventListener('click', guardarEdicionFactura);
 }

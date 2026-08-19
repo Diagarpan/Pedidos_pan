@@ -513,6 +513,37 @@ select.select-input {
 
   .home-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .home-welcome { padding: 6px 0 4px; text-align: left; }
+
+  /* --- Cabecera de escritorio: barra fina tipo aplicación de gestión,
+     no el banner grande y azul de móvil --- */
+  .topbar {
+    position: sticky;
+    justify-content: space-between;
+    padding: 10px 24px;
+    background: var(--paper-raised);
+    color: var(--ink);
+    border-bottom: 1px solid var(--wheat-line);
+  }
+  .topbar__brand { flex-direction: row; align-items: center; gap: 10px; }
+  .topbar__logo { height: 32px; background: none; padding: 0; box-shadow: none; }
+  .topbar__actions { position: static; transform: none; }
+  .icon-btn {
+    border-color: var(--wheat-line);
+    background: var(--wheat);
+    color: var(--ink);
+  }
+  .icon-btn:active { background: var(--wheat-line); }
+
+  /* --- Lienzo gris + contenido como una "hoja" centrada, tipo Word/
+     programa de contabilidad, en vez de estirar el diseño de móvil --- */
+  body { background: var(--paper); }
+  main {
+    background: var(--paper-raised);
+    border-radius: 8px;
+    margin: 24px auto;
+    box-shadow: 0 1px 3px rgba(22,35,58,0.08), 0 10px 28px rgba(22,35,58,0.07);
+    min-height: calc(100vh - 48px);
+  }
 }
 
 /* ---------- INICIO: tarjetas a color por sección ---------- */

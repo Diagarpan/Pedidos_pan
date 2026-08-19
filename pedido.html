@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Diego Avilés · Hacer pedido</title>
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#2456A6">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* Ajustes propios de esta pantalla (encima de styles.css, que ya
+     trae los colores/tipografía de la marca) */
+  body { padding-bottom: 24px; }
+  .pedido-header {
+    background: var(--crust);
+    padding: 28px 20px 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .pedido-header img { height: 90px; }
+  main.pedido-main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  .telefono-box { text-align: center; padding: 24px 8px; }
+  .telefono-box p { color: var(--ink-muted); font-size: 14px; margin: 6px 0 20px; }
+  .telefono-input {
+    width: 100%; font-size: 20px; text-align: center; letter-spacing: 1px;
+    padding: 14px; border: 1px solid var(--wheat-line); border-radius: var(--radius);
+    font-family: var(--font-data); margin-bottom: 14px; background: var(--paper-raised); color: var(--ink);
+  }
+
+  .saludo { text-align: center; margin-bottom: 18px; }
+  .saludo__nombre { font-size: 20px; font-weight: 700; }
+  .saludo__cambiar { font-size: 12px; color: var(--crust-dark); background: none; border: none; text-decoration: underline; margin-top: 4px; }
+
+  .producto-fila {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 4px; border-bottom: 1px solid var(--wheat-line);
+  }
+  .producto-fila__nombre { font-weight: 600; font-size: 15px; }
+  .producto-fila__precio { font-family: var(--font-data); font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
+  .producto-stepper { display: flex; align-items: center; gap: 10px; }
+  .producto-stepper__btn {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--crust); background: var(--paper-raised);
+    color: var(--crust); font-size: 19px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .producto-stepper__btn:active { background: var(--wheat); }
+  .producto-stepper__val { min-width: 22px; text-align: center; font-family: var(--font-data); font-weight: 700; }
+
+  .carrito-barra {
+    position: sticky; bottom: 0; background: var(--paper-raised); border-top: 1px solid var(--wheat-line);
+    padding: 14px 16px; margin: 16px -16px -40px; box-shadow: 0 -4px 12px rgba(22,35,58,0.08);
+  }
+  .carrito-barra__total { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 10px; }
+
+  .confirmacion { text-align: center; padding: 40px 16px; }
+  .confirmacion__icono { font-size: 48px; }
+  .confirmacion__num { font-family: var(--font-data); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+
+<div class="pedido-header">
+  <img src="logo-full.png" alt="Diego Avilés">
+</div>
+
+<main class="pedido-main">
+
+  <!-- PASO 1: teléfono -->
+  <section id="pantallaTelefono" class="telefono-box">
+    <h2>¿Cuál es tu teléfono?</h2>
+    <p>Lo usamos para saber quién eres y aplicarte tus precios de siempre.</p>
+    <input type="tel" id="inputTelefono" class="telefono-input" placeholder="600 000 000" inputmode="numeric">
+    <button class="btn-primary" id="btnContinuar" style="width:100%;">Continuar</button>
+    <div class="form-msg" id="msgTelefono"></div>
+  </section>
+
+  <!-- PASO 2: catálogo -->
+  <section id="pantallaCatalogo" class="tab--hidden">
+    <div class="saludo">
+      <div class="saludo__nombre" id="saludoNombre"></div>
+      <button class="saludo__cambiar" id="btnCambiarTelefono">No soy yo / cambiar teléfono</button>
+    </div>
+
+    <div id="listaCatalogo"><div class="empty-state">Cargando catálogo…</div></div>
+
+    <div class="carrito-barra">
+      <div class="carrito-barra__total"><span>Total</span><span id="carritoTotal">0,00 €</span></div>
+      <button class="btn-primary" id="btnEnviarPedido" style="width:100%;">Enviar pedido</button>
+      <div class="form-msg" id="msgPedido"></div>
+    </div>
+  </section>
+
+  <!-- PASO 3: confirmación -->
+  <section id="pantallaConfirmacion" class="tab--hidden confirmacion">
+    <div class="confirmacion__icono">✅</div>
+    <h2>¡Pedido enviado!</h2>
+    <p id="confirmacionTexto"></p>
+    <p class="confirmacion__num" id="confirmacionNum"></p>
+    <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Hacer otro pedido</button>
+  </section>
+
+</main>
+
+<script src="pedido.js"></script>
+</body>
+</html>

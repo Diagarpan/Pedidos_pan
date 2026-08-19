@@ -107,6 +107,8 @@
       <div class="home-title" id="repartoDiaTitulo"></div>
     </div>
 
+    <div id="repartoResumen" class="tab--hidden"></div>
+
     <div class="section-label">Total a preparar</div>
     <div class="ticket" id="repartoProductos">
       <div class="empty-state">Cargando…</div>
@@ -135,6 +137,8 @@
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Ver pedidos por día</button>
+      <button class="home-btn home-btn--pedidos" data-tab="clientes-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de un cliente</button>
+      <button class="home-btn home-btn--pedidos" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
     </div>
   </section>
@@ -367,6 +371,14 @@
       <span>—</span>
       <input type="date" id="resFechaFin">
       <button class="btn-secondary" id="btnBuscarResumenFacturas">Buscar</button>
+    </div>
+    <div class="product-row" style="gap:8px; margin-top:8px;">
+      <button class="chip-btn" id="btnResumenHoy">Hoy</button>
+      <select id="filtroEstadoFactura" class="select-input select-input--auto" style="margin-bottom:0;">
+        <option value="todas">Todas</option>
+        <option value="Cobrado">Cobradas</option>
+        <option value="Pendiente">Por cobrar</option>
+      </select>
     </div>
     <div id="listaResumenFacturas" class="stack">
       <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>

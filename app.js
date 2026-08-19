@@ -438,20 +438,54 @@ function pintarReparto(data) {
     return;
   }
 
-  const esAyer = offsetRepartoSeleccionado < 0;
+  const mostrarSeguimiento = offsetRepartoSeleccionado <= 0; // Hoy y Ayer, no Mañana (todavía no se ha repartido)
+
+  if (mostrarSeguimiento) {
+    const total = data.clientes.length;
+    const entregados = data.clientes.filter((c) => c.entregado).length;
+    const cobrados = data.clientes.filter((c) => c.cobrado).length;
+    const recaudado = data.clientes.filter((c) => c.cobrado).reduce((s, c) => s + Number(c.total || 0), 0);
+    const totalEsperado = data.clientes.reduce((s, c) => s + Number(c.total || 0), 0);
+
+    document.getElementById('repartoResumen').innerHTML = `
+      <div class="stats-row">
+        <div class="stats-row__item"><span class="stats-row__num">${entregados}/${total}</span><span class="stats-row__label">Entregados</span></div>
+        <div class="stats-row__item"><span class="stats-row__num">${cobrados}/${total}</span><span class="stats-row__label">Cobrados</span></div>
+        <div class="stats-row__item"><span class="stats-row__num">${formatoEuros(recaudado)}</span><span class="stats-row__label">Recaudado de ${formatoEuros(totalEsperado)}</span></div>
+      </div>
+    `;
+    document.getElementById('repartoResumen').classList.remove('tab--hidden');
+  } else {
+    document.getElementById('repartoResumen').classList.add('tab--hidden');
+  }
+
   contClientes.innerHTML = data.clientes.map((c) => `
     <div class="card">
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(c.cliente)}</div>
-          <div class="card__meta">${escapeHtml(c.fecha || '')}${c.hora ? ' · ' + escapeHtml(c.hora) : ''}${c.ruta ? ' · Ruta ' + escapeHtml(c.ruta) : ''}</div>
+          <div class="card__meta">${escapeHtml(c.fecha || '')}${c.hora ? ' · ' + escapeHtml(c.hora) : ''}${c.ruta ? ' · Ruta ' + escapeHtml(c.ruta) : ''} · ${formatoEuros(c.total)}</div>
         </div>
-        ${esAyer ? stampHtml(c.entregado ? 'Entregado' : 'No entregado') : ''}
+        ${mostrarSeguimiento ? stampHtml(c.cobrado ? 'Cobrado' : c.entregado ? 'Entregado' : 'Pendiente') : ''}
       </div>
       <div class="card__products">${escapeHtml(c.productos)}</div>
-      ${esAyer && c.entregado && c.horaEntrega ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(c.horaEntrega)}</div>` : ''}
+      ${mostrarSeguimiento && c.entregado && c.horaEntrega ? `<div class="card__meta" style="margin-top:4px;">Entregado a las ${escapeHtml(c.horaEntrega)}</div>` : ''}
+      ${mostrarSeguimiento ? `
+        <div class="card__actions">
+          ${!c.entregado ? `<button class="chip-btn" data-reparto-accion="entregado" data-id="${c.id}">Marcar entregado</button>` : ''}
+          ${!c.cobrado ? `<button class="chip-btn" data-reparto-accion="cobrado" data-id="${c.id}">Marcar cobrado</button>` : ''}
+        </div>` : ''}
     </div>
   `).join('');
+
+  contClientes.querySelectorAll('[data-reparto-accion]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const r = await apiGet('marcar' + (btn.dataset.repartoAccion === 'entregado' ? 'Entregado' : 'Cobrado'), { idPedido: btn.dataset.id }).catch(() => ({ ok: false }));
+      if (!r.ok) { alert('No se pudo actualizar: ' + (r.error || 'error')); btn.disabled = false; return; }
+      cargarReparto();
+    });
+  });
 }
 
 async function cargarFaltanManana() {
@@ -703,6 +737,8 @@ async function buscarHistorialPedidos() {
 }
 
 /* ============ RESUMEN DE FACTURAS (todas, por rango) ============ */
+let resumenFacturasCache = [];
+
 function prepararResumenFacturas() {
   const hoy = new Date();
   const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -720,13 +756,24 @@ async function buscarResumenFacturas() {
   const r = await apiGet('resumenFacturas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
-  if (!r.data.facturas.length) {
-    cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
-    document.getElementById('resumenFacturasTotal').textContent = '';
+  resumenFacturasCache = r.data.facturas;
+  document.getElementById('resumenFacturasTotal').textContent =
+    `Facturado: ${formatoEuros(r.data.total)}  ·  Cobrado: ${formatoEuros(r.data.totalCobrado)}  ·  Pendiente: ${formatoEuros(r.data.totalPendiente)}` +
+    (r.data.numAnuladas ? `  ·  ${r.data.numAnuladas} anulada(s)` : '');
+  pintarResumenFacturas();
+}
+
+function pintarResumenFacturas() {
+  const cont = document.getElementById('listaResumenFacturas');
+  const filtro = document.getElementById('filtroEstadoFactura').value;
+  const facturas = filtro === 'todas' ? resumenFacturasCache : resumenFacturasCache.filter((f) => f.estado === filtro);
+
+  if (!facturas.length) {
+    cont.innerHTML = '<div class="empty-state">Sin facturas con ese filtro en este periodo.</div>';
     return;
   }
 
-  cont.innerHTML = r.data.facturas.map((f) => `
+  cont.innerHTML = facturas.map((f) => `
     <div class="card">
       <div class="card__top">
         <div>
@@ -745,9 +792,6 @@ async function buscarResumenFacturas() {
       </div>
     </div>
   `).join('');
-  document.getElementById('resumenFacturasTotal').textContent =
-    `Facturado: ${formatoEuros(r.data.total)}  ·  Cobrado: ${formatoEuros(r.data.totalCobrado)}  ·  Pendiente: ${formatoEuros(r.data.totalPendiente)}` +
-    (r.data.numAnuladas ? `  ·  ${r.data.numAnuladas} anulada(s)` : '');
   cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
     btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarResumenFacturas));
   });
@@ -845,6 +889,13 @@ function cablearEmpresa() {
   document.getElementById('btnGuardarEmpresa').addEventListener('click', guardarEmpresa);
   document.getElementById('btnBuscarHistorialPedidos').addEventListener('click', buscarHistorialPedidos);
   document.getElementById('btnBuscarResumenFacturas').addEventListener('click', buscarResumenFacturas);
+  document.getElementById('filtroEstadoFactura').addEventListener('change', pintarResumenFacturas);
+  document.getElementById('btnResumenHoy').addEventListener('click', () => {
+    const hoy = new Date();
+    document.getElementById('resFechaIni').valueAsDate = hoy;
+    document.getElementById('resFechaFin').valueAsDate = hoy;
+    buscarResumenFacturas();
+  });
   document.getElementById('btnBuscarFacturaPorCliente').addEventListener('click', buscarFacturaPorCliente);
 }
 

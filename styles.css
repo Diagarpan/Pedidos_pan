@@ -598,3 +598,32 @@ select.select-input {
   opacity: 0.55;
   cursor: wait;
 }
+
+/* ---------- RESUMEN DE REPARTO (recuento/recaudación de Hoy y Ayer) ---------- */
+.stats-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stats-row__item {
+  flex: 1;
+  background: var(--paper-raised);
+  border: 1px solid var(--wheat-line);
+  border-radius: var(--radius);
+  padding: 12px 8px;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+.stats-row__num {
+  display: block;
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--crust-dark);
+}
+.stats-row__label {
+  display: block;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}

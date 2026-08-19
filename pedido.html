@@ -38,6 +38,15 @@
   .saludo__nombre { font-size: 20px; font-weight: 700; }
   .saludo__cambiar { font-size: 12px; color: var(--crust-dark); background: none; border: none; text-decoration: underline; margin-top: 4px; }
 
+  .categorias-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .categoria-card {
+    background: var(--paper-raised); border: 1px solid var(--wheat-line); border-left: 4px solid var(--crust);
+    border-radius: var(--radius); padding: 26px 10px; display: flex; flex-direction: column; align-items: center;
+    gap: 10px; font-weight: 700; font-size: 15px; color: var(--ink); box-shadow: var(--shadow-card);
+  }
+  .categoria-card__icono { font-size: 32px; }
+  .categoria-card:active { background: var(--wheat); }
+
   .categoria-titulo {
     font-size: 20px; font-weight: 800; color: var(--crust-dark); margin: 26px 0 8px;
     padding-bottom: 6px; border-bottom: 2px solid var(--crust);
@@ -96,7 +105,12 @@
       <button class="saludo__cambiar" id="btnCambiarTelefono">No soy yo / cambiar teléfono</button>
     </div>
 
-    <div id="listaCatalogo"><div class="empty-state">Cargando catálogo…</div></div>
+    <div id="vistaCategorias"><div class="empty-state">Cargando catálogo…</div></div>
+
+    <div id="vistaProductos" class="tab--hidden">
+      <button class="link-btn" id="btnVolverCategorias">← Categorías</button>
+      <div id="listaCatalogo"></div>
+    </div>
 
     <div class="carrito-barra">
       <div class="carrito-barra__total"><span>Total</span><span id="carritoTotal">0,00 €</span></div>

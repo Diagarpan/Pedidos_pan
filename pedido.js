@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -32,6 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') identificarCliente();
   });
   document.getElementById('btnCambiarTelefono').addEventListener('click', olvidarTelefono);
+  document.getElementById('btnVolverCategorias').addEventListener('click', () => {
+    document.getElementById('vistaProductos').classList.add('tab--hidden');
+    document.getElementById('vistaCategorias').classList.remove('tab--hidden');
+  });
   document.getElementById('btnEnviarPedido').addEventListener('click', enviarPedido);
   document.getElementById('btnNuevoPedido').addEventListener('click', () => {
     carrito = {};
@@ -94,10 +98,13 @@ function olvidarTelefono() {
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
 const ICONO_CATEGORIA = { 'Panadería': '🥖', 'Dulces': '🍰', 'Hielo': '🧊' };
+let catalogoAgrupado = {};
 
 async function cargarCatalogo() {
-  const cont = document.getElementById('listaCatalogo');
+  const cont = document.getElementById('vistaCategorias');
   cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
+  document.getElementById('vistaProductos').classList.add('tab--hidden');
+  cont.classList.remove('tab--hidden');
 
   const r = await apiCliente('clienteCatalogo').catch(() => ({ ok: false }));
   if (!r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>'; return; }
@@ -105,16 +112,21 @@ async function cargarCatalogo() {
   catalogo = r.data;
 
   // Agrupar por categoría y, dentro, por subcategoría
-  const grupos = {};
+  catalogoAgrupado = {};
   catalogo.forEach((p) => {
     const cat = p.categoria || 'Panadería';
     const sub = p.subcategoria || '';
-    if (!grupos[cat]) grupos[cat] = {};
-    if (!grupos[cat][sub]) grupos[cat][sub] = [];
-    grupos[cat][sub].push(p);
+    if (!catalogoAgrupado[cat]) catalogoAgrupado[cat] = {};
+    if (!catalogoAgrupado[cat][sub]) catalogoAgrupado[cat][sub] = [];
+    catalogoAgrupado[cat][sub].push(p);
   });
 
-  const categorias = Object.keys(grupos).sort((a, b) => {
+  pintarCategorias();
+}
+
+function pintarCategorias() {
+  const cont = document.getElementById('vistaCategorias');
+  const categorias = Object.keys(catalogoAgrupado).sort((a, b) => {
     const ia = ORDEN_CATEGORIAS.indexOf(a);
     const ib = ORDEN_CATEGORIAS.indexOf(b);
     if (ia === -1 && ib === -1) return a.localeCompare(b);
@@ -123,18 +135,33 @@ async function cargarCatalogo() {
     return ia - ib;
   });
 
-  let html = '';
-  categorias.forEach((cat) => {
-    html += `<div class="categoria-titulo">${ICONO_CATEGORIA[cat] || '•'} ${escapeHtml(cat)}</div>`;
-    const subcategorias = Object.keys(grupos[cat]).sort((a, b) => {
-      if (!a) return -1; // los productos sin subcategoría van primero
-      if (!b) return 1;
-      return a.localeCompare(b);
-    });
-    subcategorias.forEach((sub) => {
-      if (sub) html += `<div class="subcategoria-titulo">${escapeHtml(sub)}</div>`;
-      html += grupos[cat][sub].map(pintarFilaProducto).join('');
-    });
+  cont.innerHTML = `<div class="categorias-grid">` + categorias.map((cat) => `
+    <button class="categoria-card" data-categoria="${escapeHtml(cat)}">
+      <span class="categoria-card__icono">${ICONO_CATEGORIA[cat] || '🍞'}</span>
+      ${escapeHtml(cat)}
+    </button>
+  `).join('') + `</div>`;
+
+  cont.querySelectorAll('[data-categoria]').forEach((btn) => {
+    btn.addEventListener('click', () => abrirCategoria(btn.dataset.categoria));
+  });
+}
+
+function abrirCategoria(cat) {
+  document.getElementById('vistaCategorias').classList.add('tab--hidden');
+  document.getElementById('vistaProductos').classList.remove('tab--hidden');
+
+  const cont = document.getElementById('listaCatalogo');
+  let html = `<div class="categoria-titulo">${ICONO_CATEGORIA[cat] || '🍞'} ${escapeHtml(cat)}</div>`;
+
+  const subcategorias = Object.keys(catalogoAgrupado[cat]).sort((a, b) => {
+    if (!a) return -1; // los productos sin subcategoría van primero
+    if (!b) return 1;
+    return a.localeCompare(b);
+  });
+  subcategorias.forEach((sub) => {
+    if (sub) html += `<div class="subcategoria-titulo">${escapeHtml(sub)}</div>`;
+    html += catalogoAgrupado[cat][sub].map(pintarFilaProducto).join('');
   });
   cont.innerHTML = html;
 
@@ -147,8 +174,6 @@ async function cargarCatalogo() {
       recalcularCarrito();
     });
   });
-
-  recalcularCarrito();
 }
 
 function pintarFilaProducto(p) {
@@ -160,7 +185,7 @@ function pintarFilaProducto(p) {
       </div>
       <div class="producto-stepper">
         <button class="producto-stepper__btn" data-accion="menos" data-id="${p.id}">−</button>
-        <span class="producto-stepper__val" id="cant-${p.id}">0</span>
+        <span class="producto-stepper__val" id="cant-${p.id}">${carrito[p.id] || 0}</span>
         <button class="producto-stepper__btn" data-accion="mas" data-id="${p.id}">+</button>
       </div>
     </div>

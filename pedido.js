@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -206,7 +206,7 @@ function pintarFilaProducto(p) {
     <div class="producto-fila">
       <div>
         <div class="producto-fila__nombre">${escapeHtml(p.nombre)}</div>
-        <div class="producto-fila__precio">${formatoEuros(p.precio)}</div>
+        <div class="producto-fila__precio">${formatoEuros(p.precio)}${p.unidadesCaja ? ` · Caja de ${escapeHtml(String(p.unidadesCaja))} uds` : ''}</div>
       </div>
       <div class="producto-stepper">
         <button class="producto-stepper__btn" data-accion="menos" data-id="${p.id}">−</button>

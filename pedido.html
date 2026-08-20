@@ -12,11 +12,15 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Pedidos DA">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
+  /* Esta página usa Poppins en vez de la tipografía de la app de
+     gestión — se sobrescribe solo aquí, sin tocar styles.css */
+  :root { --font-ui: 'Poppins', system-ui, sans-serif; }
+
   /* Ajustes propios de esta pantalla (encima de styles.css, que ya
-     trae los colores/tipografía de la marca) */
+     trae los colores de la marca) */
   body { padding-bottom: 24px; }
   .pedido-header {
     background: var(--crust);
@@ -30,21 +34,6 @@
   @media (max-width: 360px) {
     .pedido-header img { height: 130px; }
   }
-  .pedido-header__adorno {
-    display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.55);
-    font-size: 11px; letter-spacing: 3px; text-transform: uppercase; margin-top: 2px;
-  }
-  .pedido-header__adorno::before, .pedido-header__adorno::after {
-    content: ''; width: 34px; height: 1px; background: rgba(255,255,255,0.4);
-  }
-
-  h2, .saludo__nombre, .categoria-titulo, .confirmacion h2 {
-    font-family: 'Playfair Display', serif;
-  }
-  .telefono-box h2 { font-size: 24px; }
-  .saludo__nombre { font-size: 23px; }
-  .categoria-titulo { font-size: 22px; }
-  .confirmacion h2 { font-size: 24px; }
   main.pedido-main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
 
   .telefono-box { text-align: center; padding: 24px 8px; }
@@ -113,7 +102,6 @@
 
 <div class="pedido-header">
   <img src="logo-full.png" alt="Diego Avilés">
-  <div class="pedido-header__adorno">Pan artesano de siempre</div>
 </div>
 
 <main class="pedido-main">

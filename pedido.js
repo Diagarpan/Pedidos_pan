@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -104,9 +104,9 @@ function olvidarTelefono() {
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
 const ICONO_CATEGORIA = {
-  'Panadería': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5c0-4.5 3.2-8 8-8s8 3.5 8 8-2.3 8.5-8 8.5-8-4-8-8.5z"/><path d="M9.3 8.3 8.2 15M13 7.4l-.6 9.2M16.7 8.3 15.6 15"/></svg>',
-  'Dulces': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12l-1.2 9a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8L6 11z"/><path d="M7 11c-1-3 1-6 2-4 1-3 4-3 3 0 2-2 4 1 2 4"/></svg>',
-  'Hielo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1.5"/><path d="M5 10.5h14M10.5 5v14"/></svg>',
+  'Panadería': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5c0-4 3-6.5 10-6.5s10 2.5 10 6.5-3 4.5-10 4.5-10-1-10-4.5z"/><path d="M7.5 8l-1 8M12 6.7l-.7 9.5M16.5 8l-1 8"/></svg>',
+  'Dulces': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14l-1.3 9a2 2 0 0 1-2 1.7H8.3a2 2 0 0 1-2-1.7L5 11z"/><path d="M7 15.5v4M11.5 16v4.5M16 15.5v4"/><path d="M6 11c-1.3-1.8 0-3.5 1.3-2.6 0-2.2 1.8-3.5 3.2-2.2.8-1.8 3-1.8 3.5.3 1.8-1.3 3.5.8 1.8 3"/><circle cx="12" cy="5.3" r="1" fill="currentColor" stroke="none"/></svg>',
+  'Hielo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="1.5" fill="var(--paper-raised)"/><path d="M9 15h12M15 9v12"/><rect x="3" y="3" width="12" height="12" rx="1.5" fill="var(--paper-raised)"/><path d="M3 9h12M9 3v12"/></svg>',
 };
 let catalogoAgrupado = {};
 

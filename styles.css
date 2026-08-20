@@ -402,28 +402,40 @@ select.select-input {
 .home-title { font-weight: 700; font-size: 18px; margin-top: 6px; }
 .home-sub { font-family: var(--font-data); font-size: 11.5px; color: var(--ink-muted); margin-top: 4px; }
 .home-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 22px;
-}
-.home-btn {
-  background: var(--paper-raised);
-  border: 1px solid var(--wheat-line);
-  border-left: 3px solid var(--crust);
-  border-radius: var(--radius);
-  padding: 20px 10px;
   display: flex;
   flex-direction: column;
+  margin-top: 18px;
+  border-top: 1px solid var(--wheat-line);
+}
+.home-btn {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--wheat-line);
+  border-radius: 0;
+  padding: 15px 4px;
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 13.5px;
+  justify-content: flex-start;
+  gap: 14px;
+  font-weight: 500;
+  font-size: 15.5px;
   color: var(--ink);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
+  text-align: left;
+  width: 100%;
+}
+.home-btn::after {
+  content: '›';
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--ink-muted);
+  font-size: 21px;
+  line-height: 1;
 }
 .home-btn:active { background: var(--wheat); }
-.home-btn__icon { font-size: 24px; }
+.home-btn__icon { font-size: 19px; display: flex; color: var(--crust); flex-shrink: 0; }
+.home-btn__icon svg { width: 20px; height: 20px; }
 
 /* ---------- SELECTOR DE FECHA (Reparto) ---------- */
 .date-nav {
@@ -512,7 +524,6 @@ select.select-input {
   main { max-width: 880px; padding: 28px 32px; }
   .tabbar { display: none; }
 
-  .home-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; }
   .home-welcome { padding: 6px 0 4px; text-align: left; }
 
   /* --- Lienzo gris + contenido como una "hoja" centrada, tipo Word/
@@ -528,14 +539,10 @@ select.select-input {
 }
 
 /* ---------- INICIO: tarjetas a color por sección ---------- */
-.home-btn--reparto { background: #EAF1FB; border-left-color: var(--crust); }
-.home-btn--pedidos { background: #E6EEFA; border-left-color: #3D74C4; }
-.home-btn--nuevo { background: #E3ECFA; border-left-color: var(--crust-dark); }
-.home-btn--clientes { background: #EDF3FB; border-left-color: #6D93C7; }
-.home-btn--factura { background: #E8EFFA; border-left-color: #1E5AA8; }
-.home-btn--empresa { background: #EAEEF6; border-left-color: var(--ink); }
-.home-btn--productos { background: #E9F2F6; border-left-color: #2C7A93; }
-.home-btn--stats { background: #EEF0FA; border-left-color: #4B3F8C; }
+.home-btn--reparto, .home-btn--pedidos, .home-btn--nuevo, .home-btn--clientes,
+.home-btn--factura, .home-btn--empresa, .home-btn--productos, .home-btn--stats {
+  background: none;
+}
 
 /* ---------- BÚSQUEDA GLOBAL (Inicio) ---------- */
 .global-search { margin: 18px 0 4px; }
@@ -565,8 +572,9 @@ select.select-input {
 .home-btn { position: relative; }
 .home-btn__badge {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 50%;
+  right: 30px;
+  transform: translateY(-50%);
   font-family: var(--font-data);
   font-size: 10px;
   font-weight: 700;

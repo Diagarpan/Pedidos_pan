@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -103,7 +103,11 @@ function olvidarTelefono() {
 }
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
-const ICONO_CATEGORIA = { 'Panadería': '🥖', 'Dulces': '🍰', 'Hielo': '🧊' };
+const ICONO_CATEGORIA = {
+  'Panadería': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5c0-4.5 3.2-8 8-8s8 3.5 8 8-2.3 8.5-8 8.5-8-4-8-8.5z"/><path d="M9.3 8.3 8.2 15M13 7.4l-.6 9.2M16.7 8.3 15.6 15"/></svg>',
+  'Dulces': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12l-1.2 9a2 2 0 0 1-2 1.8H9.2a2 2 0 0 1-2-1.8L6 11z"/><path d="M7 11c-1-3 1-6 2-4 1-3 4-3 3 0 2-2 4 1 2 4"/></svg>',
+  'Hielo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1.5"/><path d="M5 10.5h14M10.5 5v14"/></svg>',
+};
 let catalogoAgrupado = {};
 
 async function cargarCatalogo() {
@@ -143,7 +147,7 @@ function pintarCategorias() {
 
   cont.innerHTML = `<div class="categorias-grid">` + categorias.map((cat) => `
     <button class="categoria-card" data-categoria="${escapeHtml(cat)}">
-      <span class="categoria-card__icono">${ICONO_CATEGORIA[cat] || '🍞'}</span>
+      <span class="categoria-card__icono">${ICONO_CATEGORIA[cat] || ICONO_CATEGORIA['Panadería']}</span>
       ${escapeHtml(cat)}
     </button>
   `).join('') + `</div>`;
@@ -158,7 +162,7 @@ function abrirCategoria(cat) {
   document.getElementById('vistaProductos').classList.remove('tab--hidden');
 
   const cont = document.getElementById('listaCatalogo');
-  let html = `<div class="categoria-titulo">${ICONO_CATEGORIA[cat] || '🍞'} ${escapeHtml(cat)}</div>`;
+  let html = `<div class="categoria-titulo"><span class="categoria-titulo__icono">${ICONO_CATEGORIA[cat] || ICONO_CATEGORIA['Panadería']}</span> ${escapeHtml(cat)}</div>`;
 
   const subcategorias = Object.keys(catalogoAgrupado[cat]).sort((a, b) => {
     if (!a) return -1; // los productos sin subcategoría van primero

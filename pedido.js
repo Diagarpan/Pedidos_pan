@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -104,9 +104,23 @@ function olvidarTelefono() {
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
 const ICONO_CATEGORIA = {
-  'Panadería': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12.5c0-4 3-6.5 10-6.5s10 2.5 10 6.5-3 4.5-10 4.5-10-1-10-4.5z"/><path d="M7.5 8l-1 8M12 6.7l-.7 9.5M16.5 8l-1 8"/></svg>',
-  'Dulces': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11h14l-1.3 9a2 2 0 0 1-2 1.7H8.3a2 2 0 0 1-2-1.7L5 11z"/><path d="M7 15.5v4M11.5 16v4.5M16 15.5v4"/><path d="M6 11c-1.3-1.8 0-3.5 1.3-2.6 0-2.2 1.8-3.5 3.2-2.2.8-1.8 3-1.8 3.5.3 1.8-1.3 3.5.8 1.8 3"/><circle cx="12" cy="5.3" r="1" fill="currentColor" stroke="none"/></svg>',
-  'Hielo': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="1.5" fill="var(--paper-raised)"/><path d="M9 15h12M15 9v12"/><rect x="3" y="3" width="12" height="12" rx="1.5" fill="var(--paper-raised)"/><path d="M3 9h12M9 3v12"/></svg>',
+  'Panadería': `<svg viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="24" cy="21" rx="21" ry="9.5" fill="#B9782E"/>
+    <ellipse cx="24" cy="17.5" rx="19.5" ry="8" fill="#E3A85E"/>
+    <path d="M12.5 11 L9.5 21.5 M18.5 9 L16.5 22.5 M24 8 L23 23 M29.5 9 L31.5 22.5 M35.5 11 L38.5 21.5"
+          stroke="#A8672A" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  </svg>`,
+  'Dulces': `<svg viewBox="0 0 40 42" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10.5 21 L29.5 21 L26.8 37.5 Q26.4 39.5 24 39.5 L16 39.5 Q13.6 39.5 13.2 37.5 Z" fill="#A8611E"/>
+    <path d="M11.3 21 L28.7 21 L27.9 25.5 L12.1 25.5 Z" fill="#7A4413"/>
+    <path d="M8 21 Q6 14.5 10.5 12.5 Q10.5 6.5 16.5 8.5 Q18.5 3.5 22 6.5 Q26 3.5 28 8.5 Q34 6.5 31.5 13.5 Q36 16.5 32 21 Z" fill="#FFF4E3"/>
+    <circle cx="20" cy="7" r="2.4" fill="#C62828"/>
+  </svg>`,
+  'Hielo': `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+    <rect x="4" y="17" width="17" height="17" rx="2.5" fill="#CDEBFB" stroke="#8FC9EA" stroke-width="1.2"/>
+    <rect x="20" y="5" width="17" height="17" rx="2.5" fill="#E4F5FD" stroke="#8FC9EA" stroke-width="1.2"/>
+    <path d="M8.5 21.5l3.5 3.5M24.5 9.5l3.5 3.5" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"/>
+  </svg>`,
 };
 let catalogoAgrupado = {};
 

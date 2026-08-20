@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -159,12 +159,13 @@ function pintarCategorias() {
     return ia - ib;
   });
 
-  cont.innerHTML = `<div class="categorias-grid">` + categorias.map((cat) => `
-    <button class="categoria-card" data-categoria="${escapeHtml(cat)}">
-      <span class="categoria-card__icono">${ICONO_CATEGORIA[cat] || ICONO_CATEGORIA['Panadería']}</span>
-      ${escapeHtml(cat)}
-    </button>
-  `).join('') + `</div>`;
+  cont.innerHTML = `<div class="catalogo-titulo">Catálogo</div><div class="lista-categorias">` +
+    categorias.map((cat) => `
+      <button class="fila-categoria" data-categoria="${escapeHtml(cat)}">
+        <span>${escapeHtml(cat)}</span>
+        <span class="fila-categoria__flecha">›</span>
+      </button>
+    `).join('') + `</div>`;
 
   cont.querySelectorAll('[data-categoria]').forEach((btn) => {
     btn.addEventListener('click', () => abrirCategoria(btn.dataset.categoria));
@@ -176,7 +177,7 @@ function abrirCategoria(cat) {
   document.getElementById('vistaProductos').classList.remove('tab--hidden');
 
   const cont = document.getElementById('listaCatalogo');
-  let html = `<div class="categoria-titulo"><span class="categoria-titulo__icono">${ICONO_CATEGORIA[cat] || ICONO_CATEGORIA['Panadería']}</span> ${escapeHtml(cat)}</div>`;
+  let html = `<div class="categoria-titulo">${escapeHtml(cat)}</div>`;
 
   const subcategorias = Object.keys(catalogoAgrupado[cat]).sort((a, b) => {
     if (!a) return -1; // los productos sin subcategoría van primero

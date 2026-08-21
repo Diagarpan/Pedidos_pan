@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearFacturaDirecta();
   cablearProductosLibres();
   cablearEdicion();
+  cablearAlbaranSuelto();
+  cablearInformesFacturacion();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -181,6 +183,9 @@ const BREADCRUMBS = {
   'pedidos-hoy': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }],
   'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
   'pedidos-historial': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Historial', tab: 'pedidos-historial' }],
+  'albaran-suelto': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Nuevo albarán', tab: 'albaran-suelto' }],
+  'factura-347': [{ label: 'Facturas', tab: 'factura' }, { label: 'Modelo 347', tab: 'factura-347' }],
+  'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Facturación por periodo', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
   'clientes-lista': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }],
@@ -280,6 +285,7 @@ function cargarTabActual(nombre) {
   if (activo === 'factura-por-cliente') prepararFacturaPorCliente();
   if (activo === 'pedido-editar') cargarPedidoParaEditar();
   if (activo === 'factura-editar') cargarFacturaParaEditar();
+  if (activo === 'albaran-suelto') cargarFormularioAlbaran();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -1806,4 +1812,171 @@ async function guardarEdicionFactura() {
 function cablearEdicion() {
   document.getElementById('btnGuardarEdicionPedido').addEventListener('click', guardarEdicionPedido);
   document.getElementById('btnGuardarEdicionFactura').addEventListener('click', guardarEdicionFactura);
+}
+
+/* ============ NUEVO ALBARÁN (sin factura) ============ */
+let itemsAlbaran = []; // { tipo:'catalogo'|'libre', productoId?, nombre, cantidad, uid }
+
+async function cargarFormularioAlbaran() {
+  const selectCliente = document.getElementById('selectClienteAlbaran');
+  const selectProducto = document.getElementById('albaranProductoSelect');
+
+  if (!clientesCache.length) {
+    const rc = await apiGet('clientes').catch(() => null);
+    if (rc && rc.ok) clientesCache = rc.data;
+  }
+  if (!productosCache.length) {
+    const rp = await apiGet('productos').catch(() => null);
+    if (rp && rp.ok) productosCache = rp.data;
+  }
+
+  selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
+    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
+    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+
+  itemsAlbaran = [];
+  pintarItemsAlbaran();
+  document.getElementById('albaranSueltoMsg').textContent = '';
+}
+
+function agregarProductoAlbaran() {
+  const productoId = document.getElementById('albaranProductoSelect').value;
+  const cantidad = Number(document.getElementById('albaranProductoCantidad').value) || 1;
+  if (!productoId) { alert('Elige un producto.'); return; }
+  const p = productosCache.find((pr) => String(pr.id) === String(productoId));
+  if (!p) return;
+
+  const existente = itemsAlbaran.find((it) => it.tipo === 'catalogo' && String(it.productoId) === String(productoId));
+  if (existente) existente.cantidad += cantidad;
+  else itemsAlbaran.push({ tipo: 'catalogo', productoId, nombre: p.nombre, cantidad, uid: 'c-' + productoId });
+
+  pintarItemsAlbaran();
+  document.getElementById('albaranProductoSelect').value = '';
+  document.getElementById('albaranProductoCantidad').value = '1';
+}
+
+function agregarLibreAlbaran() {
+  const nombre = document.getElementById('albaranLibreNombre').value.trim();
+  const cantidad = Number(document.getElementById('albaranLibreCantidad').value) || 1;
+  if (!nombre) { alert('Pon un nombre para el producto.'); return; }
+
+  const uid = 'libre-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  itemsAlbaran.push({ tipo: 'libre', nombre, cantidad, uid });
+
+  pintarItemsAlbaran();
+  document.getElementById('albaranLibreNombre').value = '';
+  document.getElementById('albaranLibreCantidad').value = '1';
+}
+
+function pintarItemsAlbaran() {
+  const cont = document.getElementById('listaAlbaran');
+  if (!itemsAlbaran.length) {
+    cont.innerHTML = '<div class="empty-state">Todavía no has añadido ningún producto.</div>';
+  } else {
+    cont.innerHTML = itemsAlbaran.map((it) => `
+      <div class="client-row">
+        <span>${it.cantidad}x ${escapeHtml(it.nombre)}</span>
+        <button class="chip-btn" data-quitar-albaran="${it.uid}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
+      </div>
+    `).join('');
+    cont.querySelectorAll('[data-quitar-albaran]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        itemsAlbaran = itemsAlbaran.filter((it) => it.uid !== btn.dataset.quitarAlbaran);
+        pintarItemsAlbaran();
+      });
+    });
+  }
+}
+
+async function generarAlbaranSuelto() {
+  const msg = document.getElementById('albaranSueltoMsg');
+  const clienteId = document.getElementById('selectClienteAlbaran').value;
+  if (!clienteId) { msg.textContent = 'Elige un cliente.'; msg.className = 'form-msg is-error'; return; }
+  if (!itemsAlbaran.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
+
+  const items = itemsAlbaran.map((it) => it.tipo === 'catalogo'
+    ? { productoId: it.productoId, cantidad: it.cantidad }
+    : { nombre: it.nombre, cantidad: it.cantidad }
+  );
+
+  msg.textContent = 'Generando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('albaranSuelto', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo'); msg.className = 'form-msg is-error'; return; }
+
+  await descargarPDF(r.base64, r.nombre);
+  msg.textContent = 'Albarán generado.';
+  msg.className = 'form-msg is-ok';
+  itemsAlbaran = [];
+  pintarItemsAlbaran();
+}
+
+function cablearAlbaranSuelto() {
+  document.getElementById('btnAnadirProducto_albaran').addEventListener('click', agregarProductoAlbaran);
+  document.getElementById('btnAnadirLibre_albaran').addEventListener('click', agregarLibreAlbaran);
+  document.getElementById('btnGenerarAlbaranSuelto').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', generarAlbaranSuelto));
+}
+
+/* ============ MODELO 347 ============ */
+async function buscarModelo347() {
+  const anio = document.getElementById('anio347').value.trim();
+  const cont = document.getElementById('lista347');
+  if (!anio) { cont.innerHTML = '<div class="empty-state">Escribe un año.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('modelo347', { anio }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  if (!r.data.clientes.length) { cont.innerHTML = '<div class="empty-state">Sin facturas en ese año.</div>'; return; }
+
+  cont.innerHTML = r.data.clientes.map((c) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(c.nombre)}</div>
+          <div class="card__meta">${c.nif ? 'NIF: ' + escapeHtml(c.nif) : 'Sin NIF registrado'}${c.superaUmbral ? ' · supera 3.005,06€' : ''}</div>
+        </div>
+        <div class="card__total">${formatoEuros(c.total)}</div>
+      </div>
+      <div class="card__products">T1: ${formatoEuros(c.trimestres[0])} · T2: ${formatoEuros(c.trimestres[1])} · T3: ${formatoEuros(c.trimestres[2])} · T4: ${formatoEuros(c.trimestres[3])}</div>
+    </div>
+  `).join('');
+}
+
+/* ============ FACTURACIÓN POR PERIODO ============ */
+async function buscarFacturacionPeriodo() {
+  const anio = document.getElementById('anioPeriodo').value.trim();
+  const agrupacion = document.getElementById('agrupacionPeriodo').value;
+  const cont = document.getElementById('listaPeriodo');
+  if (!anio) { cont.innerHTML = '<div class="empty-state">Escribe un año.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('facturacionPeriodo', { anio, agrupacion }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  const periodosConDatos = r.data.periodos.filter((p) => p.numFacturas > 0 || p.numAnuladas > 0);
+  if (!periodosConDatos.length) {
+    cont.innerHTML = '<div class="empty-state">Sin facturas en ese año.</div>';
+    document.getElementById('periodoTotalAnual').textContent = '';
+    return;
+  }
+
+  cont.innerHTML = periodosConDatos.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div class="card__name">${escapeHtml(p.periodo)}</div>
+        <div class="card__total">${formatoEuros(p.total)}</div>
+      </div>
+      <div class="card__products">${p.numFacturas} factura(s)${p.numAnuladas ? ` · ${p.numAnuladas} anulada(s)` : ''} · Base: ${formatoEuros(p.base)} · IVA: ${formatoEuros(p.iva)}${p.recargo ? ' · Recargo: ' + formatoEuros(p.recargo) : ''}</div>
+      <div class="card__products">Cobrado: ${formatoEuros(p.cobrado)} · Pendiente: ${formatoEuros(p.pendiente)}</div>
+    </div>
+  `).join('');
+  document.getElementById('periodoTotalAnual').textContent = `Total del año ${r.data.anio}: ${formatoEuros(r.data.totalAnual)}`;
+}
+
+function cablearInformesFacturacion() {
+  document.getElementById('btnBuscar347').addEventListener('click', buscarModelo347);
+  document.getElementById('btnBuscarPeriodo').addEventListener('click', buscarFacturacionPeriodo);
 }

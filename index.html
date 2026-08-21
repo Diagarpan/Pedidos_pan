@@ -140,6 +140,7 @@
       <button class="home-btn home-btn--pedidos" data-tab="clientes-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de un cliente</button>
       <button class="home-btn home-btn--pedidos" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
+      <button class="home-btn home-btn--pedidos" data-tab="albaran-suelto" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Nuevo albarán (sin facturar)</button>
     </div>
   </section>
 
@@ -162,6 +163,39 @@
     <div id="listaPedidos" class="stack">
       <div class="empty-state">Cargando pedidos…</div>
     </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-albaran-suelto">
+    <button class="link-btn" data-volver="pedidos">← Pedidos</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Nuevo albarán</div>
+      <div class="home-sub">Para entregas que no se facturan — no crea ni pedido ni factura</div>
+    </div>
+
+    <label class="field-label" for="selectClienteAlbaran">Cliente</label>
+    <select id="selectClienteAlbaran" class="select-input">
+      <option value="">Selecciona un cliente…</option>
+    </select>
+
+    <div class="section-label">Productos</div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <select id="albaranProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
+        <option value="">Elige un producto…</option>
+      </select>
+      <input type="number" id="albaranProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
+      <button class="chip-btn" id="btnAnadirProducto_albaran">Añadir</button>
+    </div>
+    <div id="listaAlbaran" class="stack"></div>
+
+    <div class="section-label">Producto fuera de catálogo</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+      <input type="text" id="albaranLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 160px;">
+      <input type="number" id="albaranLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:70px;">
+      <button class="chip-btn" id="btnAnadirLibre_albaran">Añadir</button>
+    </div>
+
+    <button class="btn-primary" id="btnGenerarAlbaranSuelto" style="margin-top:16px;">Generar albarán</button>
+    <div class="form-msg" id="albaranSueltoMsg"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-pedido-editar">
@@ -361,7 +395,43 @@
       <button class="home-btn home-btn--factura" data-tab="factura-resumen"><span class="home-btn__icon" data-icon="estadisticas"></span>Resumen de facturas</button>
       <button class="home-btn home-btn--factura" data-tab="factura-por-cliente"><span class="home-btn__icon" data-icon="buscar"></span>Ver factura por cliente</button>
       <button class="home-btn home-btn--factura" data-tab="factura-crear"><span class="home-btn__icon" data-icon="nuevo"></span>Generar factura</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-347"><span class="home-btn__icon" data-icon="estadisticas"></span>Modelo 347 (por cliente)</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-periodo"><span class="home-btn__icon" data-icon="estadisticas"></span>Facturación por periodo</button>
     </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-factura-347">
+    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Modelo 347</div>
+      <div class="home-sub">Total anual por cliente, desglosado por trimestre</div>
+    </div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <input type="number" id="anio347" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
+      <button class="btn-secondary" id="btnBuscar347">Ver</button>
+    </div>
+    <div id="lista347" class="stack">
+      <div class="empty-state">Escribe un año y pulsa Ver.</div>
+    </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-factura-periodo">
+    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Facturación por periodo</div>
+    </div>
+    <div class="product-row" style="gap:8px; align-items:flex-end;">
+      <input type="number" id="anioPeriodo" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
+      <select id="agrupacionPeriodo" class="select-input select-input--auto" style="margin-bottom:0;">
+        <option value="mes">Por mes</option>
+        <option value="trimestre">Por trimestre</option>
+      </select>
+      <button class="btn-secondary" id="btnBuscarPeriodo">Ver</button>
+    </div>
+    <div id="listaPeriodo" class="stack">
+      <div class="empty-state">Escribe un año y pulsa Ver.</div>
+    </div>
+    <div class="period-total" id="periodoTotalAnual"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-factura-resumen">

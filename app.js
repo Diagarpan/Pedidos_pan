@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearAlbaranSuelto();
   cablearInformesFacturacion();
   cablearCompras();
+  cablearCerrarAnio();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -192,6 +193,7 @@ const BREADCRUMBS = {
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
   'liquidacion-iva': [{ label: 'Compras', tab: 'compras' }, { label: 'Liquidación de IVA', tab: 'liquidacion-iva' }],
+  'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Facturación por periodo', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
@@ -2300,4 +2302,36 @@ function cablearCompras() {
   document.getElementById('btnDescargarLibroGastos').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroGastos));
   document.getElementById('btnBuscarLiquidacion').addEventListener('click', buscarLiquidacionIva);
   document.getElementById('btnDescargarLiquidacion').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLiquidacionIva));
+}
+
+/* ============ CERRAR AÑO (ARCHIVAR) ============ */
+async function cerrarAnio() {
+  const msg = document.getElementById('cerrarAnioMsg');
+  const anio = document.getElementById('anioCerrar').value.trim();
+  if (!anio) { msg.textContent = 'Escribe un año.'; msg.className = 'form-msg is-error'; return; }
+
+  const anioActual = new Date().getFullYear();
+  if (Number(anio) >= anioActual) {
+    msg.textContent = 'Solo se pueden archivar años ya terminados, no el actual ni futuros.';
+    msg.className = 'form-msg is-error';
+    return;
+  }
+
+  if (!confirm(`¿Archivar todo el año ${anio}? Se moverá a pestañas propias del Sheet (no se borra nada). Puede tardar unos segundos.`)) return;
+
+  msg.textContent = 'Archivando… puede tardar un poco, no cierres esta pantalla.';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('cerrarAnio', { anio }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = `Listo — pedidos: ${r.pedidosArchivados}, facturas: ${r.facturasArchivadas}, gastos: ${r.gastosArchivados} movidos al archivo de ${r.anio}.`;
+    msg.className = 'form-msg is-ok';
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+function cablearCerrarAnio() {
+  document.getElementById('btnCerrarAnio').addEventListener('click', (e) => conEstadoCarga(e.target, 'Archivando…', cerrarAnio));
 }

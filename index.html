@@ -399,6 +399,7 @@
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
       <button class="home-btn home-btn--factura" data-tab="liquidacion-iva"><span class="home-btn__icon" data-icon="estadisticas"></span>Liquidación de IVA</button>
+      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
   </section>
 
@@ -502,6 +503,21 @@
       <div class="empty-state">Escribe un año y pulsa Ver.</div>
     </div>
     <div class="period-total" id="liquidacionTotal"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-cerrar-anio">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Cerrar año (archivar)</div>
+      <div class="home-sub">Mueve los pedidos, facturas y gastos de un año ya terminado a sus propias pestañas, para que el Sheet no crezca sin límite. No borra nada — todo se conserva, solo se organiza.</div>
+    </div>
+    <div class="aviso-hora" style="margin: 12px 0;">
+      ⚠️ Solo se pueden archivar años ya terminados (no el actual). Es una acción segura y puede repetirse sin problema si hiciera falta.
+    </div>
+    <label class="field-label" for="anioCerrar">Año a archivar</label>
+    <input type="number" id="anioCerrar" class="text-input" placeholder="Ej: 2026">
+    <button class="btn-primary" id="btnCerrarAnio">Archivar este año</button>
+    <div class="form-msg" id="cerrarAnioMsg"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-factura">

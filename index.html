@@ -409,6 +409,7 @@
     <div class="product-row" style="gap:8px; align-items:flex-end;">
       <input type="number" id="anio347" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
       <button class="btn-secondary" id="btnBuscar347">Ver</button>
+      <button class="btn-secondary" id="btnDescargar347">Descargar PDF</button>
     </div>
     <div id="lista347" class="stack">
       <div class="empty-state">Escribe un año y pulsa Ver.</div>
@@ -420,13 +421,14 @@
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Facturación por periodo</div>
     </div>
-    <div class="product-row" style="gap:8px; align-items:flex-end;">
+    <div class="product-row" style="gap:8px; align-items:flex-end; flex-wrap:wrap;">
       <input type="number" id="anioPeriodo" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
       <select id="agrupacionPeriodo" class="select-input select-input--auto" style="margin-bottom:0;">
         <option value="mes">Por mes</option>
         <option value="trimestre">Por trimestre</option>
       </select>
       <button class="btn-secondary" id="btnBuscarPeriodo">Ver</button>
+      <button class="btn-secondary" id="btnDescargarPeriodo">Descargar PDF</button>
     </div>
     <div id="listaPeriodo" class="stack">
       <div class="empty-state">Escribe un año y pulsa Ver.</div>
@@ -441,6 +443,7 @@
       <span>—</span>
       <input type="date" id="resFechaFin">
       <button class="btn-secondary" id="btnBuscarResumenFacturas">Buscar</button>
+      <button class="btn-secondary" id="btnDescargarLibroFacturas">Libro de facturas (PDF)</button>
     </div>
     <div class="product-row" style="gap:8px; margin-top:8px;">
       <button class="chip-btn" id="btnResumenHoy">Hoy</button>
@@ -467,6 +470,7 @@
       <span>—</span>
       <input type="date" id="pcFechaFin">
       <button class="btn-secondary" id="btnBuscarFacturaPorCliente">Buscar</button>
+      <button class="btn-secondary" id="btnDescargarExtractoCliente">Extracto (PDF)</button>
     </div>
     <div id="listaFacturaPorCliente" class="stack">
       <div class="empty-state">Elige un cliente y un rango de fechas.</div>

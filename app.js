@@ -1979,4 +1979,45 @@ async function buscarFacturacionPeriodo() {
 function cablearInformesFacturacion() {
   document.getElementById('btnBuscar347').addEventListener('click', buscarModelo347);
   document.getElementById('btnBuscarPeriodo').addEventListener('click', buscarFacturacionPeriodo);
+  document.getElementById('btnDescargar347').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarModelo347PDF));
+  document.getElementById('btnDescargarPeriodo').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarFacturacionPeriodoPDF));
+  document.getElementById('btnDescargarLibroFacturas').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroFacturas));
+  document.getElementById('btnDescargarExtractoCliente').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarExtractoCliente));
+}
+
+async function descargarLibroFacturas() {
+  const ini = document.getElementById('resFechaIni').value;
+  const fin = document.getElementById('resFechaFin').value;
+  if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
+  const r = await apiGet('libroFacturasPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+async function descargarExtractoCliente() {
+  const clienteId = document.getElementById('selectClienteBuscarFactura').value;
+  const ini = document.getElementById('pcFechaIni').value;
+  const fin = document.getElementById('pcFechaFin').value;
+  if (!clienteId) { alert('Elige un cliente primero.'); return; }
+  if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
+  const r = await apiGet('extractoClientePdf', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+async function descargarModelo347PDF() {
+  const anio = document.getElementById('anio347').value.trim();
+  if (!anio) { alert('Escribe un año primero.'); return; }
+  const r = await apiGet('modelo347Pdf', { anio }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+async function descargarFacturacionPeriodoPDF() {
+  const anio = document.getElementById('anioPeriodo').value.trim();
+  const agrupacion = document.getElementById('agrupacionPeriodo').value;
+  if (!anio) { alert('Escribe un año primero.'); return; }
+  const r = await apiGet('facturacionPeriodoPdf', { anio, agrupacion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
 }

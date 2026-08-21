@@ -929,6 +929,7 @@ async function cargarEmpresa() {
   document.getElementById('empTelefono').value = r.data.telefono || '';
   document.getElementById('empEmail').value = r.data.email || '';
   document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
+  document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
   msg.textContent = '';
 }
 
@@ -944,6 +945,7 @@ async function guardarEmpresa() {
     telefono: document.getElementById('empTelefono').value.trim(),
     email: document.getElementById('empEmail').value.trim(),
     logoFileId: document.getElementById('empLogoFileId').value.trim(),
+    numeroInicialFactura: document.getElementById('empNumeroInicialFactura').value.trim(),
   }).catch(() => ({ ok: false }));
 
   if (r.ok) {

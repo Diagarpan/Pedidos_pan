@@ -27,6 +27,7 @@
       <button class="sidebar__item" data-tab="pedidos"><span class="sidebar__icon" data-icon="pedidos"></span>Pedidos</button>
       <button class="sidebar__item" data-tab="nuevo" data-solo-admin="1"><span class="sidebar__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="sidebar__item" data-tab="factura" data-solo-admin="1"><span class="sidebar__icon" data-icon="facturas"></span>Facturas</button>
+      <button class="sidebar__item" data-tab="compras" data-solo-admin="1"><span class="sidebar__icon" data-icon="compras"></span>Compras</button>
       <button class="sidebar__item" data-tab="clientes" data-solo-admin="1"><span class="sidebar__icon" data-icon="clientes"></span>Clientes</button>
       <button class="sidebar__item" data-tab="productos" data-solo-admin="1"><span class="sidebar__icon" data-icon="productos"></span>Productos</button>
       <button class="sidebar__item" data-tab="estadisticas" data-solo-admin="1"><span class="sidebar__icon" data-icon="estadisticas"></span>Estadísticas</button>
@@ -54,6 +55,7 @@
       <button class="toolbar-btn" data-tab="pedidos"><span data-icon="pedidos"></span>Pedidos</button>
       <button class="toolbar-btn" data-tab="nuevo" data-solo-admin="1"><span data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="toolbar-btn" data-tab="factura" data-solo-admin="1"><span data-icon="facturas"></span>Facturas</button>
+      <button class="toolbar-btn" data-tab="compras" data-solo-admin="1"><span data-icon="compras"></span>Compras</button>
       <button class="toolbar-btn" data-tab="clientes" data-solo-admin="1"><span data-icon="clientes"></span>Clientes</button>
       <button class="toolbar-btn" data-tab="productos" data-solo-admin="1"><span data-icon="productos"></span>Productos</button>
       <button class="toolbar-btn" data-tab="estadisticas" data-solo-admin="1"><span data-icon="estadisticas"></span>Estadísticas</button>
@@ -82,6 +84,7 @@
       <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon" data-icon="clientes"></span>Clientes</button>
       <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Facturas</button>
+      <button class="home-btn home-btn--factura" data-tab="compras" data-solo-admin="1"><span class="home-btn__icon" data-icon="compras"></span>Compras</button>
       <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1"><span class="home-btn__icon" data-icon="productos"></span>Productos</button>
       <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1"><span class="home-btn__icon" data-icon="estadisticas"></span>Estadísticas</button>
       <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1"><span class="home-btn__icon" data-icon="empresa"></span>Empresa</button>
@@ -386,6 +389,121 @@
   </section>
 
   <!-- ==================== FACTURAS: menú ==================== -->
+  <section class="tab tab--hidden" id="tab-compras">
+    <div class="home-welcome">
+      <div class="home-title">Compras</div>
+      <div class="home-sub">Lo que compráis vosotros — proveedores, gastos e IVA soportado</div>
+    </div>
+    <div class="home-grid">
+      <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span>Proveedores</button>
+      <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
+      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
+      <button class="home-btn home-btn--factura" data-tab="liquidacion-iva"><span class="home-btn__icon" data-icon="estadisticas"></span>Liquidación de IVA</button>
+    </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-proveedores">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Proveedores</div>
+    </div>
+    <div id="listaProveedores" class="stack">
+      <div class="empty-state">Cargando…</div>
+    </div>
+    <button class="btn-primary" id="btnNuevoProveedor" style="margin-top:16px;">+ Nuevo proveedor</button>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-proveedor-form">
+    <button class="link-btn" data-volver="proveedores">← Proveedores</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title" id="proveedorFormTitulo">Nuevo proveedor</div>
+    </div>
+    <input type="hidden" id="prvFormId">
+    <label class="field-label" for="prvFormNombre">Nombre</label>
+    <input type="text" id="prvFormNombre" class="text-input">
+    <label class="field-label" for="prvFormNif">NIF/CIF</label>
+    <input type="text" id="prvFormNif" class="text-input">
+    <label class="field-label" for="prvFormTelefono">Teléfono</label>
+    <input type="text" id="prvFormTelefono" class="text-input">
+    <label class="field-label" for="prvFormDireccion">Dirección</label>
+    <input type="text" id="prvFormDireccion" class="text-input">
+    <label class="field-label" for="prvFormActivo">Activo</label>
+    <select id="prvFormActivo" class="select-input">
+      <option value="true">Sí</option>
+      <option value="false">No</option>
+    </select>
+    <button class="btn-primary" id="btnGuardarProveedor">Guardar proveedor</button>
+    <div class="form-msg" id="proveedorFormMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-gasto-nuevo">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title" id="gastoFormTitulo">Nuevo gasto</div>
+    </div>
+    <input type="hidden" id="gastoFormId">
+    <label class="field-label" for="gastoFormFecha">Fecha</label>
+    <input type="date" id="gastoFormFecha" class="text-input">
+    <label class="field-label" for="gastoFormProveedor">Proveedor (opcional)</label>
+    <select id="gastoFormProveedor" class="select-input">
+      <option value="">Sin proveedor / puntual</option>
+    </select>
+    <label class="field-label" for="gastoFormConcepto">Concepto</label>
+    <input type="text" id="gastoFormConcepto" class="text-input" placeholder="Ej: Harina, gasoil, mantenimiento furgoneta…">
+    <label class="field-label" for="gastoFormCategoria">Categoría (opcional)</label>
+    <input type="text" id="gastoFormCategoria" class="text-input" placeholder="Ej: Materia prima, Combustible, Alquiler…">
+    <label class="field-label" for="gastoFormBase">Base imponible (€)</label>
+    <input type="number" id="gastoFormBase" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <label class="field-label" for="gastoFormIva">IVA (€, importe — no %)</label>
+    <input type="number" id="gastoFormIva" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <div class="new-order-total">
+      <span>Total</span>
+      <span id="gastoFormTotal">0,00 €</span>
+    </div>
+    <button class="btn-primary" id="btnGuardarGasto">Guardar gasto</button>
+    <button class="btn-secondary" id="btnEliminarGasto" style="display:none; margin-top:8px; border-color:var(--warn-red); color:var(--warn-red);">Eliminar este gasto</button>
+    <div class="form-msg" id="gastoFormMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-gastos-ver">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="date-range">
+      <input type="date" id="gastosFechaIni">
+      <span>—</span>
+      <input type="date" id="gastosFechaFin">
+      <button class="btn-secondary" id="btnBuscarGastos">Buscar</button>
+    </div>
+    <div class="product-row" style="gap:8px; margin-top:8px;">
+      <button class="chip-btn" id="btnGastosEsteMes">Este mes</button>
+      <button class="btn-secondary" id="btnDescargarLibroGastos">Libro de gastos (PDF)</button>
+    </div>
+    <div id="listaGastos" class="stack">
+      <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
+    </div>
+    <div class="period-total" id="gastosTotal"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-liquidacion-iva">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Liquidación de IVA</div>
+      <div class="home-sub">IVA repercutido (ventas) menos IVA soportado (compras)</div>
+    </div>
+    <div class="product-row" style="gap:8px; align-items:flex-end; flex-wrap:wrap;">
+      <input type="number" id="anioLiquidacion" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
+      <select id="agrupacionLiquidacion" class="select-input select-input--auto" style="margin-bottom:0;">
+        <option value="trimestre">Por trimestre</option>
+        <option value="mes">Por mes</option>
+      </select>
+      <button class="btn-secondary" id="btnBuscarLiquidacion">Ver</button>
+      <button class="btn-secondary" id="btnDescargarLiquidacion">Descargar PDF</button>
+    </div>
+    <div id="listaLiquidacion" class="stack">
+      <div class="empty-state">Escribe un año y pulsa Ver.</div>
+    </div>
+    <div class="period-total" id="liquidacionTotal"></div>
+  </section>
+
   <section class="tab tab--hidden" id="tab-factura">
     <div class="home-welcome">
       <div class="home-title">Facturas</div>

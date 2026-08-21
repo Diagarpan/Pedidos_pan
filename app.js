@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearEdicion();
   cablearAlbaranSuelto();
   cablearInformesFacturacion();
+  cablearCompras();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -66,6 +67,7 @@ const ICONOS = {
   pedidos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3.5" width="15" height="17" rx="1.5"/><path d="M9 3v2.5h6V3"/><path d="M8 11h8M8 14.5h8M8 8h3"/></svg>',
   nuevo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v9M7.5 12h9"/></svg>',
   facturas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 2.5h13v19l-2.2-1.3-2.1 1.3-2.2-1.3-2.1 1.3-2.2-1.3-2.2 1.3v-19z"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4.5"/></svg>',
+  compras: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.5h2.5l2 11.5h10.5l1.8-8H7"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="16.5" cy="19.5" r="1.4"/></svg>',
   clientes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 20.5v-1.8a3.6 3.6 0 0 0-3.6-3.6H6.6A3.6 3.6 0 0 0 3 18.7v1.8"/><circle cx="9.8" cy="7.8" r="3.6"/><path d="M21 20.5v-1.8a3.6 3.6 0 0 0-2.7-3.5"/><path d="M14.8 3.4a3.6 3.6 0 0 1 0 7"/></svg>',
   productos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5c0-4.5 3.2-8 8-8s8 3.5 8 8-2.3 8.5-8 8.5-8-4-8-8.5z"/><path d="M9.3 8.3 8.2 15M13 7.4l-.6 9.2M16.7 8.3 15.6 15"/></svg>',
   estadisticas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3.5v17h17"/><rect x="7.5" y="12.5" width="3" height="5.5"/><rect x="12.5" y="8.5" width="3" height="9.5"/><rect x="17.5" y="5.5" width="3" height="12.5"/></svg>',
@@ -185,6 +187,11 @@ const BREADCRUMBS = {
   'pedidos-historial': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Historial', tab: 'pedidos-historial' }],
   'albaran-suelto': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Nuevo albarán', tab: 'albaran-suelto' }],
   'factura-347': [{ label: 'Facturas', tab: 'factura' }, { label: 'Modelo 347', tab: 'factura-347' }],
+  'proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }],
+  'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
+  'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
+  'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
+  'liquidacion-iva': [{ label: 'Compras', tab: 'compras' }, { label: 'Liquidación de IVA', tab: 'liquidacion-iva' }],
   'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Facturación por periodo', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
@@ -286,6 +293,8 @@ function cargarTabActual(nombre) {
   if (activo === 'pedido-editar') cargarPedidoParaEditar();
   if (activo === 'factura-editar') cargarFacturaParaEditar();
   if (activo === 'albaran-suelto') cargarFormularioAlbaran();
+  if (activo === 'proveedores') cargarProveedores();
+  if (activo === 'gasto-nuevo') cargarFormularioGasto();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -1941,6 +1950,7 @@ async function buscarModelo347() {
         <div class="card__total">${formatoEuros(c.total)}</div>
       </div>
       <div class="card__products">T1: ${formatoEuros(c.trimestres[0])} · T2: ${formatoEuros(c.trimestres[1])} · T3: ${formatoEuros(c.trimestres[2])} · T4: ${formatoEuros(c.trimestres[3])}</div>
+      <div class="card__meta">Base: ${formatoEuros(c.base)} · IVA: ${formatoEuros(c.iva)}</div>
     </div>
   `).join('');
 }
@@ -2020,4 +2030,274 @@ async function descargarFacturacionPeriodoPDF() {
   const r = await apiGet('facturacionPeriodoPdf', { anio, agrupacion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
+}
+
+/* ============ COMPRAS: PROVEEDORES ============ */
+let proveedoresCache = [];
+let proveedorSeleccionado = null;
+
+async function cargarProveedores() {
+  const cont = document.getElementById('listaProveedores');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const r = await apiGet('proveedores').catch(() => null);
+  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
+  proveedoresCache = r.data;
+
+  if (!proveedoresCache.length) { cont.innerHTML = '<div class="empty-state">Todavía no has añadido ningún proveedor.</div>'; return; }
+
+  cont.innerHTML = proveedoresCache.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.nombre)}</div>
+          <div class="card__meta">${p.nif ? 'NIF: ' + escapeHtml(p.nif) + ' · ' : ''}${escapeHtml(p.telefono || '')}</div>
+        </div>
+      </div>
+      <div class="card__actions">
+        <button class="chip-btn" data-editar-proveedor="${p.id}">Editar</button>
+      </div>
+    </div>
+  `).join('');
+  cont.querySelectorAll('[data-editar-proveedor]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      proveedorSeleccionado = proveedoresCache.find((p) => String(p.id) === btn.dataset.editarProveedor);
+      abrirFormularioProveedor(proveedorSeleccionado);
+    });
+  });
+}
+
+function abrirFormularioProveedor(proveedor) {
+  document.getElementById('proveedorFormTitulo').textContent = proveedor ? 'Editar proveedor' : 'Nuevo proveedor';
+  document.getElementById('prvFormId').value = proveedor ? proveedor.id : '';
+  document.getElementById('prvFormNombre').value = proveedor ? proveedor.nombre : '';
+  document.getElementById('prvFormNif').value = proveedor ? proveedor.nif : '';
+  document.getElementById('prvFormTelefono').value = proveedor ? proveedor.telefono : '';
+  document.getElementById('prvFormDireccion').value = proveedor ? proveedor.direccion : '';
+  document.getElementById('prvFormActivo').value = proveedor ? String(proveedor.activo) : 'true';
+  document.getElementById('proveedorFormMsg').textContent = '';
+  cambiarTab('proveedor-form');
+}
+
+async function guardarProveedor() {
+  const msg = document.getElementById('proveedorFormMsg');
+  const nombre = document.getElementById('prvFormNombre').value.trim();
+  if (!nombre) { msg.textContent = 'Pon un nombre.'; msg.className = 'form-msg is-error'; return; }
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet('guardarProveedor', {
+    id: document.getElementById('prvFormId').value,
+    nombre,
+    nif: document.getElementById('prvFormNif').value.trim(),
+    telefono: document.getElementById('prvFormTelefono').value.trim(),
+    direccion: document.getElementById('prvFormDireccion').value.trim(),
+    activo: document.getElementById('prvFormActivo').value,
+  }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+
+  if (r.ok) {
+    msg.textContent = 'Proveedor guardado.';
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('proveedores'), 700);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+/* ============ COMPRAS: GASTOS ============ */
+async function cargarFormularioGasto() {
+  const select = document.getElementById('gastoFormProveedor');
+  if (!proveedoresCache.length) {
+    const r = await apiGet('proveedores').catch(() => null);
+    if (r && r.ok) proveedoresCache = r.data;
+  }
+  select.innerHTML = '<option value="">Sin proveedor / puntual</option>' +
+    proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+
+  document.getElementById('gastoFormTitulo').textContent = 'Nuevo gasto';
+  document.getElementById('gastoFormId').value = '';
+  document.getElementById('gastoFormFecha').valueAsDate = new Date();
+  document.getElementById('gastoFormConcepto').value = '';
+  document.getElementById('gastoFormCategoria').value = '';
+  document.getElementById('gastoFormBase').value = '';
+  document.getElementById('gastoFormIva').value = '';
+  document.getElementById('gastoFormTotal').textContent = '0,00 €';
+  document.getElementById('btnEliminarGasto').style.display = 'none';
+  document.getElementById('gastoFormMsg').textContent = '';
+}
+
+async function abrirGastoParaEditar(g) {
+  if (!proveedoresCache.length) {
+    const r = await apiGet('proveedores').catch(() => null);
+    if (r && r.ok) proveedoresCache = r.data;
+  }
+  cambiarTab('gasto-nuevo');
+  document.getElementById('gastoFormTitulo').textContent = 'Editar gasto';
+  document.getElementById('gastoFormId').value = g.id;
+  document.getElementById('gastoFormFecha').value = g.fecha.split('/').reverse().join('-');
+  document.getElementById('gastoFormProveedor').value = g.proveedorId || '';
+  document.getElementById('gastoFormConcepto').value = g.concepto || '';
+  document.getElementById('gastoFormCategoria').value = g.categoria || '';
+  document.getElementById('gastoFormBase').value = g.base;
+  document.getElementById('gastoFormIva').value = g.iva;
+  recalcularTotalGasto();
+  document.getElementById('btnEliminarGasto').style.display = 'block';
+  document.getElementById('gastoFormMsg').textContent = '';
+}
+
+function recalcularTotalGasto() {
+  const base = Number(document.getElementById('gastoFormBase').value) || 0;
+  const iva = Number(document.getElementById('gastoFormIva').value) || 0;
+  document.getElementById('gastoFormTotal').textContent = formatoEuros(base + iva);
+}
+
+async function guardarGasto() {
+  const msg = document.getElementById('gastoFormMsg');
+  const id = document.getElementById('gastoFormId').value;
+  const fecha = document.getElementById('gastoFormFecha').value;
+  if (!fecha) { msg.textContent = 'Elige una fecha.'; msg.className = 'form-msg is-error'; return; }
+
+  const proveedorId = document.getElementById('gastoFormProveedor').value;
+  const proveedorNombre = proveedorId ? proveedoresCache.find((p) => String(p.id) === proveedorId)?.nombre || '' : '';
+
+  const datos = {
+    fecha: formatoFechaES(fecha),
+    proveedorId,
+    proveedorNombre,
+    concepto: document.getElementById('gastoFormConcepto').value.trim(),
+    categoria: document.getElementById('gastoFormCategoria').value.trim(),
+    base: document.getElementById('gastoFormBase').value || 0,
+    iva: document.getElementById('gastoFormIva').value || 0,
+  };
+
+  msg.textContent = 'Guardando…';
+  msg.className = 'form-msg';
+
+  const r = await apiGet(id ? 'editarGasto' : 'crearGasto', id ? { ...datos, id } : datos).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = 'Gasto guardado.';
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('gastos-ver'), 700);
+  } else {
+    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+async function eliminarGasto() {
+  const id = document.getElementById('gastoFormId').value;
+  if (!id) return;
+  if (!confirm('¿Seguro que quieres eliminar este gasto? No se puede deshacer.')) return;
+  const r = await apiGet('eliminarGasto', { id }).catch(() => ({ ok: false }));
+  if (r.ok) cambiarTab('gastos-ver');
+  else alert('No se pudo eliminar: ' + (r.error || 'error'));
+}
+
+async function buscarGastos() {
+  const ini = document.getElementById('gastosFechaIni').value;
+  const fin = document.getElementById('gastosFechaFin').value;
+  const cont = document.getElementById('listaGastos');
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('gastosPeriodo', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  if (!r.data.gastos.length) {
+    cont.innerHTML = '<div class="empty-state">Sin gastos en ese periodo.</div>';
+    document.getElementById('gastosTotal').textContent = '';
+    return;
+  }
+
+  cont.innerHTML = r.data.gastos.map((g) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(g.concepto || 'Gasto')}</div>
+          <div class="card__meta">${escapeHtml(g.fecha)}${g.proveedor ? ' · ' + escapeHtml(g.proveedor) : ''}${g.categoria ? ' · ' + escapeHtml(g.categoria) : ''}</div>
+        </div>
+        <div class="card__total">${formatoEuros(g.total)}</div>
+      </div>
+      <div class="card__actions">
+        <button class="chip-btn" data-editar-gasto="${g.id}">Editar</button>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('gastosTotal').textContent = `Base: ${formatoEuros(r.data.totalBase)}  ·  IVA: ${formatoEuros(r.data.totalIva)}  ·  Total: ${formatoEuros(r.data.totalGeneral)}`;
+
+  cont.querySelectorAll('[data-editar-gasto]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const g = r.data.gastos.find((x) => String(x.id) === btn.dataset.editarGasto);
+      if (g) abrirGastoParaEditar(g);
+    });
+  });
+}
+
+async function descargarLibroGastos() {
+  const ini = document.getElementById('gastosFechaIni').value;
+  const fin = document.getElementById('gastosFechaFin').value;
+  if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
+  const r = await apiGet('libroGastosPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+/* ============ LIQUIDACIÓN DE IVA ============ */
+async function buscarLiquidacionIva() {
+  const anio = document.getElementById('anioLiquidacion').value.trim();
+  const agrupacion = document.getElementById('agrupacionLiquidacion').value;
+  const cont = document.getElementById('listaLiquidacion');
+  if (!anio) { cont.innerHTML = '<div class="empty-state">Escribe un año.</div>'; return; }
+
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('liquidacionIva', { anio, agrupacion }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  const periodosConDatos = r.data.periodos.filter((p) => p.ivaRepercutido !== 0 || p.ivaSoportado !== 0);
+  if (!periodosConDatos.length) {
+    cont.innerHTML = '<div class="empty-state">Sin datos para ese año.</div>';
+    document.getElementById('liquidacionTotal').textContent = '';
+    return;
+  }
+
+  cont.innerHTML = periodosConDatos.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div class="card__name">${escapeHtml(p.periodo)}</div>
+        <div class="card__total">${formatoEuros(p.ivaALiquidar)}</div>
+      </div>
+      <div class="card__products">Repercutido (ventas): ${formatoEuros(p.ivaRepercutido)} · Soportado (compras): ${formatoEuros(p.ivaSoportado)}</div>
+    </div>
+  `).join('');
+  document.getElementById('liquidacionTotal').textContent =
+    `Repercutido: ${formatoEuros(r.data.totalRepercutido)}  ·  Soportado: ${formatoEuros(r.data.totalSoportado)}  ·  A liquidar: ${formatoEuros(r.data.totalALiquidar)}`;
+}
+
+async function descargarLiquidacionIva() {
+  const anio = document.getElementById('anioLiquidacion').value.trim();
+  const agrupacion = document.getElementById('agrupacionLiquidacion').value;
+  if (!anio) { alert('Escribe un año primero.'); return; }
+  const r = await apiGet('liquidacionIvaPdf', { anio, agrupacion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+function cablearCompras() {
+  document.getElementById('btnNuevoProveedor').addEventListener('click', () => abrirFormularioProveedor(null));
+  document.getElementById('btnGuardarProveedor').addEventListener('click', guardarProveedor);
+  document.getElementById('btnGuardarGasto').addEventListener('click', guardarGasto);
+  document.getElementById('btnEliminarGasto').addEventListener('click', eliminarGasto);
+  document.getElementById('gastoFormBase').addEventListener('input', recalcularTotalGasto);
+  document.getElementById('gastoFormIva').addEventListener('input', recalcularTotalGasto);
+  document.getElementById('btnBuscarGastos').addEventListener('click', buscarGastos);
+  document.getElementById('btnGastosEsteMes').addEventListener('click', () => {
+    const hoy = new Date();
+    document.getElementById('gastosFechaIni').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('gastosFechaFin').valueAsDate = hoy;
+    buscarGastos();
+  });
+  document.getElementById('btnDescargarLibroGastos').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroGastos));
+  document.getElementById('btnBuscarLiquidacion').addEventListener('click', buscarLiquidacionIva);
+  document.getElementById('btnDescargarLiquidacion').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLiquidacionIva));
 }

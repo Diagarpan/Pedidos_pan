@@ -73,21 +73,40 @@
       <div class="home-sub" id="homeSub"></div>
     </div>
 
+    <div class="resumen-inicio" id="resumenInicio">
+      <div class="resumen-inicio__item">
+        <span class="resumen-inicio__label">Recaudado hoy</span>
+        <span class="resumen-inicio__num" id="riRecaudado">—</span>
+      </div>
+      <div class="resumen-inicio__item">
+        <span class="resumen-inicio__label">Pedidos hoy</span>
+        <span class="resumen-inicio__num" id="riPedidos">—</span>
+      </div>
+      <div class="resumen-inicio__item">
+        <span class="resumen-inicio__label">Entregados</span>
+        <span class="resumen-inicio__num" id="riEntregados">—</span>
+      </div>
+      <div class="resumen-inicio__item">
+        <span class="resumen-inicio__label">Pendiente de cobro</span>
+        <span class="resumen-inicio__num resumen-inicio__num--alerta" id="riPendiente">—</span>
+      </div>
+    </div>
+
     <div class="global-search" id="bloqueBusquedaGlobal">
       <input type="search" id="buscarGlobal" class="search-input" placeholder="Buscar cliente, pedido o factura…" style="margin-bottom:0;">
     </div>
     <div id="resultadosBusquedaGlobal"></div>
 
     <div class="home-grid">
-      <button class="home-btn home-btn--reparto" data-tab="reparto"><span class="home-btn__icon" data-icon="reparto"></span>Reparto<span class="home-btn__badge" id="badgeReparto"></span></button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos"><span class="home-btn__icon" data-icon="pedidos"></span>Pedidos<span class="home-btn__badge" id="badgePedidos"></span></button>
-      <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1"><span class="home-btn__icon" data-icon="clientes"></span>Clientes</button>
-      <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Facturas</button>
-      <button class="home-btn home-btn--factura" data-tab="compras" data-solo-admin="1"><span class="home-btn__icon" data-icon="compras"></span>Compras</button>
-      <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1"><span class="home-btn__icon" data-icon="productos"></span>Productos</button>
-      <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1"><span class="home-btn__icon" data-icon="estadisticas"></span>Estadísticas</button>
-      <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1"><span class="home-btn__icon" data-icon="empresa"></span>Empresa</button>
+      <button class="home-btn home-btn--reparto" data-tab="reparto">Reparto<span class="home-btn__badge" id="badgeReparto"></span></button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos">Pedidos<span class="home-btn__badge" id="badgePedidos"></span></button>
+      <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1">Nuevo pedido</button>
+      <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1">Clientes</button>
+      <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1">Facturas</button>
+      <button class="home-btn home-btn--factura" data-tab="compras" data-solo-admin="1">Compras</button>
+      <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1">Productos</button>
+      <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1">Estadísticas</button>
+      <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1">Empresa</button>
     </div>
   </section>
 
@@ -706,6 +725,10 @@
 
     <label class="field-label" for="empLogoFileId">ID del logo en Google Drive (opcional)</label>
     <input type="text" id="empLogoFileId" class="text-input" placeholder="1AbCdEfGhIjK...">
+
+    <label class="field-label" for="empSerie">Serie de facturación (opcional)</label>
+    <input type="text" id="empSerie" class="text-input" placeholder="Ej: 4">
+    <div class="card__meta" style="margin: -8px 0 14px;">Si tu gestor lleva una serie que sube cada año (ej. Serie 4 este año), ponla aquí — sale impresa en cada factura. Cámbiala tú mismo cuando toque (ej. a 5 en enero). Deja en blanco si no la usáis.</div>
 
     <label class="field-label" for="empNumeroInicialFactura">Próxima factura empieza en (opcional)</label>
     <input type="number" id="empNumeroInicialFactura" class="text-input" placeholder="Deja en blanco si no hace falta">

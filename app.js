@@ -142,6 +142,7 @@ function aplicarModoUI() {
   document.querySelectorAll('.toolbar-btn[data-solo-admin]').forEach((btn) => {
     btn.style.display = esRepartidor ? 'none' : '';
   });
+  document.getElementById('resumenInicio').style.display = esRepartidor ? 'none' : '';
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
     cambiarTab('inicio');
@@ -306,6 +307,16 @@ function pintarInicio() {
   document.getElementById('homeSub').textContent =
     ROL === 'repartidor' ? `Repartidor · Ruta ${RUTA}` : 'Administración';
   cargarBadgesInicio();
+  if (ROL === 'admin') cargarResumenInicio();
+}
+
+async function cargarResumenInicio() {
+  const r = await apiGet('resumenInicio').catch(() => null);
+  if (!r || !r.ok) return;
+  document.getElementById('riRecaudado').textContent = formatoEuros(r.data.recaudado);
+  document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
+  document.getElementById('riEntregados').textContent = `${r.data.entregados} / ${r.data.pedidosHoy}`;
+  document.getElementById('riPendiente').textContent = formatoEuros(r.data.pendiente);
 }
 
 async function cargarBadgesInicio() {
@@ -930,6 +941,7 @@ async function cargarEmpresa() {
   document.getElementById('empEmail').value = r.data.email || '';
   document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
   document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
+  document.getElementById('empSerie').value = r.data.serie || '';
   msg.textContent = '';
 }
 
@@ -946,6 +958,7 @@ async function guardarEmpresa() {
     email: document.getElementById('empEmail').value.trim(),
     logoFileId: document.getElementById('empLogoFileId').value.trim(),
     numeroInicialFactura: document.getElementById('empNumeroInicialFactura').value.trim(),
+    serie: document.getElementById('empSerie').value.trim(),
   }).catch(() => ({ ok: false }));
 
   if (r.ok) {

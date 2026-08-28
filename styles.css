@@ -635,3 +635,34 @@ select.select-input {
   color: var(--ink-muted);
   margin-top: 2px;
 }
+
+/* ---------- RESUMEN DEL DÍA EN INICIO (cuadrícula 2x2) ---------- */
+.resumen-inicio {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+.resumen-inicio__item {
+  background: var(--paper-raised);
+  border: 1px solid var(--wheat-line);
+  border-radius: var(--radius);
+  padding: 12px 12px;
+  box-shadow: var(--shadow-card);
+}
+.resumen-inicio__label {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-bottom: 3px;
+}
+.resumen-inicio__num {
+  display: block;
+  font-family: var(--font-data);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--crust-dark);
+}
+.resumen-inicio__num--alerta {
+  color: var(--warn-red);
+}

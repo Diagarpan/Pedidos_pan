@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -47,8 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
     carrito = {};
     mostrarAvisoPedidoExistente(false);
     mostrarPantalla('catalogo');
-    await cargarCatalogo();
-    await precargarPedidoExistente();
+    const carga = iniciarCargaCatalogo(telefonoCliente);
+    await cargarCatalogo(carga.catalogo);
+    await precargarPedidoExistente(carga.existente);
   });
 
   if (telefonoCliente) {
@@ -74,6 +75,9 @@ async function identificarCliente(esAutomatico) {
     msg.className = 'form-msg';
   }
 
+  // Las tres peticiones salen A LA VEZ (antes iban una detrás de otra). Si el
+  // teléfono no está registrado, las otras dos simplemente se descartan.
+  const carga = iniciarCargaCatalogo(telefono);
   const r = await apiCliente('clienteIdentificar', { telefono }).catch(() => ({ ok: false }));
 
   if (!r.ok) {
@@ -93,16 +97,24 @@ async function identificarCliente(esAutomatico) {
   document.getElementById('saludoNombre').textContent = `¿Qué deseas para mañana, ${nombreCliente}?`;
 
   mostrarPantalla('catalogo');
-  await cargarCatalogo();
-  await precargarPedidoExistente();
+  await cargarCatalogo(carga.catalogo);
+  await precargarPedidoExistente(carga.existente);
+}
+
+// Lanza ya la petición del catálogo (con SUS precios) y la de su pedido de mañana
+function iniciarCargaCatalogo(telefono) {
+  return {
+    catalogo: apiCliente('clienteCatalogo', { telefono }).catch(() => ({ ok: false })),
+    existente: apiCliente('clientePedidoManana', { telefono }).catch(() => null),
+  };
 }
 
 // Si el cliente ya envió un pedido para mañana, se precarga el carrito
 // con lo que pidió — así, en vez de duplicarlo, lo ve y lo modifica
 // (quita/añade/cambia cantidades) y al enviar se actualiza el mismo
 // pedido en vez de crear uno nuevo.
-async function precargarPedidoExistente() {
-  const r = await apiCliente('clientePedidoManana', { telefono: telefonoCliente }).catch(() => null);
+async function precargarPedidoExistente(peticionYaLanzada) {
+  const r = await (peticionYaLanzada || apiCliente('clientePedidoManana', { telefono: telefonoCliente }).catch(() => null));
   if (!r || !r.ok || !r.encontrado) return;
 
   carrito = {};
@@ -166,13 +178,13 @@ const ICONO_CATEGORIA = {
 };
 let catalogoAgrupado = {};
 
-async function cargarCatalogo() {
+async function cargarCatalogo(peticionYaLanzada) {
   const cont = document.getElementById('vistaCategorias');
   cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
   document.getElementById('vistaProductos').classList.add('tab--hidden');
   cont.classList.remove('tab--hidden');
 
-  const r = await apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch(() => ({ ok: false }));
+  const r = await (peticionYaLanzada || apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch(() => ({ ok: false })));
   if (!r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>'; return; }
 
   catalogo = r.data;

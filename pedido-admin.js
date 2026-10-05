@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   mostrarPantalla('cliente');
+  BuscadorClientes.activar(document.getElementById('selectClienteAdmin'));
   cargarClientesAdmin();
 
   document.getElementById('btnContinuarAdmin').addEventListener('click', continuarConCliente);

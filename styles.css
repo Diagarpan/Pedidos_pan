@@ -666,3 +666,57 @@ select.select-input {
 .resumen-inicio__num--alerta {
   color: var(--warn-red);
 }
+
+/* ---------- BUSCADOR DE CLIENTES (caja con sugerencias mientras escribes) ---------- */
+.buscador-cliente {
+  position: relative;
+  margin-bottom: 12px;
+}
+.buscador-cliente__input {
+  margin-bottom: 0;
+  padding-right: 40px;
+}
+.buscador-cliente__limpiar {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.buscador-cliente__limpiar[hidden] { display: none; }
+.buscador-cliente__lista {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--paper-raised);
+  border: 1px solid var(--wheat-line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(22,35,58,0.18);
+}
+.buscador-cliente__lista[hidden] { display: none; }
+.buscador-cliente__opcion {
+  padding: 12px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--wheat-line);
+  cursor: pointer;
+}
+.buscador-cliente__opcion:last-child { border-bottom: none; }
+.buscador-cliente__opcion:hover,
+.buscador-cliente__opcion.is-activo { background: var(--wheat); }
+.buscador-cliente__vacio {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}

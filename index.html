@@ -773,6 +773,12 @@
     <div class="card__meta" style="margin: -8px 0 14px;">Solo rellena esto si cambias de otro programa de facturación a mitad de año y quieres seguir su numeración, para no repetir un número ya usado allí. Deja en blanco en el uso normal.</div>
 
     <button class="btn-primary" id="btnGuardarEmpresa">Guardar datos</button>
+    <div class="section-label" style="margin-top:28px;">Copias de seguridad</div>
+    <div class="card">
+      <div class="card__meta" id="estadoCopias">Comprobando…</div>
+      <button class="btn-secondary" id="btnCopiaAhora" style="width:100%; margin-top:10px;">Hacer una copia ahora</button>
+      <div class="form-msg" id="copiaMsg"></div>
+    </div>
     <div class="form-msg" id="empresaMsg"></div>
   </section>
 
@@ -880,6 +886,7 @@
   </div>
 </div>
 
+<script src="buscador-clientes.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

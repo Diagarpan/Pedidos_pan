@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pedidos-pan-v3';
+const CACHE_NAME = 'pedidos-pan-v4';
 const APP_SHELL = [
   './index.html',
   './styles.css',
@@ -35,8 +35,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell: cache primero, red de respaldo
+  if (event.request.method !== 'GET') return;
+
+  // App shell: RED PRIMERO (comprobando siempre si hay versión nueva) y la caché
+  // solo como respaldo sin conexión. Así, al subir cambios a GitHub, cada
+  // dispositivo recibe lo nuevo al abrir la app, sin tener que limpiar la caché.
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    fetch(event.request, { cache: 'no-cache' })
+      .then((respuesta) => {
+        const copia = respuesta.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copia)).catch(() => {});
+        return respuesta;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

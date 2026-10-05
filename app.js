@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearNavegacionPedidos();
   cablearAjustes();
   cablearTema();
+  // Buscador con sugerencias en todos los desplegables de cliente
+  ['selectClienteAlbaran', 'selectCliente', 'selectClienteHistorial', 'selectClienteBuscarFactura', 'selectClienteFactura']
+    .forEach((id) => BuscadorClientes.activar(document.getElementById(id)));
   cablearNuevoPedido();
   cablearFacturaDirecta();
   cablearProductosLibres();
@@ -33,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearCompras();
   cablearCerrarAnio();
   cablearBalance();
+  cablearCopias();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -581,11 +585,11 @@ function cablearNavegacionPedidos() {
 
 function pintarPedidos(pedidos) {
   const cont = document.getElementById('listaPedidos');
-  const filtroTexto = (document.getElementById('buscarPedido').value || '').toLowerCase();
+  const filtroTexto = BuscadorClientes.normalizar(document.getElementById('buscarPedido').value || '');
   const filtroEstado = document.getElementById('filtroEstadoPedido').value;
 
   const filtrados = pedidos.filter((p) => {
-    if (!p.cliente.toLowerCase().includes(filtroTexto)) return false;
+    if (!coincideBusqueda(p.cliente, filtroTexto)) return false;
     if (filtroEstado === 'todos') return true;
     const estado = p.cobrado ? 'cobrado' : p.entregado ? 'entregado' : 'pendiente';
     return estado === filtroEstado;
@@ -944,6 +948,7 @@ async function cargarEmpresa() {
   document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
   document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
   document.getElementById('empSerie').value = r.data.serie || '';
+  cargarEstadoCopias();
   msg.textContent = '';
 }
 
@@ -1126,8 +1131,8 @@ async function cargarClientes() {
 
 function filtrarListaClientes() {
   const cont = document.getElementById('listaClientes');
-  const filtro = (document.getElementById('buscarCliente').value || '').toLowerCase();
-  const filtrados = clientesCache.filter((c) => c.nombre.toLowerCase().includes(filtro));
+  const filtro = BuscadorClientes.normalizar(document.getElementById('buscarCliente').value || '');
+  const filtrados = clientesCache.filter((c) => coincideBusqueda(c.nombre, filtro));
 
   cont.innerHTML = filtrados.map((c) => `
     <div class="client-row" data-id="${c.id}">
@@ -1231,6 +1236,12 @@ function stampHtml(estado) {
   if (estado === 'Cobrado' || estado === 'Entregado') clase = 'stamp--cobrado';
   else if (estado === 'Anulado' || estado === 'Anulada') clase = 'stamp--anulado';
   return `<span class="stamp ${clase}">${escapeHtml(estado || 'Pendiente')}</span>`;
+}
+
+// ¿El texto contiene todas las palabras buscadas (sin tildes ni mayúsculas, en cualquier orden)?
+function coincideBusqueda(texto, consultaNormalizada) {
+  const t = BuscadorClientes.normalizar(texto);
+  return consultaNormalizada.split(/\s+/).filter(Boolean).every((palabra) => t.includes(palabra));
 }
 
 function formatoEuros(n) {
@@ -2433,4 +2444,36 @@ function cablearBalance() {
     buscarBalance();
   });
   document.getElementById('btnDescargarBalance').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarBalance));
+}
+
+
+/* ============ COPIAS DE SEGURIDAD (en Empresa) ============ */
+async function cargarEstadoCopias() {
+  const cont = document.getElementById('estadoCopias');
+  const r = await apiGet('estadoCopias').catch(() => ({ ok: false }));
+  if (!r.ok) { cont.textContent = 'No se pudo comprobar el estado de las copias.'; return; }
+  const d = r.data;
+  const auto = d.programada === true ? 'Copia automática: <strong>activada</strong>'
+    : d.programada === false ? '<strong style="color:var(--warn-red)">La copia automática NO está activada</strong> (ejecuta configurarMantenimiento en Apps Script)'
+    : 'Copia automática: no se pudo comprobar';
+  cont.innerHTML = `${auto}<br>Última copia: ${d.ultima ? escapeHtml(d.ultima) : 'todavía ninguna'} · Guardadas: ${d.total} (se conservan las últimas ${d.conservar})`;
+}
+
+async function hacerCopiaAhora() {
+  const msg = document.getElementById('copiaMsg');
+  msg.textContent = 'Haciendo la copia… puede tardar unos segundos.';
+  msg.className = 'form-msg';
+  const r = await apiGet('copiaSeguridad').catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (r.ok) {
+    msg.textContent = `Copia guardada en tu Drive, carpeta "${r.carpeta}".`;
+    msg.className = 'form-msg is-ok';
+    cargarEstadoCopias();
+  } else {
+    msg.textContent = 'No se pudo hacer la copia: ' + (r.error || 'inténtalo de nuevo');
+    msg.className = 'form-msg is-error';
+  }
+}
+
+function cablearCopias() {
+  document.getElementById('btnCopiaAhora').addEventListener('click', (e) => conEstadoCarga(e.target, 'Copiando…', hacerCopiaAhora));
 }

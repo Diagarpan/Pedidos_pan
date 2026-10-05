@@ -69,6 +69,7 @@
   }
   .carrito-barra__total { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 10px; }
 
+  .volver-gestion { display: inline-block; margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--crust-dark); text-decoration: none; }
   .confirmacion { text-align: center; padding: 40px 16px; }
   .confirmacion__icono { font-size: 48px; }
   .confirmacion__num { font-family: var(--font-data); color: var(--ink-muted); }
@@ -81,6 +82,8 @@
 </div>
 
 <main class="pedido-main">
+
+  <a class="volver-gestion" href="index.html">← Volver a la app de gestión</a>
 
   <!-- PASO 1: elegir cliente + fecha (en vez de teléfono, esto lo usa el admin) -->
   <section id="pantallaSinConfigurar" class="tab--hidden" style="text-align:center; padding:30px 10px;">
@@ -155,6 +158,7 @@
     <div id="confirmacionDetalle" class="stack" style="text-align:left; margin-top:16px;"></div>
     <p class="confirmacion__num" id="confirmacionNum"></p>
     <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Meter otro pedido</button>
+    <a class="btn-secondary" href="index.html" style="display:block; margin-top:10px; text-decoration:none; text-align:center;">Volver a la app de gestión</a>
   </section>
 
 </main>

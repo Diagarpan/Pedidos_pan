@@ -3,25 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>Diego Avilés · Hacer pedido</title>
+<title>Diego Avilés · Pedido rápido (admin)</title>
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="manifest" href="manifest-pedido.json">
 <meta name="theme-color" content="#2456A6">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Pedidos DA">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  /* Esta página usa una tipografía clásica del sistema (Arial/Helvetica)
-     en vez de la fuente "de diseño" de la app de gestión — se
-     sobrescribe solo aquí, sin tocar styles.css */
   :root { --font-ui: Arial, Helvetica, 'Liberation Sans', sans-serif; }
-
-  /* Ajustes propios de esta pantalla (encima de styles.css, que ya
-     trae los colores de la marca) */
   body { padding-bottom: 24px; }
   .pedido-header {
     background: var(--crust);
@@ -31,26 +19,15 @@
     align-items: center;
     gap: 8px;
   }
-  .pedido-header img { height: 170px; }
-  @media (max-width: 360px) {
-    .pedido-header img { height: 130px; }
-  }
+  .pedido-header img { height: 130px; }
   main.pedido-main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
 
-  .telefono-box { text-align: center; padding: 24px 8px; }
-  .telefono-box p { color: var(--ink-muted); font-size: 14px; margin: 6px 0 20px; }
-  .telefono-input {
-    width: 100%; font-size: 20px; text-align: center; letter-spacing: 1px;
-    padding: 14px; border: 1px solid var(--wheat-line); border-radius: var(--radius);
-    font-family: var(--font-data); margin-bottom: 14px; background: var(--paper-raised); color: var(--ink);
-  }
-
-  .saludo { text-align: center; margin-bottom: 18px; }
-  .saludo__nombre { font-size: 20px; font-weight: 700; }
   .aviso-hora {
     background: var(--wheat); color: var(--crust-dark); font-size: 12.5px; font-weight: 600;
     padding: 8px 12px; border-radius: var(--radius); margin: 10px 0;
   }
+  .saludo { margin-bottom: 18px; }
+  .saludo__nombre { font-size: 20px; font-weight: 700; }
   .saludo__cambiar { font-size: 12px; color: var(--crust-dark); background: none; border: none; text-decoration: underline; margin-top: 4px; }
 
   .catalogo-titulo { font-size: 22px; font-weight: 700; margin: 6px 0 6px; }
@@ -105,23 +82,42 @@
 
 <main class="pedido-main">
 
-  <!-- PASO 1: teléfono -->
-  <section id="pantallaTelefono" class="telefono-box">
-    <h2>¿Cuál es tu teléfono?</h2>
-    <p>Lo usamos solo para identificarte y registrar tu pedido.</p>
-    <input type="tel" id="inputTelefono" class="telefono-input" placeholder="600 000 000" inputmode="numeric">
-    <button class="btn-primary" id="btnContinuar" style="width:100%;">Continuar</button>
-    <div class="form-msg" id="msgTelefono"></div>
+  <!-- PASO 1: elegir cliente + fecha (en vez de teléfono, esto lo usa el admin) -->
+  <section id="pantallaSinConfigurar" class="tab--hidden" style="text-align:center; padding:30px 10px;">
+    <p>Primero tienes que entrar en la <strong>app de gestión</strong> (el enlace sin "-admin") y conectarla en ⚙ Ajustes — esta página reutiliza esa misma conexión.</p>
+  </section>
+
+  <section id="pantallaCliente" class="tab--hidden">
+    <h2 style="margin-top:4px;">Pedido rápido (WhatsApp/llamada)</h2>
+    <p style="color:var(--ink-muted); font-size:13px; margin-bottom:16px;">Para meter un pedido que te llega fuera de la app, con la misma facilidad que la ve el cliente.</p>
+
+    <label class="field-label" for="selectClienteAdmin">Cliente</label>
+    <select id="selectClienteAdmin" class="select-input">
+      <option value="">Elige un cliente…</option>
+    </select>
+
+    <label class="field-label" for="selectFechaAdmin">Pedido para</label>
+    <select id="selectFechaAdmin" class="select-input">
+      <option value="manana">Mañana</option>
+      <option value="hoy">Hoy</option>
+    </select>
+
+    <label class="field-label" for="selectTipoAdmin">Documento</label>
+    <select id="selectTipoAdmin" class="select-input">
+      <option value="factura">Factura</option>
+      <option value="albaran">Albarán (sin factura)</option>
+    </select>
+
+    <button class="btn-primary" id="btnContinuarAdmin" style="width:100%; margin-top:8px;">Continuar</button>
+    <div class="form-msg" id="msgClienteAdmin"></div>
   </section>
 
   <!-- PASO 2: catálogo -->
   <section id="pantallaCatalogo" class="tab--hidden">
     <div class="saludo">
       <div class="saludo__nombre" id="saludoNombre"></div>
-      <div class="aviso-hora">⏰ Puedes pedir o modificar tu pedido de mañana hasta las 22:00</div>
-      <div class="aviso-hora" id="avisoPedidoExistente" style="display:none; background: var(--crust); color: #fff;">✏️ Ya tienes un pedido para mañana — puedes añadir, quitar o cambiar cantidades antes de enviarlo de nuevo</div>
-      <button class="btn-secondary" id="btnAnularMiPedido" style="display:none; width:100%; margin:6px 0 10px; border-color:var(--warn-red); color:var(--warn-red);">Anular mi pedido de mañana</button>
-      <button class="saludo__cambiar" id="btnCambiarTelefono">No soy yo / cambiar teléfono</button>
+      <div class="aviso-hora" id="avisoPedidoExistente" style="display:none; background: var(--crust); color: #fff;">✏️ Este cliente ya tiene pedido para esta fecha — puedes añadir, quitar o cambiar cantidades</div>
+      <button class="saludo__cambiar" id="btnCambiarCliente">← Elegir otro cliente / fecha</button>
     </div>
 
     <div id="vistaCategorias"><div class="empty-state">Cargando catálogo…</div></div>
@@ -133,7 +129,7 @@
 
     <div class="carrito-barra">
       <div class="carrito-barra__total"><span>Total</span><span id="carritoTotal">0,00 €</span></div>
-      <button class="btn-primary" id="btnVerPedido" style="width:100%;">Ver mi pedido</button>
+      <button class="btn-primary" id="btnVerPedido" style="width:100%;">Ver pedido</button>
     </div>
   </section>
 
@@ -141,12 +137,12 @@
   <section id="pantallaRepaso" class="tab--hidden">
     <button class="link-btn" id="btnVolverAlCatalogo">← Seguir añadiendo</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Tu pedido para mañana</div>
+      <div class="home-title" id="repasoTitulo">Pedido</div>
     </div>
     <div id="listaRepaso" class="stack"></div>
     <div class="carrito-barra">
       <div class="carrito-barra__total"><span>Total</span><span id="repasoTotal">0,00 €</span></div>
-      <button class="btn-primary" id="btnEnviarPedido" style="width:100%;">Confirmar y enviar</button>
+      <button class="btn-primary" id="btnEnviarPedido" style="width:100%;">Guardar pedido</button>
       <div class="form-msg" id="msgPedido"></div>
     </div>
   </section>
@@ -154,15 +150,15 @@
   <!-- PASO 3: confirmación -->
   <section id="pantallaConfirmacion" class="tab--hidden confirmacion">
     <div class="confirmacion__icono">✅</div>
-    <h2>¡Pedido enviado!</h2>
+    <h2>¡Pedido guardado!</h2>
     <p id="confirmacionTexto"></p>
     <div id="confirmacionDetalle" class="stack" style="text-align:left; margin-top:16px;"></div>
     <p class="confirmacion__num" id="confirmacionNum"></p>
-    <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Hacer otro pedido</button>
+    <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Meter otro pedido</button>
   </section>
 
 </main>
 
-<script src="pedido.js"></script>
+<script src="pedido-admin.js"></script>
 </body>
 </html>

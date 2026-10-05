@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -42,10 +42,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnVolverAlCatalogo').addEventListener('click', () => mostrarPantalla('catalogo'));
   document.getElementById('btnEnviarPedido').addEventListener('click', enviarPedido);
-  document.getElementById('btnNuevoPedido').addEventListener('click', () => {
+  document.getElementById('btnAnularMiPedido').addEventListener('click', anularMiPedido);
+  document.getElementById('btnNuevoPedido').addEventListener('click', async () => {
     carrito = {};
+    mostrarAvisoPedidoExistente(false);
     mostrarPantalla('catalogo');
-    cargarCatalogo();
+    await cargarCatalogo();
+    await precargarPedidoExistente();
   });
 
   if (telefonoCliente) {
@@ -90,7 +93,45 @@ async function identificarCliente(esAutomatico) {
   document.getElementById('saludoNombre').textContent = `¿Qué deseas para mañana, ${nombreCliente}?`;
 
   mostrarPantalla('catalogo');
-  cargarCatalogo();
+  await cargarCatalogo();
+  await precargarPedidoExistente();
+}
+
+// Si el cliente ya envió un pedido para mañana, se precarga el carrito
+// con lo que pidió — así, en vez de duplicarlo, lo ve y lo modifica
+// (quita/añade/cambia cantidades) y al enviar se actualiza el mismo
+// pedido en vez de crear uno nuevo.
+async function precargarPedidoExistente() {
+  const r = await apiCliente('clientePedidoManana', { telefono: telefonoCliente }).catch(() => null);
+  if (!r || !r.ok || !r.encontrado) return;
+
+  carrito = {};
+  r.items.forEach((it) => {
+    if (it.tipo === 'catalogo' && it.productoId) {
+      carrito[it.productoId] = (carrito[it.productoId] || 0) + it.cantidad;
+    }
+  });
+  recalcularCarrito();
+  mostrarAvisoPedidoExistente(true);
+}
+
+// Muestra/oculta el aviso de "ya tienes un pedido" y el botón de anularlo (van juntos)
+function mostrarAvisoPedidoExistente(visible) {
+  document.getElementById('avisoPedidoExistente').style.display = visible ? 'block' : 'none';
+  document.getElementById('btnAnularMiPedido').style.display = visible ? 'block' : 'none';
+}
+
+// El cliente anula su pedido de mañana (hasta las 22:00, lo comprueba el servidor)
+async function anularMiPedido() {
+  if (!confirm('¿Seguro que quieres anular tu pedido de mañana?')) return;
+  const r = await apiCliente('clienteAnularPedido', { telefono: telefonoCliente }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert(r.error || 'No se ha podido anular. Inténtalo de nuevo.'); return; }
+  carrito = {};
+  mostrarAvisoPedidoExistente(false);
+  recalcularCarrito();
+  mostrarPantalla('catalogo');
+  await cargarCatalogo();
+  alert('Tu pedido de mañana se ha anulado. Si quieres, puedes hacer otro hasta las 22:00.');
 }
 
 function olvidarTelefono() {
@@ -99,6 +140,7 @@ function olvidarTelefono() {
   carrito = {};
   document.getElementById('inputTelefono').value = '';
   document.getElementById('msgTelefono').textContent = '';
+  mostrarAvisoPedidoExistente(false);
   mostrarPantalla('telefono');
 }
 

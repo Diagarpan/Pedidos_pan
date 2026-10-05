@@ -144,6 +144,7 @@
     <button class="btn-secondary" id="btnHojaRuta" style="width:100%; margin-top:14px;">📄 Imprimir hoja de ruta</button>
     <button class="btn-secondary" id="btnResumenDia" style="width:100%; margin-top:8px;">📊 Resumen del día (reparto + facturas)</button>
     <button class="btn-secondary" id="btnFacturasDia" style="width:100%; margin-top:8px;">🧾 Descargar todas las facturas del día</button>
+    <button class="btn-secondary" id="btnAlbaranesDia" style="width:100%; margin-top:8px;">📋 Descargar todos los albaranes del día</button>
 
     <div id="bloqueFaltanManana" class="tab--hidden">
       <div class="section-label">Todavía no han pedido</div>
@@ -163,6 +164,7 @@
       <button class="home-btn home-btn--pedidos" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
       <button class="home-btn home-btn--pedidos" data-tab="albaran-suelto" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Nuevo albarán (sin facturar)</button>
+      <a class="home-btn home-btn--pedidos" href="pedido-admin.html" data-solo-admin="1" style="text-decoration:none;">Pedido rápido (WhatsApp/llamada)</a>
     </div>
   </section>
 
@@ -227,6 +229,13 @@
       <div class="home-sub" id="editarPedidoCliente"></div>
     </div>
 
+    <label class="field-label" for="epFechaEntrega">Día de entrega</label>
+    <select id="epFechaEntrega" class="select-input">
+      <option value="mantener">Mantener la fecha actual</option>
+      <option value="manana">Pasar a mañana</option>
+      <option value="hoy">Pasar a hoy</option>
+    </select>
+
     <div class="section-label">Productos</div>
     <div class="product-row" style="gap:8px; align-items:flex-end;">
       <select id="epProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
@@ -276,9 +285,16 @@
 
     <label class="field-label" for="selectFechaPedido">Pedido para</label>
     <select id="selectFechaPedido" class="select-input">
-      <option value="hoy">Hoy</option>
       <option value="manana">Mañana</option>
+      <option value="hoy">Hoy</option>
     </select>
+
+    <label class="field-label" for="selectTipoDocumento">Documento</label>
+    <select id="selectTipoDocumento" class="select-input">
+      <option value="factura">Factura</option>
+      <option value="albaran">Albarán (sin factura)</option>
+    </select>
+    <div class="card__meta" id="avisoTipoDocumento" style="margin:-8px 0 14px; display:none;">Se guarda como pedido (cuenta en el reparto y en el total a preparar) pero no crea factura. Los albaranes de un día se imprimen todos juntos desde Reparto → Mañana.</div>
 
     <div class="section-label">Productos</div>
     <div class="product-row" style="gap:8px; align-items:flex-end;">
@@ -418,6 +434,7 @@
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
       <button class="home-btn home-btn--factura" data-tab="liquidacion-iva"><span class="home-btn__icon" data-icon="estadisticas"></span>Liquidación de IVA</button>
+      <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
       <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
   </section>
@@ -522,6 +539,27 @@
       <div class="empty-state">Escribe un año y pulsa Ver.</div>
     </div>
     <div class="period-total" id="liquidacionTotal"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-balance">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Balance: ventas y coste</div>
+      <div class="home-sub">Lo que vendes frente a lo que te cuesta de fábrica (por fecha de entrega, sin IVA)</div>
+    </div>
+    <div class="date-range">
+      <input type="date" id="balFechaIni">
+      <span>—</span>
+      <input type="date" id="balFechaFin">
+      <button class="btn-secondary" id="btnBuscarBalance">Ver</button>
+    </div>
+    <div class="product-row" style="gap:8px; margin-top:8px;">
+      <button class="chip-btn" id="btnBalanceEsteMes">Este mes</button>
+      <button class="btn-secondary" id="btnDescargarBalance">Balance (PDF)</button>
+    </div>
+    <div id="balResumen" class="stack"></div>
+    <div id="balLista" class="stack"></div>
+    <div class="card__meta" id="balNota" style="margin-top:12px;"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-cerrar-anio">
@@ -772,6 +810,8 @@
     </select>
     <label class="field-label" for="prFormSubcategoria">Subcategoría (opcional, ej: Integral, Semillas, Mini)</label>
     <input type="text" id="prFormSubcategoria" class="text-input" placeholder="Deja en blanco si no aplica">
+    <label class="field-label" for="prFormCoste">Coste de fábrica (€ por caja, sin IVA) — solo lo ves tú</label>
+    <input type="number" id="prFormCoste" class="text-input" step="0.01" min="0" placeholder="Lo que te cuesta a ti. Déjalo en blanco si no lo sabes">
     <label class="field-label" for="prFormUnidadesCaja">Unidades por caja (se ve en la app de clientes)</label>
     <input type="text" id="prFormUnidadesCaja" class="text-input" placeholder="Ej: 25 uds, Saco de 5 bolsas… deja en blanco si no aplica">
     <label class="field-label" for="prFormActivo">Activo</label>

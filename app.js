@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearInformesFacturacion();
   cablearCompras();
   cablearCerrarAnio();
+  cablearBalance();
   cablearClientes();
   cablearClientesForm();
   cablearPreciosEspeciales();
@@ -195,6 +196,7 @@ const BREADCRUMBS = {
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
   'liquidacion-iva': [{ label: 'Compras', tab: 'compras' }, { label: 'Liquidación de IVA', tab: 'liquidacion-iva' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
+  'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
   'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Facturación por periodo', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
@@ -601,7 +603,7 @@ function pintarPedidos(pedidos) {
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(p.cliente)}</div>
-          <div class="card__meta">${escapeHtml(p.hora || '')} · ${escapeHtml(p.canal || '')}</div>
+          <div class="card__meta">${escapeHtml(p.hora || '')} · ${escapeHtml(p.canal || '')}${p.documento === 'Albarán' ? ' · <strong>ALBARÁN (sin factura)</strong>' : ''}</div>
         </div>
         <div style="text-align:right">
           <div class="card__total">${formatoEuros(p.total)}</div>
@@ -615,7 +617,7 @@ function pintarPedidos(pedidos) {
         ${!p.entregado ? `<button class="chip-btn" data-accion="entregado" data-id="${p.id}">Marcar entregado</button>` : ''}
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
         <button class="chip-btn" data-accion="albaran" data-id="${p.id}">Albarán PDF</button>
-        ${ROL === 'admin' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
+        ${ROL === 'admin' && p.documento !== 'Albarán' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="editar" data-id="${p.id}">Editar pedido</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="anular" data-id="${p.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Anular</button>` : ''}
       </div>
@@ -720,7 +722,7 @@ document.addEventListener('change', (e) => {
 });
 
 /* ============ NUEVO PEDIDO ============ */
-let fechaPedidoSeleccion = 'hoy';
+let fechaPedidoSeleccion = 'manana';
 
 /* ============ HISTORIAL DE PEDIDOS (rango de fechas) ============ */
 function prepararHistorialPedidos() {
@@ -975,6 +977,9 @@ function cablearNuevoPedido() {
   document.getElementById('selectFechaPedido').addEventListener('change', (e) => {
     fechaPedidoSeleccion = e.target.value;
   });
+  document.getElementById('selectTipoDocumento').addEventListener('change', (e) => {
+    document.getElementById('avisoTipoDocumento').style.display = e.target.value === 'albaran' ? 'block' : 'none';
+  });
 }
 
 async function cargarFormularioNuevo() {
@@ -998,8 +1003,10 @@ async function cargarFormularioNuevo() {
   itemsNuevo = [];
   pintarItems('nuevo');
 
-  fechaPedidoSeleccion = 'hoy';
-  document.getElementById('selectFechaPedido').value = 'hoy';
+  fechaPedidoSeleccion = 'manana';
+  document.getElementById('selectFechaPedido').value = 'manana';
+  document.getElementById('selectTipoDocumento').value = 'factura';
+  document.getElementById('avisoTipoDocumento').style.display = 'none';
   document.getElementById('nuevoMsg').textContent = '';
 }
 
@@ -1019,12 +1026,14 @@ async function crearPedidoManual() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const tipoDocumento = document.getElementById('selectTipoDocumento').value;
+  const cuando = fechaPedidoSeleccion === 'manana' ? 'mañana' : 'HOY';
+  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion, tipoDocumento }).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (r.ok) {
-    msg.textContent = `Pedido #${r.idPedido} creado (${formatoEuros(r.total)}).`;
-    msg.className = 'form-msg is-ok';
     document.getElementById('selectCliente').value = '';
-    cargarFormularioNuevo();
+    await cargarFormularioNuevo();
+    msg.textContent = `${tipoDocumento === 'albaran' ? 'Albarán' : 'Pedido'} #${r.idPedido} creado para ${cuando} (${formatoEuros(r.total)}).`;
+    msg.className = 'form-msg is-ok';
   } else {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
     msg.className = 'form-msg is-error';
@@ -1277,6 +1286,13 @@ function cablearHojaRuta() {
       if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
     });
   });
+  document.getElementById('btnAlbaranesDia').addEventListener('click', (e) => {
+    conEstadoCarga(e.target, 'Generando…', async () => {
+      const r = await apiGet('albaranesDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
+      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
+      descargarPDF(r.base64, r.nombre);
+    });
+  });
 }
 
 /* ============ PRODUCTOS (alta/edición) ============ */
@@ -1303,7 +1319,7 @@ async function cargarProductosGestion() {
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(p.nombre)}</div>
-          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}% · ${escapeHtml(p.categoria || 'Panadería')}${p.subcategoria ? ' — ' + escapeHtml(p.subcategoria) : ''}${p.unidadesCaja ? ' · ' + escapeHtml(p.unidadesCaja) : ''}</div>
+          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}% · ${escapeHtml(p.categoria || 'Panadería')}${p.subcategoria ? ' — ' + escapeHtml(p.subcategoria) : ''}${p.unidadesCaja ? ' · ' + escapeHtml(p.unidadesCaja) : ''}${p.coste !== null && p.coste !== undefined ? ' · Coste ' + formatoEuros(p.coste) + ' (margen ' + formatoEuros(p.precio - p.coste) + ')' : ''}</div>
         </div>
         ${stampHtml(p.activo ? 'Activo' : 'Inactivo')}
       </div>
@@ -1331,6 +1347,7 @@ function abrirFormularioProducto(producto) {
   document.getElementById('prFormCategoria').value = producto && producto.categoria ? producto.categoria : 'Panadería';
   document.getElementById('prFormSubcategoria').value = producto ? (producto.subcategoria || '') : '';
   document.getElementById('prFormUnidadesCaja').value = producto ? (producto.unidadesCaja || '') : '';
+  document.getElementById('prFormCoste').value = producto && producto.coste !== null && producto.coste !== undefined ? producto.coste : '';
   document.getElementById('prFormActivo').value = producto ? String(producto.activo) : 'true';
   document.getElementById('productoFormMsg').textContent = '';
   cambiarTab('producto-form');
@@ -1353,6 +1370,7 @@ async function guardarProducto() {
     categoria: document.getElementById('prFormCategoria').value,
     subcategoria: document.getElementById('prFormSubcategoria').value.trim(),
     unidadesCaja: document.getElementById('prFormUnidadesCaja').value.trim(),
+    coste: document.getElementById('prFormCoste').value,
     activo: document.getElementById('prFormActivo').value,
   }).catch((err) => ({ ok: false, error: String(err) }));
 
@@ -1761,7 +1779,11 @@ async function cargarPedidoParaEditar() {
   const r = await apiGet('itemsPedido', { idPedido: idPedidoEnEdicion }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok || !r.data) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml((r && r.error) || 'pedido no encontrado')}</div>`; return; }
 
-  document.getElementById('editarPedidoCliente').textContent = `Pedido #${idPedidoEnEdicion} · ${r.data.cliente}`;
+  document.getElementById('editarPedidoCliente').textContent =
+    `${r.data.documento === 'Albarán' ? 'Albarán' : 'Pedido'} #${idPedidoEnEdicion} · ${r.data.cliente}`;
+  const selFecha = document.getElementById('epFechaEntrega');
+  selFecha.value = 'mantener';
+  selFecha.options[0].textContent = `Mantener la fecha actual (${r.data.fechaEntrega})`;
   itemsEditarPedido = prepararItemsParaEditar(r.data.items);
   pintarItems('editarPedido');
   document.getElementById('editarPedidoMsg').textContent = '';
@@ -1779,9 +1801,13 @@ async function guardarEdicionPedido() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet('editarPedido', { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const nuevaFecha = document.getElementById('epFechaEntrega').value;
+  const params = { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) };
+  if (nuevaFecha !== 'mantener') params.fechaEntrega = nuevaFecha;
+  const r = await apiGet('editarPedido', params).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (r.ok) {
-    msg.textContent = `Pedido actualizado (${formatoEuros(r.total)}).`;
+    msg.textContent = `Pedido actualizado (${formatoEuros(r.total)})` +
+      (nuevaFecha === 'manana' ? ', pasado a mañana.' : nuevaFecha === 'hoy' ? ', pasado a hoy.' : '.');
     msg.className = 'form-msg is-ok';
     setTimeout(() => cambiarTab('pedidos-hoy'), 700);
   } else {
@@ -2349,4 +2375,62 @@ async function cerrarAnio() {
 
 function cablearCerrarAnio() {
   document.getElementById('btnCerrarAnio').addEventListener('click', (e) => conEstadoCarga(e.target, 'Archivando…', cerrarAnio));
+}
+
+
+/* ============ BALANCE: VENTAS vs COSTE DE FÁBRICA ============ */
+async function buscarBalance() {
+  const ini = document.getElementById('balFechaIni').value;
+  const fin = document.getElementById('balFechaFin').value;
+  const resumen = document.getElementById('balResumen');
+  const lista = document.getElementById('balLista');
+  if (!ini || !fin) { resumen.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; lista.innerHTML = ''; return; }
+
+  resumen.innerHTML = '<div class="empty-state">Calculando…</div>';
+  lista.innerHTML = '';
+  const r = await apiGet('balance', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { resumen.innerHTML = `<div class="empty-state">No se pudo calcular: ${escapeHtml(r.error || '')}</div>`; return; }
+  const d = r.data;
+
+  const pct = d.margenPct !== null ? ` (${(d.margenPct * 100).toFixed(1)}%)` : '';
+  resumen.innerHTML = `
+    <div class="card">
+      <div class="card__top"><div class="card__name">Margen bruto</div><div class="card__total">${formatoEuros(d.margenBruto)}${pct}</div></div>
+      <div class="card__products">Ventas ${formatoEuros(d.ventasTotal)} · Coste de fábrica ${formatoEuros(d.costeTotal)} · ${d.pedidos} pedidos</div>
+      ${d.ventasSinCoste > 0 ? `<div class="card__meta" style="color:var(--warn-red); margin-top:6px;">Hay ${formatoEuros(d.ventasSinCoste)} de ventas de productos sin coste puesto: no entran en el margen. Ponles el coste en Productos.</div>` : ''}
+      <div class="card__meta" style="margin-top:6px;">Gastos registrados en Compras (referencia): ${formatoEuros(d.gastosBase)}</div>
+    </div>`;
+
+  lista.innerHTML = d.productos.length ? d.productos.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.nombre)}</div>
+          <div class="card__meta">${p.unidades} cajas · Ventas ${formatoEuros(p.ventas)}${p.tieneCoste ? ' · Coste ' + formatoEuros(p.coste) : ' · sin coste'}</div>
+        </div>
+        <div class="card__total">${p.tieneCoste ? formatoEuros(p.margen) : '—'}</div>
+      </div>
+    </div>`).join('') : '<div class="empty-state">Sin pedidos en ese periodo.</div>';
+  document.getElementById('balNota').textContent =
+    'Si las facturas de la fábrica también las registras como gastos en Compras, no las restes otra vez: ya cuentan en el coste.';
+}
+
+async function descargarBalance() {
+  const ini = document.getElementById('balFechaIni').value;
+  const fin = document.getElementById('balFechaFin').value;
+  if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
+  const r = await apiGet('balancePdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
+}
+
+function cablearBalance() {
+  document.getElementById('btnBuscarBalance').addEventListener('click', buscarBalance);
+  document.getElementById('btnBalanceEsteMes').addEventListener('click', () => {
+    const hoy = new Date();
+    document.getElementById('balFechaIni').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    document.getElementById('balFechaFin').valueAsDate = hoy;
+    buscarBalance();
+  });
+  document.getElementById('btnDescargarBalance').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarBalance));
 }

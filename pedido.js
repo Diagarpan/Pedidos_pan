@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -172,7 +172,7 @@ async function cargarCatalogo() {
   document.getElementById('vistaProductos').classList.add('tab--hidden');
   cont.classList.remove('tab--hidden');
 
-  const r = await apiCliente('clienteCatalogo').catch(() => ({ ok: false }));
+  const r = await apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch(() => ({ ok: false }));
   if (!r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>'; return; }
 
   catalogo = r.data;
@@ -268,7 +268,7 @@ function itemsCarrito() {
 
 function recalcularCarrito() {
   let total = 0;
-  itemsCarrito().forEach((it) => { total += it.producto.precio * it.cantidad * (1 + it.producto.iva); });
+  itemsCarrito().forEach((it) => { total += it.producto.precio * it.cantidad * (1 + it.producto.iva + (it.producto.recargo || 0)); });
   document.getElementById('carritoTotal').textContent = formatoEuros(total);
   const repasoTotal = document.getElementById('repasoTotal');
   if (repasoTotal) repasoTotal.textContent = formatoEuros(total);
@@ -283,7 +283,7 @@ function pintarRepaso() {
   } else {
     cont.innerHTML = items.map((it) => `
       <div class="client-row">
-        <span>${it.cantidad}x ${escapeHtml(it.producto.nombre)} — ${formatoEuros(it.producto.precio * it.cantidad * (1 + it.producto.iva))}</span>
+        <span>${it.cantidad}x ${escapeHtml(it.producto.nombre)} — ${formatoEuros(it.producto.precio * it.cantidad * (1 + it.producto.iva + (it.producto.recargo || 0)))}</span>
         <button class="chip-btn" data-quitar-repaso="${it.producto.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
       </div>
     `).join('');

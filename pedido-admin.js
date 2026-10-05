@@ -97,8 +97,10 @@ async function continuarConCliente() {
   document.getElementById('saludoNombre').textContent = `${tipoSeleccionado === 'albaran' ? 'Albarán' : 'Pedido'} para ${clienteSeleccionado.nombre} — ${fechaSeleccionada === 'hoy' ? 'HOY' : 'mañana'}`;
 
   mostrarPantalla('catalogo');
+  // Las dos peticiones salen a la vez (antes iban una detrás de otra)
+  const existente = apiAdmin('pedidoClienteFecha', { clienteId: clienteSeleccionado.id, fecha: fechaFormateada(fechaSeleccionada), tipoDocumento: tipoSeleccionado }).catch(() => null);
   await cargarCatalogoAdmin();
-  await precargarPedidoClienteAdmin();
+  await precargarPedidoClienteAdmin(existente);
 }
 
 async function cargarCatalogoAdmin() {
@@ -235,9 +237,9 @@ function pintarRepaso() {
 // Si este cliente ya tiene un pedido guardado para la fecha elegida,
 // se precarga el carrito con lo que ya tenía — así se edita en vez
 // de crear uno duplicado.
-async function precargarPedidoClienteAdmin() {
+async function precargarPedidoClienteAdmin(peticionYaLanzada) {
   const fechaStr = fechaFormateada(fechaSeleccionada);
-  const r = await apiAdmin('pedidoClienteFecha', { clienteId: clienteSeleccionado.id, fecha: fechaStr, tipoDocumento: tipoSeleccionado }).catch(() => null);
+  const r = await (peticionYaLanzada || apiAdmin('pedidoClienteFecha', { clienteId: clienteSeleccionado.id, fecha: fechaStr, tipoDocumento: tipoSeleccionado }).catch(() => null));
   idPedidoEnEdicion = null;
   document.getElementById('avisoPedidoExistente').style.display = 'none';
   if (!r || !r.ok || !r.data.encontrado) return;

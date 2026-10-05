@@ -53,6 +53,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // Si ya sabemos quién eres de la última vez, se arranca YA (sin esperar a
+  // Google) y la clave se comprueba en segundo plano. El servidor sigue
+  // decidiendo qué puede hacer cada clave: esto solo ahorra la espera.
+  if (localStorage.getItem('rol')) {
+    aplicarModoUI();
+    cargarTabActual();
+    precargarListas();
+    apiGet('quienSoy').then((r) => {
+      if (!r.ok) { abrirAjustes(); return; }
+      const cambio = r.data.rol !== ROL || (r.data.ruta || '') !== RUTA;
+      ROL = r.data.rol;
+      RUTA = r.data.ruta || '';
+      localStorage.setItem('rol', ROL);
+      localStorage.setItem('ruta', RUTA);
+      if (cambio) { aplicarModoUI(); cargarTabActual(); precargarListas(); }
+    }).catch(() => { /* sin conexión: se queda con lo que ya hay */ });
+    return;
+  }
+
   const r = await apiGet('quienSoy').catch(() => ({ ok: false }));
   if (r.ok) {
     ROL = r.data.rol;
@@ -61,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.setItem('ruta', RUTA);
     aplicarModoUI();
     cargarTabActual();
+    precargarListas();
   } else {
     abrirAjustes();
   }
@@ -312,8 +332,8 @@ function cargarTabActual(nombre) {
 function pintarInicio() {
   document.getElementById('homeSub').textContent =
     ROL === 'repartidor' ? `Repartidor · Ruta ${RUTA}` : 'Administración';
-  cargarBadgesInicio();
-  if (ROL === 'admin') cargarResumenInicio();
+  // El admin ya recibe todo en una sola petición (resumen + insignias)
+  if (ROL === 'admin') cargarResumenInicio(); else cargarBadgesInicio();
 }
 
 async function cargarResumenInicio() {
@@ -323,6 +343,12 @@ async function cargarResumenInicio() {
   document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
   document.getElementById('riEntregados').textContent = `${r.data.entregados} / ${r.data.pedidosHoy}`;
   document.getElementById('riPendiente').textContent = formatoEuros(r.data.pendiente);
+
+  // Insignias de "Reparto" y "Pedidos" con los mismos datos (sin pedir nada más)
+  const total = r.data.pedidosHoy;
+  const pendientes = total - r.data.entregados;
+  document.getElementById('badgeReparto').textContent = total ? `${total} hoy` : '';
+  document.getElementById('badgePedidos').textContent = pendientes ? `${pendientes} pendientes` : (total ? 'Al día' : '');
 }
 
 async function cargarBadgesInicio() {
@@ -452,7 +478,9 @@ async function cargarReparto() {
   }
 }
 
+let ultimoReparto = null;
 function pintarReparto(data) {
+  ultimoReparto = data;
   const contProductos = document.getElementById('repartoProductos');
   const contClientes = document.getElementById('repartoClientes');
 
@@ -514,10 +542,21 @@ function pintarReparto(data) {
 
   contClientes.querySelectorAll('[data-reparto-accion]').forEach((btn) => {
     btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      const r = await apiGet('marcar' + (btn.dataset.repartoAccion === 'entregado' ? 'Entregado' : 'Cobrado'), { idPedido: btn.dataset.id }).catch(() => ({ ok: false }));
-      if (!r.ok) { alert('No se pudo actualizar: ' + (r.error || 'error')); btn.disabled = false; return; }
-      cargarReparto();
+      // Se ve al instante; si Google falla, se deshace y se avisa
+      const accion = btn.dataset.repartoAccion;
+      const c = ultimoReparto && ultimoReparto.clientes.find((x) => String(x.id) === String(btn.dataset.id));
+      const antes = c ? { entregado: c.entregado, cobrado: c.cobrado, horaEntrega: c.horaEntrega } : null;
+      if (c) {
+        if (accion === 'entregado') { c.entregado = true; c.horaEntrega = horaAhoraCorta(); } else { c.cobrado = true; }
+        pintarReparto(ultimoReparto);
+      } else {
+        btn.disabled = true;
+      }
+      const r = await apiGet('marcar' + (accion === 'entregado' ? 'Entregado' : 'Cobrado'), { idPedido: btn.dataset.id }).catch(() => ({ ok: false }));
+      if (!r.ok) {
+        alert('No se pudo actualizar: ' + (r.error || 'error'));
+        if (c && antes) { Object.assign(c, antes); pintarReparto(ultimoReparto); } else { btn.disabled = false; }
+      }
     });
   });
 }
@@ -583,7 +622,9 @@ function cablearNavegacionPedidos() {
   });
 }
 
+let ultimosPedidos = [];
 function pintarPedidos(pedidos) {
+  ultimosPedidos = pedidos;
   const cont = document.getElementById('listaPedidos');
   const filtroTexto = BuscadorClientes.normalizar(document.getElementById('buscarPedido').value || '');
   const filtroEstado = document.getElementById('filtroEstadoPedido').value;
@@ -646,13 +687,27 @@ function pintarPedidos(pedidos) {
   });
 }
 
+function horaAhoraCorta() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Marca entregado/cobrado AL INSTANTE en pantalla y lo manda a Google detrás.
+// Si Google falla, vuelve a como estaba y avisa.
 async function cambiarEstadoPedido(idPedido, accion) {
+  const p = ultimosPedidos.find((x) => String(x.id) === String(idPedido));
+  const antes = p ? { entregado: p.entregado, cobrado: p.cobrado, horaEntrega: p.horaEntrega } : null;
+  if (p) {
+    if (accion === 'entregado') { p.entregado = true; p.horaEntrega = horaAhoraCorta(); } else { p.cobrado = true; }
+    pintarPedidos(ultimosPedidos);
+  }
   const action = accion === 'entregado' ? 'marcarEntregado' : 'marcarCobrado';
   const r = await apiGet(action, { idPedido }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) {
     alert('No se pudo actualizar: ' + (r.error || 'error desconocido'));
+    if (p && antes) { Object.assign(p, antes); pintarPedidos(ultimosPedidos); } else { cargarPedidos(); }
   }
-  cargarPedidos();
 }
 
 async function generarDocumento(idPedido, tipo) {
@@ -843,10 +898,7 @@ function pintarResumenFacturas() {
 /* ============ VER FACTURA POR CLIENTE (desde el menú Facturas) ============ */
 async function prepararFacturaPorCliente() {
   const select = document.getElementById('selectClienteBuscarFactura');
-  if (!clientesCache.length) {
-    const rc = await apiGet('clientes').catch(() => null);
-    if (rc && rc.ok) clientesCache = rc.data;
-  }
+  await cargarClientesCache();
   if (select.options.length <= 1) {
     select.innerHTML = '<option value="">Selecciona un cliente…</option>' +
       clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
@@ -991,14 +1043,7 @@ async function cargarFormularioNuevo() {
   const selectCliente = document.getElementById('selectCliente');
   const selectProducto = document.getElementById('nProductoSelect');
 
-  if (!clientesCache.length) {
-    const rc = await apiGet('clientes').catch(() => null);
-    if (rc && rc.ok) clientesCache = rc.data;
-  }
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await Promise.all([cargarClientesCache(), cargarProductosCache()]);
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
@@ -1054,14 +1099,7 @@ async function cargarFormularioFactura() {
   const selectCliente = document.getElementById('selectClienteFactura');
   const selectProducto = document.getElementById('fProductoSelect');
 
-  if (!clientesCache.length) {
-    const rc = await apiGet('clientes').catch(() => null);
-    if (rc && rc.ok) clientesCache = rc.data;
-  }
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await Promise.all([cargarClientesCache(), cargarProductosCache()]);
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
@@ -1122,10 +1160,7 @@ let clienteSeleccionado = null;
 async function cargarClientes() {
   document.getElementById('detalleCliente').classList.add('tab--hidden');
   document.getElementById('clientesListaVista').classList.remove('tab--hidden');
-  if (!clientesCache.length) {
-    const r = await apiGet('clientes').catch(() => null);
-    if (r && r.ok) clientesCache = r.data;
-  }
+  await cargarClientesCache();
   filtrarListaClientes();
 }
 
@@ -1265,6 +1300,52 @@ function leerCache(clave) {
   try { return JSON.parse(localStorage.getItem('cache_' + clave)); } catch (e) { return null; }
 }
 
+
+/* ============ LISTAS DE CLIENTES Y PRODUCTOS (rápidas) ============
+ * Se piden a Google una sola vez aunque varias pantallas las necesiten a la
+ * vez, se guardan en el móvil para tenerlas AL INSTANTE la próxima vez que se
+ * abre la app, y se refrescan en segundo plano para que no se queden viejas. */
+let _enCursoClientes = null;
+let _enCursoProductos = null;
+
+function cargarClientesCache(forzar) {
+  if (clientesCache.length && !forzar) return Promise.resolve();
+  if (!_enCursoClientes) {
+    _enCursoClientes = apiGet('clientes')
+      .then((r) => { if (r && r.ok) { clientesCache = r.data; guardarCache('clientes', r.data); } })
+      .catch(() => {})
+      .then(() => { _enCursoClientes = null; });
+  }
+  return _enCursoClientes;
+}
+
+function cargarProductosCache(forzar) {
+  if (productosCache.length && !forzar) return Promise.resolve();
+  if (!_enCursoProductos) {
+    _enCursoProductos = apiGet('productos')
+      .then((r) => { if (r && r.ok) { productosCache = r.data; guardarCache('productos', r.data); } })
+      .catch(() => {})
+      .then(() => { _enCursoProductos = null; });
+  }
+  return _enCursoProductos;
+}
+
+// Al arrancar (solo admin): usa lo guardado la última vez y refresca ambas listas a la vez
+function precargarListas() {
+  if (ROL !== 'admin') return;
+  const c = leerCache('clientes');
+  const p = leerCache('productos');
+  if (Array.isArray(c) && c.length && !clientesCache.length) clientesCache = c;
+  if (Array.isArray(p) && p.length && !productosCache.length) productosCache = p;
+  cargarClientesCache(true);
+  cargarProductosCache(true);
+}
+
+// Cuando se cambia un cliente/producto, se tira también la copia guardada
+function olvidarListaGuardada(nombre) {
+  try { localStorage.removeItem('cache_' + nombre); } catch (e) {}
+}
+
 /* ============ ANULAR PEDIDO ============ */
 async function anularPedido(idPedido) {
   if (!confirm('¿Seguro que quieres anular este pedido? Se borrará también su factura. Esto no se puede deshacer.')) return;
@@ -1322,6 +1403,7 @@ async function cargarProductosGestion() {
 
   productosGestionCache = r.data;
   productosCache = []; // fuerza a refrescar el caché de productos activos en otras pantallas
+  olvidarListaGuardada('productos');
 
   if (!r.data.length) { cont.innerHTML = '<div class="empty-state">Sin productos todavía.</div>'; return; }
 
@@ -1406,10 +1488,7 @@ function cablearClientesForm() {
 
 async function cargarClientesHistorial() {
   const select = document.getElementById('selectClienteHistorial');
-  if (!clientesCache.length) {
-    const r = await apiGet('clientes').catch(() => null);
-    if (r && r.ok) clientesCache = r.data;
-  }
+  await cargarClientesCache();
   select.innerHTML = '<option value="">Elige un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
   document.getElementById('historialClienteResultado').innerHTML = '';
@@ -1483,6 +1562,7 @@ async function guardarCliente() {
     msg.textContent = 'Cliente guardado.';
     msg.className = 'form-msg is-ok';
     clientesCache = []; // fuerza a refrescar el caché en otras pantallas
+    olvidarListaGuardada('clientes');
     setTimeout(() => cambiarTab('clientes-lista'), 500);
   } else {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
@@ -1603,10 +1683,7 @@ async function cargarPreciosEspeciales(idCliente) {
   const select = document.getElementById('peSelectProducto');
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
 
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await cargarProductosCache();
   select.innerHTML = '<option value="">Producto…</option>' +
     productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
 
@@ -1781,10 +1858,7 @@ async function cargarPedidoParaEditar() {
   document.getElementById('editarPedidoCliente').textContent = '';
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
 
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await cargarProductosCache();
   rellenarSelectProductos('editarPedido');
 
   const r = await apiGet('itemsPedido', { idPedido: idPedidoEnEdicion }).catch((err) => ({ ok: false, error: String(err) }));
@@ -1833,10 +1907,7 @@ async function cargarFacturaParaEditar() {
   document.getElementById('editarFacturaCliente').textContent = '';
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
 
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await cargarProductosCache();
   rellenarSelectProductos('editarFactura');
 
   const r = await apiGet('itemsFactura', { idFactura: idFacturaEnEdicion }).catch((err) => ({ ok: false, error: String(err) }));
@@ -1884,14 +1955,7 @@ async function cargarFormularioAlbaran() {
   const selectCliente = document.getElementById('selectClienteAlbaran');
   const selectProducto = document.getElementById('albaranProductoSelect');
 
-  if (!clientesCache.length) {
-    const rc = await apiGet('clientes').catch(() => null);
-    if (rc && rc.ok) clientesCache = rc.data;
-  }
-  if (!productosCache.length) {
-    const rp = await apiGet('productos').catch(() => null);
-    if (rp && rp.ok) productosCache = rp.data;
-  }
+  await Promise.all([cargarClientesCache(), cargarProductosCache()]);
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
     clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');

@@ -1,14 +1,16 @@
-const CACHE_NAME = 'pedidos-pan-v4';
+const CACHE_NAME = 'pedidos-pan-v5';
 const APP_SHELL = [
   './index.html',
   './styles.css',
   './app.js',
+  './buscador-clientes.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
   './logo.png',
   './logo-full.png',
 ];
+const ESPERA_RED_MS = 2500; // con mala cobertura, tras este tiempo se usa la copia guardada
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -26,6 +28,44 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+function guardarEnCache(request, respuesta) {
+  if (!respuesta || (respuesta.status !== 200 && respuesta.type !== 'opaque')) return;
+  const copia = respuesta.clone();
+  caches.open(CACHE_NAME).then((cache) => cache.put(request, copia)).catch(() => {});
+}
+
+// Código (html, js, css): se pide a la red para tener SIEMPRE la última versión,
+// pero si la red tarda más de ESPERA_RED_MS o no hay, sale la copia guardada.
+function redPrimeroConLimite(request) {
+  return new Promise((resolve, reject) => {
+    let resuelto = false;
+    const usarCopia = () => caches.match(request).then((copia) => {
+      if (copia && !resuelto) { resuelto = true; resolve(copia); }
+      return copia;
+    });
+    const temporizador = setTimeout(usarCopia, ESPERA_RED_MS);
+
+    fetch(request, { cache: 'no-cache' })
+      .then((respuesta) => {
+        clearTimeout(temporizador);
+        guardarEnCache(request, respuesta);
+        if (!resuelto) { resuelto = true; resolve(respuesta); }
+      })
+      .catch((error) => {
+        clearTimeout(temporizador);
+        usarCopia().then((copia) => { if (!copia && !resuelto) { resuelto = true; reject(error); } });
+      });
+  });
+}
+
+// Imágenes e iconos: no cambian casi nunca, así que salen de la copia guardada al instante.
+function cachePrimero(request) {
+  return caches.match(request).then((copia) => {
+    if (copia) return copia;
+    return fetch(request).then((respuesta) => { guardarEnCache(request, respuesta); return respuesta; });
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -37,16 +77,9 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.method !== 'GET') return;
 
-  // App shell: RED PRIMERO (comprobando siempre si hay versión nueva) y la caché
-  // solo como respaldo sin conexión. Así, al subir cambios a GitHub, cada
-  // dispositivo recibe lo nuevo al abrir la app, sin tener que limpiar la caché.
-  event.respondWith(
-    fetch(event.request, { cache: 'no-cache' })
-      .then((respuesta) => {
-        const copia = respuesta.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copia)).catch(() => {});
-        return respuesta;
-      })
-      .catch(() => caches.match(event.request))
-  );
+  if (/\.(png|jpe?g|svg|ico|webp|woff2?)$/i.test(url.pathname)) {
+    event.respondWith(cachePrimero(event.request));
+  } else {
+    event.respondWith(redPrimeroConLimite(event.request));
+  }
 });

@@ -7,7 +7,6 @@ let RUTA = localStorage.getItem('ruta') || '';
 let productosCache = [];
 let clientesCache = [];
 let itemsNuevo = []; // { tipo:'catalogo'|'libre', productoId?, nombre, precio, iva (fracción), cantidad, uid }
-let itemsFactura = [];
 let itemsEditarPedido = [];
 let itemsEditarFactura = [];
 let idPedidoEnEdicion = null;
@@ -25,13 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearAjustes();
   cablearTema();
   // Buscador con sugerencias en todos los desplegables de cliente
-  ['selectClienteAlbaran', 'selectCliente', 'selectClienteHistorial', 'selectClienteBuscarFactura', 'selectClienteFactura']
+  ['selectCliente', 'selectClientePedidos', 'selectClienteFacturas']
     .forEach((id) => BuscadorClientes.activar(document.getElementById(id)));
   cablearNuevoPedido();
-  cablearFacturaDirecta();
   cablearProductosLibres();
   cablearEdicion();
-  cablearAlbaranSuelto();
+  cablearListaFacturas();
   cablearInformesFacturacion();
   cablearCompras();
   cablearCerrarAnio();
@@ -164,9 +162,6 @@ function aplicarModoUI() {
   document.querySelectorAll('.sidebar__item[data-solo-admin]').forEach((btn) => {
     btn.style.display = esRepartidor ? 'none' : '';
   });
-  document.querySelectorAll('.toolbar-btn[data-solo-admin]').forEach((btn) => {
-    btn.style.display = esRepartidor ? 'none' : '';
-  });
   document.getElementById('resumenInicio').style.display = esRepartidor ? 'none' : '';
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
@@ -189,19 +184,43 @@ function registrarServiceWorker() {
 }
 
 /* ============ LLAMADAS A LA API ============ */
-async function apiGet(action, extraParams) {
-  const params = new URLSearchParams({ action, key: API_KEY, ...(extraParams || {}) });
-  const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
-  return res.json();
+// Acciones que se pueden repetir sin riesgo (leer datos, o guardar "lo mismo" otra vez):
+// si la respuesta llega rota o se corta la conexión, se reintentan solas UNA vez.
+// Las que CREAN algo (pedido, factura, gasto…) no se reintentan nunca solas, para no duplicarlas.
+const ACCIONES_REINTENTABLES = new Set([
+  'quienSoy', 'resumenInicio', 'reparto', 'pedidos', 'facturas', 'clientes', 'productos',
+  'preciosEspecialesCliente', 'resumenPeriodo', 'resumenManana', 'empresa', 'estadoCopias',
+  'itemsPedido', 'itemsFactura',
+  'guardarPrecioEspecial', 'eliminarPrecioEspecial', 'marcarEntregado', 'marcarCobrado', 'marcarFacturaCobrada',
+]);
+const MENSAJE_RESPUESTA_ILEGIBLE = 'Google devolvió una respuesta que no se pudo leer (tardó demasiado o hubo demasiadas peticiones seguidas). Puede que la operación SÍ se haya guardado: compruébalo antes de repetirla.';
+
+// Texto del error cuando una petición no llegó a buen puerto
+function errorDeRed(err) {
+  return err && err.toString && String(err) === MENSAJE_RESPUESTA_ILEGIBLE ? MENSAJE_RESPUESTA_ILEGIBLE : 'Sin conexión';
 }
 
-async function apiPost(action, payload) {
-  const res = await fetch(WEB_APP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
-    body: JSON.stringify({ action, apiKey: API_KEY, ...payload }),
-  });
-  return res.json();
+async function apiGet(action, extraParams) {
+  const params = new URLSearchParams({ action, key: API_KEY, ...(extraParams || {}) });
+  const url = `${WEB_APP_URL}?${params.toString()}`;
+  const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
+  let fallo;
+  for (let i = 0; i < intentos; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const res = await fetch(url);
+      const texto = await res.text();
+      try {
+        return JSON.parse(texto);
+      } catch (e) {
+        fallo = new Error(MENSAJE_RESPUESTA_ILEGIBLE);
+        fallo.toString = () => MENSAJE_RESPUESTA_ILEGIBLE;
+      }
+    } catch (e) {
+      fallo = e; // sin conexión
+    }
+  }
+  throw fallo;
 }
 
 /* ============ MIGAS DE PAN ============ */
@@ -209,28 +228,22 @@ const BREADCRUMBS = {
   reparto: [{ label: 'Reparto', tab: 'reparto' }],
   'reparto-dia': [{ label: 'Reparto', tab: 'reparto' }, { label: 'Detalle', tab: 'reparto-dia' }],
   pedidos: [{ label: 'Pedidos', tab: 'pedidos' }],
-  'pedidos-hoy': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }],
-  'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Pedidos de hoy', tab: 'pedidos-hoy' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
-  'pedidos-historial': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Historial', tab: 'pedidos-historial' }],
-  'albaran-suelto': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Nuevo albarán', tab: 'albaran-suelto' }],
+  'pedidos-lista': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Ver pedidos', tab: 'pedidos-lista' }],
+  'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Ver pedidos', tab: 'pedidos-lista' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
   'factura-347': [{ label: 'Facturas', tab: 'factura' }, { label: 'Modelo 347', tab: 'factura-347' }],
   'proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }],
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
-  'liquidacion-iva': [{ label: 'Compras', tab: 'compras' }, { label: 'Liquidación de IVA', tab: 'liquidacion-iva' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
-  'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Facturación por periodo', tab: 'factura-periodo' }],
+  'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen por periodo e IVA', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
   'clientes-lista': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }],
-  'clientes-historial': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Historial de pedidos', tab: 'clientes-historial' }],
   'cliente-form': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }, { label: 'Cliente', tab: 'cliente-form' }],
   factura: [{ label: 'Facturas', tab: 'factura' }],
-  'factura-resumen': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen', tab: 'factura-resumen' }],
-  'factura-por-cliente': [{ label: 'Facturas', tab: 'factura' }, { label: 'Por cliente', tab: 'factura-por-cliente' }],
-  'factura-crear': [{ label: 'Facturas', tab: 'factura' }, { label: 'Generar factura', tab: 'factura-crear' }],
+  'factura-lista': [{ label: 'Facturas', tab: 'factura' }, { label: 'Lista', tab: 'factura-lista' }],
   'factura-editar': [{ label: 'Facturas', tab: 'factura' }, { label: 'Editar factura', tab: 'factura-editar' }],
   productos: [{ label: 'Productos', tab: 'productos' }],
   'producto-form': [{ label: 'Productos', tab: 'productos' }, { label: 'Producto', tab: 'producto-form' }],
@@ -270,9 +283,6 @@ function cablearNavegacion() {
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
   });
-  document.querySelectorAll('.toolbar-btn[data-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => cambiarTab(btn.dataset.tab));
-  });
   document.querySelectorAll('[data-volver]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarTab(btn.dataset.volver));
   });
@@ -284,7 +294,7 @@ function cablearNavegacion() {
   });
 }
 
-// Las subpáginas (ej. "pedidos-hoy") resaltan el menú padre ("pedidos") en
+// Las subpáginas (ej. "pedidos-lista") resaltan el menú padre ("pedidos") en
 // el menú lateral y en la barra inferior, no un ítem propio (no existe).
 function claveMenuPadre(nombre) {
   if (nombre.startsWith('pedidos')) return 'pedidos';
@@ -301,7 +311,6 @@ function cambiarTab(nombre) {
   const clave = claveMenuPadre(nombre);
   document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   document.querySelectorAll('.sidebar__item[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
-  document.querySelectorAll('.toolbar-btn[data-tab]').forEach((b) => b.classList.toggle('is-active', b.dataset.tab === clave));
   pintarBreadcrumb(nombre);
   cargarTabActual(nombre);
 }
@@ -311,17 +320,13 @@ function cargarTabActual(nombre) {
   if (!WEB_APP_URL || !API_KEY) return;
   if (activo === 'inicio') pintarInicio();
   if (activo === 'reparto-dia') cargarReparto();
-  if (activo === 'pedidos-hoy') cargarPedidos();
-  if (activo === 'pedidos-historial') prepararHistorialPedidos();
+  if (activo === 'pedidos-lista') prepararPedidosLista();
   if (activo === 'nuevo') cargarFormularioNuevo();
   if (activo === 'clientes-lista') cargarClientes();
-  if (activo === 'clientes-historial') cargarClientesHistorial();
-  if (activo === 'factura-crear') cargarFormularioFactura();
-  if (activo === 'factura-resumen') prepararResumenFacturas();
-  if (activo === 'factura-por-cliente') prepararFacturaPorCliente();
+  if (activo === 'factura-lista') prepararResumenFacturas();
+  if (activo === 'factura-periodo') prepararResumenPeriodo();
   if (activo === 'pedido-editar') cargarPedidoParaEditar();
   if (activo === 'factura-editar') cargarFacturaParaEditar();
-  if (activo === 'albaran-suelto') cargarFormularioAlbaran();
   if (activo === 'proveedores') cargarProveedores();
   if (activo === 'gasto-nuevo') cargarFormularioGasto();
   if (activo === 'empresa') cargarEmpresa();
@@ -357,7 +362,7 @@ async function cargarBadgesInicio() {
   badgeReparto.textContent = '';
   badgePedidos.textContent = '';
 
-  const r = await apiGet('pedidosHoy').catch(() => null);
+  const r = await apiGet('pedidos').catch(() => null);
   if (!r || !r.ok) return;
 
   const total = r.data.length;
@@ -576,7 +581,7 @@ async function cargarFaltanManana() {
 
   cont.innerHTML = `<div class="card__meta" style="margin-bottom:8px;">${d.conPedido} de ${d.totalClientes} clientes ya han pedido</div>` +
     d.sinPedido.map((c) => {
-      const mensaje = `Hola ${c.nombre}! 👋 Te escribimos porque todavía no hemos recibido tu pedido de pan para mañana. Si quieres que te llevemos mañana, no olvides rellenar el formulario antes de las 21:00. ¡Gracias!`;
+      const mensaje = `Hola ${c.nombre}! 👋 Todavía no hemos recibido tu pedido de pan para mañana. Si quieres que te lo llevemos, haz tu pedido en la app antes de las 22:00: ${new URL('pedido.html', location.href).href} ¡Gracias!`;
       const enlace = c.telefono
         ? `https://wa.me/34${String(c.telefono).replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`
         : '';
@@ -589,75 +594,161 @@ async function cargarFaltanManana() {
     }).join('');
 }
 
-/* ============ PEDIDOS DEL DÍA ============ */
+/* ============ PEDIDOS: un día, un rango de fechas y/o un cliente, en UNA pantalla ============ */
+let pedidosFiltroPendiente = null;  // { ini, fin, clienteId }: lo que pide quien abre la pantalla (ej. la ficha de un cliente)
+let rangoPedidosAnterior = null;    // para saber si se estaba mirando UN solo día
+let peticionPedidos = 0;            // número de la última petición (se ignoran las respuestas atrasadas)
+
+// Fechas en hora LOCAL (valueAsDate trabaja en UTC y cerca de medianoche daba el día anterior)
+function aISO(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function desdeISO(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); }
+function sumarDiasISO(iso, n) { const d = desdeISO(iso); d.setDate(d.getDate() + n); return aISO(d); }
+function hoyISO() { return aISO(new Date()); }
+function primeroDeMesISO() { const d = new Date(); return aISO(new Date(d.getFullYear(), d.getMonth(), 1)); }
+
+function fijarRangoPedidos(ini, fin) {
+  document.getElementById('pedidosFechaIni').value = ini;
+  document.getElementById('pedidosFechaFin').value = fin;
+  rangoPedidosAnterior = { ini: ini, fin: fin };
+}
+
+// Opciones de cliente de un desplegable (se rehacen solo si la lista cambió, sin perder lo elegido)
+function rellenarClientesFiltro(select, textoTodos) {
+  if (select.options.length - 1 === clientesCache.length) return;
+  const actual = select.value;
+  select.innerHTML = `<option value="">${textoTodos}</option>` +
+    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+  select.value = actual;
+}
+
+async function prepararPedidosLista() {
+  const esAdmin = ROL === 'admin';
+  document.getElementById('bloquePedidosCliente').style.display = esAdmin ? '' : 'none';
+  const selEstado = document.getElementById('filtroEstadoPedido');
+  const opAnulado = selEstado.querySelector('option[value="anulado"]');
+  if (opAnulado && !esAdmin) opAnulado.remove();
+
+  // Los clientes y los pedidos se piden A LA VEZ: la lista no espera a los clientes
+  const selCliente = document.getElementById('selectClientePedidos');
+  const clientesListos = esAdmin
+    ? cargarClientesCache().then(() => rellenarClientesFiltro(selCliente, 'Todos los clientes'))
+    : Promise.resolve();
+
+  if (pedidosFiltroPendiente) {
+    await clientesListos; // (ya están en memoria: se viene de la ficha de un cliente)
+    const f = pedidosFiltroPendiente;
+    pedidosFiltroPendiente = null;
+    fijarRangoPedidos(f.ini, f.fin);
+    selCliente.value = f.clienteId || '';
+    document.getElementById('buscarPedido').value = '';
+    selEstado.value = 'todos';
+  } else if (!document.getElementById('pedidosFechaIni').value) {
+    fijarRangoPedidos(hoyISO(), hoyISO());
+  }
+  await cargarPedidos();
+}
+
 async function cargarPedidos() {
   const cont = document.getElementById('listaPedidos');
-  const inputFecha = document.getElementById('pedidosFechaSeleccionada');
-  if (!inputFecha.value) inputFecha.valueAsDate = new Date();
+  const ini = document.getElementById('pedidosFechaIni').value;
+  const fin = document.getElementById('pedidosFechaFin').value;
+  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las fechas.</div>'; return; }
 
-  const fecha = formatoFechaES(inputFecha.value);
-  const r = await apiGet('pedidosHoy', { fecha }).catch(() => null);
+  const params = { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) };
+  const clienteId = ROL === 'admin' ? document.getElementById('selectClientePedidos').value : '';
+  if (clienteId) params.clienteId = clienteId;
+
+  const miPeticion = ++peticionPedidos;
+  const r = await apiGet('pedidos', params).catch(() => null);
+  if (miPeticion !== peticionPedidos) return; // llegó tarde: ya se pidió otra cosa
   if (!r || !r.ok) {
     cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
     return;
   }
-  guardarCache('pedidosHoy', r.data);
   pintarPedidos(r.data);
 }
 
 function cablearNavegacionPedidos() {
-  const inputFecha = document.getElementById('pedidosFechaSeleccionada');
-  inputFecha.addEventListener('change', cargarPedidos);
-  document.getElementById('btnPedidosDiaAnterior').addEventListener('click', () => {
-    const d = inputFecha.valueAsDate || new Date();
-    d.setDate(d.getDate() - 1);
-    inputFecha.valueAsDate = d;
+  const ini = document.getElementById('pedidosFechaIni');
+  const fin = document.getElementById('pedidosFechaFin');
+  const recordar = () => { rangoPedidosAnterior = { ini: ini.value, fin: fin.value }; };
+
+  ini.addEventListener('change', () => {
+    if (!ini.value) return;
+    const eraUnDia = rangoPedidosAnterior && rangoPedidosAnterior.ini === rangoPedidosAnterior.fin;
+    if (eraUnDia || !fin.value || fin.value < ini.value) fin.value = ini.value; // mirando un día: sigue siendo un día
+    recordar();
     cargarPedidos();
   });
-  document.getElementById('btnPedidosDiaSiguiente').addEventListener('click', () => {
-    const d = inputFecha.valueAsDate || new Date();
-    d.setDate(d.getDate() + 1);
-    inputFecha.valueAsDate = d;
+  fin.addEventListener('change', () => {
+    if (!fin.value) return;
+    if (!ini.value || ini.value > fin.value) ini.value = fin.value;
+    recordar();
     cargarPedidos();
   });
+
+  // Las flechas saltan un periodo entero (un día si se mira un día, N días si se mira un rango)
+  const desplazar = (sentido) => {
+    if (!ini.value || !fin.value) return;
+    const dias = Math.round((desdeISO(fin.value) - desdeISO(ini.value)) / 86400000) + 1;
+    fijarRangoPedidos(sumarDiasISO(ini.value, sentido * dias), sumarDiasISO(fin.value, sentido * dias));
+    cargarPedidos();
+  };
+  document.getElementById('btnPedidosAnterior').addEventListener('click', () => desplazar(-1));
+  document.getElementById('btnPedidosSiguiente').addEventListener('click', () => desplazar(1));
+
+  document.querySelectorAll('[data-pedidos-rapido]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cual = btn.dataset.pedidosRapido;
+      if (cual === 'mes') fijarRangoPedidos(primeroDeMesISO(), hoyISO());
+      else {
+        const dia = cual === 'ayer' ? sumarDiasISO(hoyISO(), -1) : cual === 'manana' ? sumarDiasISO(hoyISO(), 1) : hoyISO();
+        fijarRangoPedidos(dia, dia);
+      }
+      cargarPedidos();
+    });
+  });
+
+  document.getElementById('selectClientePedidos').addEventListener('change', cargarPedidos);
+  document.getElementById('buscarPedido').addEventListener('input', () => pintarPedidos(ultimosPedidos));
+  document.getElementById('filtroEstadoPedido').addEventListener('change', () => pintarPedidos(ultimosPedidos));
 }
 
 let ultimosPedidos = [];
+function estadoDePedido(p) {
+  return p.anulado ? 'Anulado' : p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
+}
+
 function pintarPedidos(pedidos) {
   ultimosPedidos = pedidos;
   const cont = document.getElementById('listaPedidos');
+  const resumen = document.getElementById('pedidosResumen');
   const filtroTexto = BuscadorClientes.normalizar(document.getElementById('buscarPedido').value || '');
   const filtroEstado = document.getElementById('filtroEstadoPedido').value;
+  const variosDias = document.getElementById('pedidosFechaIni').value !== document.getElementById('pedidosFechaFin').value;
 
   const filtrados = pedidos.filter((p) => {
     if (!coincideBusqueda(p.cliente, filtroTexto)) return false;
-    if (filtroEstado === 'todos') return true;
-    const estado = p.cobrado ? 'cobrado' : p.entregado ? 'entregado' : 'pendiente';
-    return estado === filtroEstado;
+    const estado = estadoDePedido(p).toLowerCase();
+    return filtroEstado === 'todos' ? estado !== 'anulado' : estado === filtroEstado;
   });
 
   if (!filtrados.length) {
     cont.innerHTML = '<div class="empty-state">No hay pedidos que coincidan.</div>';
+    resumen.textContent = '';
     return;
   }
+  const suma = filtrados.reduce((s, p) => s + (Number(p.total) || 0), 0);
+  resumen.textContent = filtroEstado === 'anulado'
+    ? `${filtrados.length} pedido(s) anulado(s)`
+    : `${filtrados.length} pedido(s) · Total ${formatoEuros(suma)}`;
 
   cont.innerHTML = filtrados.map((p) => {
-    const estado = p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
-    return `
-    <div class="card">
-      <div class="card__top">
-        <div>
-          <div class="card__name">${escapeHtml(p.cliente)}</div>
-          <div class="card__meta">${escapeHtml(p.hora || '')} · ${escapeHtml(p.canal || '')}${p.documento === 'Albarán' ? ' · <strong>ALBARÁN (sin factura)</strong>' : ''}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="card__total">${formatoEuros(p.total)}</div>
-          ${stampHtml(estado)}
-        </div>
-      </div>
-      <div class="card__products">${escapeHtml(p.pedido)}</div>
-      ${p.entregado && p.horaEntrega ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(p.horaEntrega)}</div>` : ''}
-      ${p.observaciones ? `<div class="card__meta" style="color:var(--stamp-red); margin-top:6px;">${escapeHtml(p.observaciones)}</div>` : ''}
+    const estado = estadoDePedido(p);
+    const acciones = p.anulado ? '' : `
       <div class="card__actions">
         ${!p.entregado ? `<button class="chip-btn" data-accion="entregado" data-id="${p.id}">Marcar entregado</button>` : ''}
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
@@ -665,7 +756,23 @@ function pintarPedidos(pedidos) {
         ${ROL === 'admin' && p.documento !== 'Albarán' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="editar" data-id="${p.id}">Editar pedido</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="anular" data-id="${p.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Anular</button>` : ''}
+      </div>`;
+    return `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.cliente)}</div>
+          <div class="card__meta">${variosDias ? escapeHtml(p.fecha) + ' · ' : ''}${escapeHtml(p.hora || '')} · ${escapeHtml(p.canal || '')}${p.documento === 'Albarán' ? ' · <strong>ALBARÁN (sin factura)</strong>' : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="card__total">${formatoEuros(p.total)}</div>
+          ${stampHtml(estado)}
+        </div>
       </div>
+      <div class="card__products">${escapeHtml(p.pedido)}</div>
+      ${p.entregado && p.horaEntrega && !p.anulado ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(p.horaEntrega)}</div>` : ''}
+      ${p.observaciones ? `<div class="card__meta" style="color:var(--stamp-red); margin-top:6px;">${escapeHtml(p.observaciones)}</div>` : ''}
+      ${acciones}
     </div>
   `;
   }).join('');
@@ -764,75 +871,60 @@ async function descargarPDF(base64, nombreArchivo) {
 }
 
 document.addEventListener('input', (e) => {
-  if (e.target.id === 'buscarPedido') {
-    const cache = leerCache('pedidosHoy');
-    if (cache) pintarPedidos(cache);
-  }
   if (e.target.id === 'buscarCliente') {
     filtrarListaClientes();
-  }
-});
-
-document.addEventListener('change', (e) => {
-  if (e.target.id === 'filtroEstadoPedido') {
-    const cache = leerCache('pedidosHoy');
-    if (cache) pintarPedidos(cache);
   }
 });
 
 /* ============ NUEVO PEDIDO ============ */
 let fechaPedidoSeleccion = 'manana';
 
-/* ============ HISTORIAL DE PEDIDOS (rango de fechas) ============ */
-function prepararHistorialPedidos() {
-  const hoy = new Date();
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  if (!document.getElementById('histFechaIni').value) document.getElementById('histFechaIni').valueAsDate = inicioMes;
-  if (!document.getElementById('histFechaFin').value) document.getElementById('histFechaFin').valueAsDate = hoy;
-}
+/* ============ FACTURAS: una sola lista (todas, o las de un cliente) ============ */
+let resumenFacturasCache = [];
+let facturasFiltroPendiente = null; // { ini, fin, clienteId }: lo que pide quien abre la pantalla (ej. la ficha de un cliente)
 
-async function buscarHistorialPedidos() {
-  const cont = document.getElementById('listaHistorialPedidos');
-  const ini = document.getElementById('histFechaIni').value;
-  const fin = document.getElementById('histFechaFin').value;
-  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
+async function prepararResumenFacturas() {
+  const select = document.getElementById('selectClienteFacturas');
+  const clientesListos = cargarClientesCache().then(() => rellenarClientesFiltro(select, 'Todos los clientes'));
 
-  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('pedidosPorRango', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
-
-  if (!r.data.length) {
-    cont.innerHTML = '<div class="empty-state">Sin pedidos en ese periodo.</div>';
+  if (facturasFiltroPendiente) {
+    await clientesListos;
+    const f = facturasFiltroPendiente;
+    facturasFiltroPendiente = null;
+    document.getElementById('resFechaIni').value = f.ini;
+    document.getElementById('resFechaFin').value = f.fin;
+    select.value = f.clienteId || '';
+    actualizarBotonExtracto();
+    await buscarResumenFacturas(); // viene de la ficha de un cliente: se ven ya sus facturas
     return;
   }
-
-  cont.innerHTML = r.data.map((p) => {
-    const estado = p.anulado ? 'Anulado' : p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente';
-    return `
-    <div class="card">
-      <div class="card__top">
-        <div>
-          <div class="card__name">${escapeHtml(p.cliente)}</div>
-          <div class="card__meta">${escapeHtml(p.fecha)} · ${escapeHtml(p.hora || '')}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="card__total">${formatoEuros(p.total)}</div>
-          ${stampHtml(estado)}
-        </div>
-      </div>
-      <div class="card__products">${escapeHtml(p.pedido)}</div>
-    </div>`;
-  }).join('');
+  if (!document.getElementById('resFechaIni').value) document.getElementById('resFechaIni').value = primeroDeMesISO();
+  if (!document.getElementById('resFechaFin').value) document.getElementById('resFechaFin').value = hoyISO();
+  actualizarBotonExtracto();
 }
 
-/* ============ RESUMEN DE FACTURAS (todas, por rango) ============ */
-let resumenFacturasCache = [];
+// El extracto es de UN cliente: solo se puede pedir si hay uno elegido
+function actualizarBotonExtracto() {
+  document.getElementById('btnDescargarExtractoCliente').disabled = !document.getElementById('selectClienteFacturas').value;
+}
 
-function prepararResumenFacturas() {
-  const hoy = new Date();
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  if (!document.getElementById('resFechaIni').value) document.getElementById('resFechaIni').valueAsDate = inicioMes;
-  if (!document.getElementById('resFechaFin').value) document.getElementById('resFechaFin').valueAsDate = hoy;
+function cablearListaFacturas() {
+  document.getElementById('btnBuscarResumenFacturas').addEventListener('click', buscarResumenFacturas);
+  document.getElementById('filtroEstadoFactura').addEventListener('change', pintarResumenFacturas);
+  document.getElementById('btnResumenHoy').addEventListener('click', () => {
+    document.getElementById('resFechaIni').value = hoyISO();
+    document.getElementById('resFechaFin').value = hoyISO();
+    buscarResumenFacturas();
+  });
+  document.getElementById('btnResumenMes').addEventListener('click', () => {
+    document.getElementById('resFechaIni').value = primeroDeMesISO();
+    document.getElementById('resFechaFin').value = hoyISO();
+    buscarResumenFacturas();
+  });
+  document.getElementById('selectClienteFacturas').addEventListener('change', () => {
+    actualizarBotonExtracto();
+    buscarResumenFacturas();
+  });
 }
 
 async function buscarResumenFacturas() {
@@ -842,7 +934,10 @@ async function buscarResumenFacturas() {
   if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
 
   cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('resumenFacturas', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
+  const params = { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) };
+  const clienteId = document.getElementById('selectClienteFacturas').value;
+  if (clienteId) params.clienteId = clienteId;
+  const r = await apiGet('facturas', params).catch((err) => ({ ok: false, error: String(err) }));
   if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
   resumenFacturasCache = r.data.facturas;
@@ -895,69 +990,6 @@ function pintarResumenFacturas() {
   });
 }
 
-/* ============ VER FACTURA POR CLIENTE (desde el menú Facturas) ============ */
-async function prepararFacturaPorCliente() {
-  const select = document.getElementById('selectClienteBuscarFactura');
-  await cargarClientesCache();
-  if (select.options.length <= 1) {
-    select.innerHTML = '<option value="">Selecciona un cliente…</option>' +
-      clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
-  }
-  const hoy = new Date();
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  if (!document.getElementById('pcFechaIni').value) document.getElementById('pcFechaIni').valueAsDate = inicioMes;
-  if (!document.getElementById('pcFechaFin').value) document.getElementById('pcFechaFin').valueAsDate = hoy;
-}
-
-async function buscarFacturaPorCliente() {
-  const cont = document.getElementById('listaFacturaPorCliente');
-  const clienteId = document.getElementById('selectClienteBuscarFactura').value;
-  const ini = document.getElementById('pcFechaIni').value;
-  const fin = document.getElementById('pcFechaFin').value;
-  if (!clienteId) { cont.innerHTML = '<div class="empty-state">Selecciona un cliente.</div>'; return; }
-  if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
-
-  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('facturasCliente', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
-
-  if (!r.data.facturas.length) {
-    cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
-    document.getElementById('facturaPorClienteTotal').textContent = '';
-    return;
-  }
-
-  cont.innerHTML = r.data.facturas.map((f) => `
-    <div class="card">
-      <div class="card__top">
-        <div class="card__meta">Factura #${f.idFactura} · ${escapeHtml(f.fecha)}</div>
-        <div style="text-align:right">
-          <div class="card__total">${formatoEuros(f.total)}</div>
-          ${stampHtml(f.estado)}
-        </div>
-      </div>
-      <div class="card__actions">
-        <button class="chip-btn" data-ver-factura="${f.idFactura}">Ver factura</button>
-        ${(!f.idPedido && f.estado !== 'Anulada') ? `<button class="chip-btn" data-editar-factura="${f.idFactura}">Editar factura</button>` : ''}
-        ${f.estado !== 'Cobrado' ? `<button class="chip-btn" data-marcar-cobrada="${f.idFactura}">Marcar cobrada</button>` : ''}
-      </div>
-    </div>
-  `).join('');
-  document.getElementById('facturaPorClienteTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
-  cont.querySelectorAll('[data-marcar-cobrada]').forEach((btn) => {
-    btn.addEventListener('click', () => marcarFacturaCobrada(btn.dataset.marcarCobrada, buscarFacturaPorCliente));
-  });
-  cont.querySelectorAll('[data-ver-factura]').forEach((btn) => {
-    btn.addEventListener('click', (e) => conEstadoCarga(e.target, 'Abriendo…', () => verFacturaPDF(btn.dataset.verFactura)));
-  });
-  cont.querySelectorAll('[data-editar-factura]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      idFacturaEnEdicion = btn.dataset.editarFactura;
-      cambiarTab('factura-editar');
-    });
-  });
-}
-
 async function verFacturaPDF(idFactura) {
   const r = await apiGet('facturaDirectaPdf', { idFactura }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) { alert('No se pudo abrir la factura: ' + (r.error || 'error')); return; }
@@ -973,16 +1005,6 @@ async function marcarFacturaCobrada(idFactura, recargar) {
 /* ============ DATOS DE LA EMPRESA ============ */
 function cablearEmpresa() {
   document.getElementById('btnGuardarEmpresa').addEventListener('click', guardarEmpresa);
-  document.getElementById('btnBuscarHistorialPedidos').addEventListener('click', buscarHistorialPedidos);
-  document.getElementById('btnBuscarResumenFacturas').addEventListener('click', buscarResumenFacturas);
-  document.getElementById('filtroEstadoFactura').addEventListener('change', pintarResumenFacturas);
-  document.getElementById('btnResumenHoy').addEventListener('click', () => {
-    const hoy = new Date();
-    document.getElementById('resFechaIni').valueAsDate = hoy;
-    document.getElementById('resFechaFin').valueAsDate = hoy;
-    buscarResumenFacturas();
-  });
-  document.getElementById('btnBuscarFacturaPorCliente').addEventListener('click', buscarFacturaPorCliente);
 }
 
 async function cargarEmpresa() {
@@ -1029,19 +1051,41 @@ async function guardarEmpresa() {
   }
 }
 
+// Los tres documentos que se crean desde esta pantalla
+let tipoDocumentoPendiente = null; // lo pide quien abre la pantalla (ej. "Nueva factura suelta" del menú Facturas)
+const TEXTOS_TIPO_DOCUMENTO = {
+  factura: { aviso: '', boton: 'Crear pedido' },
+  albaran: { aviso: 'Se guarda como pedido (cuenta en el reparto y en el total a preparar) pero no crea factura. Los albaranes de un día se imprimen todos juntos desde Reparto → Mañana.', boton: 'Crear albarán' },
+  facturaSuelta: { aviso: 'Factura de una venta puntual: no es un pedido de reparto (no cuenta en el reparto ni en el total a preparar). Al crearla se abre su PDF.', boton: 'Crear factura' },
+};
+
+function actualizarTipoDocumento() {
+  const tipo = document.getElementById('selectTipoDocumento').value;
+  const t = TEXTOS_TIPO_DOCUMENTO[tipo] || TEXTOS_TIPO_DOCUMENTO.factura;
+  const aviso = document.getElementById('avisoTipoDocumento');
+  aviso.textContent = t.aviso;
+  aviso.style.display = t.aviso ? 'block' : 'none';
+  document.getElementById('bloqueFechaPedido').style.display = tipo === 'facturaSuelta' ? 'none' : '';
+  document.getElementById('btnCrearPedido').textContent = t.boton;
+}
+
 function cablearNuevoPedido() {
   document.getElementById('btnCrearPedido').addEventListener('click', crearPedidoManual);
   document.getElementById('selectFechaPedido').addEventListener('change', (e) => {
     fechaPedidoSeleccion = e.target.value;
   });
-  document.getElementById('selectTipoDocumento').addEventListener('change', (e) => {
-    document.getElementById('avisoTipoDocumento').style.display = e.target.value === 'albaran' ? 'block' : 'none';
+  document.getElementById('selectTipoDocumento').addEventListener('change', actualizarTipoDocumento);
+  document.getElementById('btnNuevaFacturaSuelta').addEventListener('click', () => {
+    tipoDocumentoPendiente = 'facturaSuelta';
+    cambiarTab('nuevo');
   });
 }
 
-async function cargarFormularioNuevo() {
+async function cargarFormularioNuevo(opciones) {
   const selectCliente = document.getElementById('selectCliente');
   const selectProducto = document.getElementById('nProductoSelect');
+  const selectTipo = document.getElementById('selectTipoDocumento');
+  const tipoActual = selectTipo.value;
 
   await Promise.all([cargarClientesCache(), cargarProductosCache()]);
 
@@ -1055,16 +1099,18 @@ async function cargarFormularioNuevo() {
 
   fechaPedidoSeleccion = 'manana';
   document.getElementById('selectFechaPedido').value = 'manana';
-  document.getElementById('selectTipoDocumento').value = 'factura';
-  document.getElementById('avisoTipoDocumento').style.display = 'none';
+  // Tras crear uno se conserva el tipo (por si se hacen varios seguidos); al entrar de nuevo, vuelve a "pedido con factura"
+  selectTipo.value = tipoDocumentoPendiente || (opciones && opciones.conservarTipo ? tipoActual : 'factura');
+  tipoDocumentoPendiente = null;
+  actualizarTipoDocumento();
   document.getElementById('nuevoMsg').textContent = '';
 }
 
-function recalcularTotalNuevo() { recalcularTotal('nuevo'); }
 
 async function crearPedidoManual() {
   const msg = document.getElementById('nuevoMsg');
   const clienteId = document.getElementById('selectCliente').value;
+  const tipoDocumento = document.getElementById('selectTipoDocumento').value;
   const items = itemsNuevo.map((it) => it.tipo === 'catalogo'
     ? { productoId: it.productoId, cantidad: it.cantidad }
     : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
@@ -1076,74 +1122,27 @@ async function crearPedidoManual() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const tipoDocumento = document.getElementById('selectTipoDocumento').value;
   const cuando = fechaPedidoSeleccion === 'manana' ? 'mañana' : 'HOY';
-  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion, tipoDocumento }).catch(() => ({ ok: false, error: 'Sin conexión' }));
-  if (r.ok) {
-    document.getElementById('selectCliente').value = '';
-    await cargarFormularioNuevo();
-    msg.textContent = `${tipoDocumento === 'albaran' ? 'Albarán' : 'Pedido'} #${r.idPedido} creado para ${cuando} (${formatoEuros(r.total)}).`;
-    msg.className = 'form-msg is-ok';
-  } else {
+  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion, tipoDocumento }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  if (!r.ok) {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
     msg.className = 'form-msg is-error';
+    return;
   }
-}
 
-/* ============ FACTURAS DIRECTAS (sin pedido) ============ */
-function cablearFacturaDirecta() {
-  document.getElementById('btnCrearFactura').addEventListener('click', crearFacturaDirecta);
-}
+  document.getElementById('selectCliente').value = '';
+  await cargarFormularioNuevo({ conservarTipo: true });
 
-async function cargarFormularioFactura() {
-  const selectCliente = document.getElementById('selectClienteFactura');
-  const selectProducto = document.getElementById('fProductoSelect');
-
-  await Promise.all([cargarClientesCache(), cargarProductosCache()]);
-
-  selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
-  selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
-    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${formatoEuros(p.precio)}</option>`).join('');
-
-  itemsFactura = [];
-  pintarItems('factura');
-  document.getElementById('facturaMsg').textContent = '';
-}
-
-function recalcularTotalFactura() { recalcularTotal('factura'); }
-
-async function crearFacturaDirecta() {
-  const msg = document.getElementById('facturaMsg');
-  const clienteId = document.getElementById('selectClienteFactura').value;
-  const items = itemsFactura.map((it) => it.tipo === 'catalogo'
-    ? { productoId: it.productoId, cantidad: it.cantidad }
-    : { nombre: it.nombre, precio: it.precio, iva: it.iva, cantidad: it.cantidad }
-  );
-
-  if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
-  if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
-
-  msg.textContent = 'Guardando…';
-  msg.className = 'form-msg';
-
-  const r = await apiGet('nuevaFactura', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
-  if (r.ok) {
+  if (tipoDocumento === 'facturaSuelta') {
     msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}). Generando PDF…`;
     msg.className = 'form-msg is-ok';
-
     const rPdf = await apiGet('facturaDirectaPdf', { idFactura: r.idFactura }).catch(() => ({ ok: false }));
-    if (rPdf.ok) {
-      descargarPDF(rPdf.base64, rPdf.nombre);
-      msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}).`;
-    }
-
-    document.getElementById('selectClienteFactura').value = '';
-    cargarFormularioFactura();
-  } else {
-    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
-    msg.className = 'form-msg is-error';
+    if (rPdf.ok) descargarPDF(rPdf.base64, rPdf.nombre);
+    msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}).`;
+    return;
   }
+  msg.textContent = `${tipoDocumento === 'albaran' ? 'Albarán' : 'Pedido'} #${r.idPedido} creado para ${cuando} (${formatoEuros(r.total)}).`;
+  msg.className = 'form-msg is-ok';
 }
 
 /* ============ CLIENTES ============ */
@@ -1152,7 +1151,17 @@ function cablearClientes() {
     document.getElementById('detalleCliente').classList.add('tab--hidden');
     document.getElementById('clientesListaVista').classList.remove('tab--hidden');
   });
-  document.getElementById('btnBuscarFacturas').addEventListener('click', buscarFacturasCliente);
+  // La ficha ya no copia las listas de pedidos y facturas: abre las listas normales ya filtradas por este cliente
+  document.getElementById('btnVerPedidosCliente').addEventListener('click', () => {
+    if (!clienteSeleccionado) return;
+    pedidosFiltroPendiente = { ini: sumarDiasISO(hoyISO(), -90), fin: hoyISO(), clienteId: clienteSeleccionado.id };
+    cambiarTab('pedidos-lista');
+  });
+  document.getElementById('btnVerFacturasCliente').addEventListener('click', () => {
+    if (!clienteSeleccionado) return;
+    facturasFiltroPendiente = { ini: sumarDiasISO(hoyISO(), -365), fin: hoyISO(), clienteId: clienteSeleccionado.id };
+    cambiarTab('factura-lista');
+  });
 }
 
 let clienteSeleccionado = null;
@@ -1192,8 +1201,6 @@ async function abrirDetalleCliente(id) {
   document.getElementById('clientesListaVista').classList.add('tab--hidden');
   document.getElementById('detalleCliente').classList.remove('tab--hidden');
   window.scrollTo({ top: 0, behavior: 'instant' });
-  document.getElementById('listaFacturas').innerHTML = '';
-  document.getElementById('periodoTotal').textContent = '';
 
   const info = [];
   if (clienteSeleccionado.telefono) info.push('📞 ' + clienteSeleccionado.telefono);
@@ -1203,66 +1210,6 @@ async function abrirDetalleCliente(id) {
   document.getElementById('detalleClienteInfo').innerHTML = info.map((l) => `<div>${escapeHtml(l)}</div>`).join('');
 
   cargarPreciosEspeciales(id);
-
-  const hoy = new Date();
-  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  document.getElementById('fechaIni').valueAsDate = inicioMes;
-  document.getElementById('fechaFin').valueAsDate = hoy;
-
-  const cont = document.getElementById('historialPedidos');
-  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
-
-  const r = await apiGet('historialCliente', { clienteId: id }).catch(() => null);
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
-
-  if (!r.data.pedidos.length) {
-    cont.innerHTML = '<div class="empty-state">Sin pedidos recientes.</div>';
-  } else {
-    cont.innerHTML = r.data.pedidos.map((p) => `
-      <div class="card">
-        <div class="card__top">
-          <div class="card__meta">${escapeHtml(p.fecha)}</div>
-          <div class="card__total">${formatoEuros(p.total)}</div>
-        </div>
-        <div class="card__products">${escapeHtml(p.pedido)}</div>
-      </div>
-    `).join('');
-  }
-}
-
-async function buscarFacturasCliente() {
-  if (!clienteSeleccionado) return;
-  const ini = document.getElementById('fechaIni').value;
-  const fin = document.getElementById('fechaFin').value;
-  const cont = document.getElementById('listaFacturas');
-  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-
-  const r = await apiGet('facturasCliente', {
-    clienteId: clienteSeleccionado.id,
-    fechaIni: formatoFechaES(ini),
-    fechaFin: formatoFechaES(fin),
-  }).catch(() => null);
-
-  if (!r || !r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar.</div>'; return; }
-
-  if (!r.data.facturas.length) {
-    cont.innerHTML = '<div class="empty-state">Sin facturas en ese periodo.</div>';
-  } else {
-    cont.innerHTML = r.data.facturas.map((f) => `
-      <div class="card">
-        <div class="card__top">
-          <div>
-            <div class="card__meta">Factura #${f.idFactura} · ${escapeHtml(f.fecha)}</div>
-          </div>
-          <div style="text-align:right">
-            <div class="card__total">${formatoEuros(f.total)}</div>
-            ${stampHtml(f.estado)}
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-  document.getElementById('periodoTotal').textContent = `Total periodo: ${formatoEuros(r.data.total)}`;
 }
 
 /* ============ UTILIDADES ============ */
@@ -1483,42 +1430,6 @@ function cablearClientesForm() {
   document.getElementById('btnNuevoClienteHub').addEventListener('click', () => abrirFormularioCliente(null));
   document.getElementById('btnEditarCliente').addEventListener('click', () => abrirFormularioCliente(clienteSeleccionado));
   document.getElementById('btnGuardarCliente').addEventListener('click', guardarCliente);
-  document.getElementById('selectClienteHistorial').addEventListener('change', cargarHistorialClientePorSeleccion);
-}
-
-async function cargarClientesHistorial() {
-  const select = document.getElementById('selectClienteHistorial');
-  await cargarClientesCache();
-  select.innerHTML = '<option value="">Elige un cliente…</option>' +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
-  document.getElementById('historialClienteResultado').innerHTML = '';
-}
-
-async function cargarHistorialClientePorSeleccion() {
-  const clienteId = document.getElementById('selectClienteHistorial').value;
-  const cont = document.getElementById('historialClienteResultado');
-  if (!clienteId) { cont.innerHTML = ''; return; }
-
-  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
-  const r = await apiGet('historialCliente', { clienteId }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
-
-  if (!r.data.pedidos.length) {
-    cont.innerHTML = '<div class="empty-state">Este cliente no tiene pedidos todavía.</div>';
-    return;
-  }
-  cont.innerHTML = r.data.pedidos.map((p) => `
-    <div class="card">
-      <div class="card__top">
-        <div class="card__meta">${escapeHtml(p.fecha)}</div>
-        <div style="text-align:right">
-          <div class="card__total">${formatoEuros(p.total)}</div>
-          ${stampHtml(p.cobrado ? 'Cobrado' : p.entregado ? 'Entregado' : 'Pendiente')}
-        </div>
-      </div>
-      <div class="card__products">${escapeHtml(p.pedido)}</div>
-    </div>
-  `).join('');
 }
 
 function abrirFormularioCliente(cliente) {
@@ -1676,26 +1587,49 @@ async function buscarGlobal(termino) {
 /* ============ PRECIOS ESPECIALES (por cliente + producto) ============ */
 function cablearPreciosEspeciales() {
   document.getElementById('btnAnadirPrecioEspecial').addEventListener('click', anadirPrecioEspecial);
+  // Enter en el precio = Añadir (para meter varios deprisa)
+  document.getElementById('peInputPrecio').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); anadirPrecioEspecial(); }
+  });
 }
 
-async function cargarPreciosEspeciales(idCliente) {
+// Precios especiales: se ven AL INSTANTE y se mandan a Google de uno en uno, en cola, por detrás.
+// (Antes cada guardado esperaba a Google y luego recargaba la lista: lento, y varios seguidos
+// se amontonaban y llegaban a romper la respuesta.)
+let preciosEspecialesMostrados = []; // { idProducto, producto, precio } del cliente que se ve
+let colaPrecios = Promise.resolve();
+let preciosPendientes = 0;
+let errorPrecios = '';
+let opsPrecios = []; // cambios recientes: { tipo: 'poner'|'quitar', idCliente, idProducto, producto, precio, fin, fallida }
+
+// Si se intenta cerrar la página con precios aún sin enviar, el navegador pregunta antes (se perderían)
+window.addEventListener('beforeunload', (e) => {
+  if (preciosPendientes > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
+function mostrarEstadoPrecios() {
+  const el = document.getElementById('peEstado');
+  if (errorPrecios) { el.textContent = errorPrecios; el.className = 'form-msg is-error'; return; }
+  el.textContent = preciosPendientes ? `Guardando ${preciosPendientes}…` : (el.dataset.huboCambios ? '✓ Todo guardado' : '');
+  el.className = preciosPendientes ? 'form-msg' : 'form-msg is-ok';
+}
+
+function encolarPrecio(tarea, op) {
+  preciosPendientes++;
+  opsPrecios.push(op);
+  opsPrecios = opsPrecios.filter((o) => !o.fin || Date.now() - o.fin < 60000); // se olvidan los de hace más de un minuto
+  document.getElementById('peEstado').dataset.huboCambios = '1';
+  mostrarEstadoPrecios();
+  colaPrecios = colaPrecios.then(tarea).catch(() => {}).then(() => { preciosPendientes--; op.fin = Date.now(); mostrarEstadoPrecios(); });
+}
+
+function pintarPreciosEspeciales(idCliente) {
   const cont = document.getElementById('listaPreciosEspeciales');
-  const select = document.getElementById('peSelectProducto');
-  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
-
-  await cargarProductosCache();
-  select.innerHTML = '<option value="">Producto…</option>' +
-    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
-
-  const r = await apiGet('preciosEspecialesCliente', { clienteId: idCliente }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
-
-  if (!r.data.length) {
+  if (!preciosEspecialesMostrados.length) {
     cont.innerHTML = '<div class="empty-state">Este cliente paga el precio normal en todos los productos.</div>';
     return;
   }
-
-  cont.innerHTML = r.data.map((pe) => `
+  cont.innerHTML = preciosEspecialesMostrados.map((pe) => `
     <div class="client-row">
       <span>${escapeHtml(pe.producto)}</span>
       <span style="display:flex; align-items:center; gap:8px;">
@@ -1704,54 +1638,113 @@ async function cargarPreciosEspeciales(idCliente) {
       </span>
     </div>
   `).join('');
-
   cont.querySelectorAll('[data-quitar-precio]').forEach((btn) => {
     btn.addEventListener('click', () => quitarPrecioEspecial(idCliente, btn.dataset.quitarPrecio));
   });
 }
 
-async function anadirPrecioEspecial() {
+async function cargarPreciosEspeciales(idCliente) {
+  const cont = document.getElementById('listaPreciosEspeciales');
+  const select = document.getElementById('peSelectProducto');
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  errorPrecios = '';
+  mostrarEstadoPrecios();
+
+  await cargarProductosCache();
+  select.innerHTML = '<option value="">Producto…</option>' +
+    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+
+  await colaPrecios; // si aún hay guardados en marcha, se espera a que terminen
+  const momentoDePedirla = Date.now();
+  const r = await apiGet('preciosEspecialesCliente', { clienteId: idCliente }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+  // Lo añadido o quitado desde que se pidió la lista (esté o no ya confirmado) se mantiene a la vista:
+  // la lista pudo calcularse en Google ANTES de que ese cambio llegara.
+  let lista = r.data.map((x) => Object.assign({}, x));
+  opsPrecios.filter((o) => !o.fallida && (!o.fin || o.fin >= momentoDePedirla) && String(o.idCliente) === String(idCliente)).forEach((o) => {
+    if (o.tipo === 'poner') {
+      const x = lista.find((y) => String(y.idProducto) === String(o.idProducto));
+      if (x) x.precio = o.precio; else lista.push({ idProducto: o.idProducto, producto: o.producto, precio: o.precio });
+    } else {
+      lista = lista.filter((y) => String(y.idProducto) !== String(o.idProducto));
+    }
+  });
+  preciosEspecialesMostrados = lista;
+  pintarPreciosEspeciales(idCliente);
+}
+
+function anadirPrecioEspecial() {
   if (!clienteSeleccionado) return;
+  const idCliente = clienteSeleccionado.id;
+  const clienteNombre = clienteSeleccionado.nombre;
   const idProducto = document.getElementById('peSelectProducto').value;
   const precio = document.getElementById('peInputPrecio').value;
   if (!idProducto) { alert('Selecciona un producto.'); return; }
   if (precio === '' || Number(precio) < 0) { alert('Pon un precio válido.'); return; }
 
   const producto = productosCache.find((p) => String(p.id) === String(idProducto));
+  const nombreProducto = producto ? producto.nombre : '';
 
-  const r = await apiGet('guardarPrecioEspecial', {
-    idCliente: clienteSeleccionado.id,
-    clienteNombre: clienteSeleccionado.nombre,
-    idProducto: idProducto,
-    productoNombre: producto ? producto.nombre : '',
-    precio: precio,
-  }).catch((err) => ({ ok: false, error: String(err) }));
-
-  if (!r.ok) { alert('No se pudo guardar: ' + (r.error || 'error')); return; }
-
+  // 1) se ve ya
+  const existente = preciosEspecialesMostrados.find((x) => String(x.idProducto) === String(idProducto));
+  const precioAnterior = existente ? existente.precio : undefined;
+  if (existente) existente.precio = Number(precio);
+  else preciosEspecialesMostrados.push({ idProducto, producto: nombreProducto, precio: Number(precio) });
+  errorPrecios = '';
+  pintarPreciosEspeciales(idCliente);
   document.getElementById('peInputPrecio').value = '';
   document.getElementById('peSelectProducto').value = '';
-  cargarPreciosEspeciales(clienteSeleccionado.id);
+  document.getElementById('peSelectProducto').focus();
+
+  // 2) se manda a Google, de uno en uno
+  const op = { tipo: 'poner', idCliente, idProducto, producto: nombreProducto, precio: Number(precio) };
+  encolarPrecio(async () => {
+    const r = await apiGet('guardarPrecioEspecial', { idCliente, clienteNombre, idProducto, productoNombre: nombreProducto, precio })
+      .catch((err) => ({ ok: false, error: String(err) }));
+    if (r.ok) return;
+    // falló: se deshace SOLO este cambio y se avisa
+    if (clienteSeleccionado && String(clienteSeleccionado.id) === String(idCliente)) {
+      if (precioAnterior === undefined) preciosEspecialesMostrados = preciosEspecialesMostrados.filter((x) => String(x.idProducto) !== String(idProducto));
+      else { const x = preciosEspecialesMostrados.find((y) => String(y.idProducto) === String(idProducto)); if (x) x.precio = precioAnterior; }
+      pintarPreciosEspeciales(idCliente);
+    }
+    op.fallida = true;
+    errorPrecios = `No se pudo guardar ${nombreProducto}: ${r.error || 'error'}`;
+    mostrarEstadoPrecios();
+  }, op);
 }
 
-async function quitarPrecioEspecial(idCliente, idProducto) {
-  const r = await apiGet('eliminarPrecioEspecial', { idCliente, idProducto }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r.ok) { alert('No se pudo quitar: ' + (r.error || 'error')); return; }
-  cargarPreciosEspeciales(idCliente);
+function quitarPrecioEspecial(idCliente, idProducto) {
+  const quitado = preciosEspecialesMostrados.find((x) => String(x.idProducto) === String(idProducto));
+  preciosEspecialesMostrados = preciosEspecialesMostrados.filter((x) => String(x.idProducto) !== String(idProducto));
+  errorPrecios = '';
+  pintarPreciosEspeciales(idCliente);
+
+  const op = { tipo: 'quitar', idCliente, idProducto };
+  encolarPrecio(async () => {
+    const r = await apiGet('eliminarPrecioEspecial', { idCliente, idProducto }).catch((err) => ({ ok: false, error: String(err) }));
+    // "No encontrado" = ya estaba quitado (p. ej. la primera petición sí llegó): vale igual
+    if (r.ok || r.error === 'No encontrado') return;
+    if (quitado && clienteSeleccionado && String(clienteSeleccionado.id) === String(idCliente)) {
+      preciosEspecialesMostrados.push(quitado);
+      pintarPreciosEspeciales(idCliente);
+    }
+    op.fallida = true;
+    errorPrecios = `No se pudo quitar ${quitado ? quitado.producto : 'el precio'}: ${r.error || 'error'}`;
+    mostrarEstadoPrecios();
+  }, op);
 }
 
-/* ============ PRODUCTOS EN NUEVO PEDIDO / GENERAR FACTURA / EDITAR
+/* ============ PRODUCTOS EN NUEVO PEDIDO / EDITAR
    (catálogo + fuera de catálogo, todo en una sola lista por pantalla) ============ */
 const CONFIG_ITEMS = {
   nuevo: { prefijo: 'n', obtener: () => itemsNuevo, poner: (l) => { itemsNuevo = l; }, listaId: 'listaProductosNuevo', totalId: 'nuevoTotal' },
-  factura: { prefijo: 'f', obtener: () => itemsFactura, poner: (l) => { itemsFactura = l; }, listaId: 'listaProductosFactura', totalId: 'facturaTotal' },
   editarPedido: { prefijo: 'ep', obtener: () => itemsEditarPedido, poner: (l) => { itemsEditarPedido = l; }, listaId: 'listaEditarPedido', totalId: 'editarPedidoTotal' },
   editarFactura: { prefijo: 'ef', obtener: () => itemsEditarFactura, poner: (l) => { itemsEditarFactura = l; }, listaId: 'listaEditarFactura', totalId: 'editarFacturaTotal' },
 };
 
 function cablearProductosLibres() {
   Object.keys(CONFIG_ITEMS).forEach((tipo) => {
-    const p = CONFIG_ITEMS[tipo].prefijo;
     document.getElementById(`btnAnadirProducto_${tipo}`)?.addEventListener('click', () => agregarProductoCatalogo(tipo));
     document.getElementById(`btnAnadirLibre_${tipo}`)?.addEventListener('click', () => agregarProductoLibre(tipo));
   });
@@ -1889,12 +1882,12 @@ async function guardarEdicionPedido() {
   const nuevaFecha = document.getElementById('epFechaEntrega').value;
   const params = { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) };
   if (nuevaFecha !== 'mantener') params.fechaEntrega = nuevaFecha;
-  const r = await apiGet('editarPedido', params).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('editarPedido', params).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (r.ok) {
     msg.textContent = `Pedido actualizado (${formatoEuros(r.total)})` +
       (nuevaFecha === 'manana' ? ', pasado a mañana.' : nuevaFecha === 'hoy' ? ', pasado a hoy.' : '.');
     msg.className = 'form-msg is-ok';
-    setTimeout(() => cambiarTab('pedidos-hoy'), 700);
+    setTimeout(() => cambiarTab('pedidos-lista'), 700);
   } else {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
     msg.className = 'form-msg is-error';
@@ -1932,7 +1925,7 @@ async function guardarEdicionFactura() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet('editarFactura', { idFactura: idFacturaEnEdicion, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('editarFactura', { idFactura: idFacturaEnEdicion, items: JSON.stringify(items) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (r.ok) {
     msg.textContent = `Factura actualizada (${formatoEuros(r.total)}).`;
     msg.className = 'form-msg is-ok';
@@ -1946,104 +1939,6 @@ async function guardarEdicionFactura() {
 function cablearEdicion() {
   document.getElementById('btnGuardarEdicionPedido').addEventListener('click', guardarEdicionPedido);
   document.getElementById('btnGuardarEdicionFactura').addEventListener('click', guardarEdicionFactura);
-}
-
-/* ============ NUEVO ALBARÁN (sin factura) ============ */
-let itemsAlbaran = []; // { tipo:'catalogo'|'libre', productoId?, nombre, cantidad, uid }
-
-async function cargarFormularioAlbaran() {
-  const selectCliente = document.getElementById('selectClienteAlbaran');
-  const selectProducto = document.getElementById('albaranProductoSelect');
-
-  await Promise.all([cargarClientesCache(), cargarProductosCache()]);
-
-  selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
-  selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
-    productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
-
-  itemsAlbaran = [];
-  pintarItemsAlbaran();
-  document.getElementById('albaranSueltoMsg').textContent = '';
-}
-
-function agregarProductoAlbaran() {
-  const productoId = document.getElementById('albaranProductoSelect').value;
-  const cantidad = Number(document.getElementById('albaranProductoCantidad').value) || 1;
-  if (!productoId) { alert('Elige un producto.'); return; }
-  const p = productosCache.find((pr) => String(pr.id) === String(productoId));
-  if (!p) return;
-
-  const existente = itemsAlbaran.find((it) => it.tipo === 'catalogo' && String(it.productoId) === String(productoId));
-  if (existente) existente.cantidad += cantidad;
-  else itemsAlbaran.push({ tipo: 'catalogo', productoId, nombre: p.nombre, cantidad, uid: 'c-' + productoId });
-
-  pintarItemsAlbaran();
-  document.getElementById('albaranProductoSelect').value = '';
-  document.getElementById('albaranProductoCantidad').value = '1';
-}
-
-function agregarLibreAlbaran() {
-  const nombre = document.getElementById('albaranLibreNombre').value.trim();
-  const cantidad = Number(document.getElementById('albaranLibreCantidad').value) || 1;
-  if (!nombre) { alert('Pon un nombre para el producto.'); return; }
-
-  const uid = 'libre-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-  itemsAlbaran.push({ tipo: 'libre', nombre, cantidad, uid });
-
-  pintarItemsAlbaran();
-  document.getElementById('albaranLibreNombre').value = '';
-  document.getElementById('albaranLibreCantidad').value = '1';
-}
-
-function pintarItemsAlbaran() {
-  const cont = document.getElementById('listaAlbaran');
-  if (!itemsAlbaran.length) {
-    cont.innerHTML = '<div class="empty-state">Todavía no has añadido ningún producto.</div>';
-  } else {
-    cont.innerHTML = itemsAlbaran.map((it) => `
-      <div class="client-row">
-        <span>${it.cantidad}x ${escapeHtml(it.nombre)}</span>
-        <button class="chip-btn" data-quitar-albaran="${it.uid}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
-      </div>
-    `).join('');
-    cont.querySelectorAll('[data-quitar-albaran]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        itemsAlbaran = itemsAlbaran.filter((it) => it.uid !== btn.dataset.quitarAlbaran);
-        pintarItemsAlbaran();
-      });
-    });
-  }
-}
-
-async function generarAlbaranSuelto() {
-  const msg = document.getElementById('albaranSueltoMsg');
-  const clienteId = document.getElementById('selectClienteAlbaran').value;
-  if (!clienteId) { msg.textContent = 'Elige un cliente.'; msg.className = 'form-msg is-error'; return; }
-  if (!itemsAlbaran.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
-
-  const items = itemsAlbaran.map((it) => it.tipo === 'catalogo'
-    ? { productoId: it.productoId, cantidad: it.cantidad }
-    : { nombre: it.nombre, cantidad: it.cantidad }
-  );
-
-  msg.textContent = 'Generando…';
-  msg.className = 'form-msg';
-
-  const r = await apiGet('albaranSuelto', { clienteId, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
-  if (!r.ok) { msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo'); msg.className = 'form-msg is-error'; return; }
-
-  await descargarPDF(r.base64, r.nombre);
-  msg.textContent = 'Albarán generado.';
-  msg.className = 'form-msg is-ok';
-  itemsAlbaran = [];
-  pintarItemsAlbaran();
-}
-
-function cablearAlbaranSuelto() {
-  document.getElementById('btnAnadirProducto_albaran').addEventListener('click', agregarProductoAlbaran);
-  document.getElementById('btnAnadirLibre_albaran').addEventListener('click', agregarLibreAlbaran);
-  document.getElementById('btnGenerarAlbaranSuelto').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', generarAlbaranSuelto));
 }
 
 /* ============ MODELO 347 ============ */
@@ -2073,25 +1968,31 @@ async function buscarModelo347() {
   `).join('');
 }
 
-/* ============ FACTURACIÓN POR PERIODO ============ */
-async function buscarFacturacionPeriodo() {
+/* ============ RESUMEN POR PERIODO E IVA A LIQUIDAR (un solo informe) ============ */
+function prepararResumenPeriodo() {
+  const anio = document.getElementById('anioPeriodo');
+  if (!anio.value) anio.value = new Date().getFullYear();
+}
+
+async function buscarResumenPeriodo() {
   const anio = document.getElementById('anioPeriodo').value.trim();
   const agrupacion = document.getElementById('agrupacionPeriodo').value;
   const cont = document.getElementById('listaPeriodo');
+  const total = document.getElementById('periodoTotalAnual');
   if (!anio) { cont.innerHTML = '<div class="empty-state">Escribe un año.</div>'; return; }
 
   cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('facturacionPeriodo', { anio, agrupacion }).catch((err) => ({ ok: false, error: String(err) }));
+  const r = await apiGet('resumenPeriodo', { anio, agrupacion }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
 
-  const periodosConDatos = r.data.periodos.filter((p) => p.numFacturas > 0 || p.numAnuladas > 0);
-  if (!periodosConDatos.length) {
-    cont.innerHTML = '<div class="empty-state">Sin facturas en ese año.</div>';
-    document.getElementById('periodoTotalAnual').textContent = '';
+  const conDatos = r.data.periodos.filter((p) => p.numFacturas > 0 || p.numAnuladas > 0 || p.ivaSoportado !== 0 || p.baseCompras !== 0);
+  if (!conDatos.length) {
+    cont.innerHTML = '<div class="empty-state">Sin facturas ni compras en ese año.</div>';
+    total.textContent = '';
     return;
   }
 
-  cont.innerHTML = periodosConDatos.map((p) => `
+  cont.innerHTML = conDatos.map((p) => `
     <div class="card">
       <div class="card__top">
         <div class="card__name">${escapeHtml(p.periodo)}</div>
@@ -2099,16 +2000,26 @@ async function buscarFacturacionPeriodo() {
       </div>
       <div class="card__products">${p.numFacturas} factura(s)${p.numAnuladas ? ` · ${p.numAnuladas} anulada(s)` : ''} · Base: ${formatoEuros(p.base)} · IVA: ${formatoEuros(p.iva)}${p.recargo ? ' · Recargo: ' + formatoEuros(p.recargo) : ''}</div>
       <div class="card__products">Cobrado: ${formatoEuros(p.cobrado)} · Pendiente: ${formatoEuros(p.pendiente)}</div>
+      <div class="card__products"><strong>IVA a liquidar: ${formatoEuros(p.ivaALiquidar)}</strong> (repercutido ${formatoEuros(p.iva)} − soportado ${formatoEuros(p.ivaSoportado)})</div>
     </div>
   `).join('');
-  document.getElementById('periodoTotalAnual').textContent = `Total del año ${r.data.anio}: ${formatoEuros(r.data.totalAnual)}`;
+  total.textContent = `Facturado ${r.data.anio}: ${formatoEuros(r.data.totalAnual)}  ·  IVA repercutido: ${formatoEuros(r.data.totalRepercutido)}  ·  IVA soportado: ${formatoEuros(r.data.totalSoportado)}  ·  A liquidar: ${formatoEuros(r.data.totalALiquidar)}`;
+}
+
+async function descargarResumenPeriodoPDF() {
+  const anio = document.getElementById('anioPeriodo').value.trim();
+  const agrupacion = document.getElementById('agrupacionPeriodo').value;
+  if (!anio) { alert('Escribe un año primero.'); return; }
+  const r = await apiGet('resumenPeriodoPdf', { anio, agrupacion }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
+  await descargarPDF(r.base64, r.nombre);
 }
 
 function cablearInformesFacturacion() {
   document.getElementById('btnBuscar347').addEventListener('click', buscarModelo347);
-  document.getElementById('btnBuscarPeriodo').addEventListener('click', buscarFacturacionPeriodo);
+  document.getElementById('btnBuscarPeriodo').addEventListener('click', buscarResumenPeriodo);
   document.getElementById('btnDescargar347').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarModelo347PDF));
-  document.getElementById('btnDescargarPeriodo').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarFacturacionPeriodoPDF));
+  document.getElementById('btnDescargarPeriodo').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarResumenPeriodoPDF));
   document.getElementById('btnDescargarLibroFacturas').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroFacturas));
   document.getElementById('btnDescargarExtractoCliente').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarExtractoCliente));
 }
@@ -2117,18 +2028,18 @@ async function descargarLibroFacturas() {
   const ini = document.getElementById('resFechaIni').value;
   const fin = document.getElementById('resFechaFin').value;
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('libroFacturasPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('libroFacturasPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
 
 async function descargarExtractoCliente() {
-  const clienteId = document.getElementById('selectClienteBuscarFactura').value;
-  const ini = document.getElementById('pcFechaIni').value;
-  const fin = document.getElementById('pcFechaFin').value;
+  const clienteId = document.getElementById('selectClienteFacturas').value;
+  const ini = document.getElementById('resFechaIni').value;
+  const fin = document.getElementById('resFechaFin').value;
   if (!clienteId) { alert('Elige un cliente primero.'); return; }
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('extractoClientePdf', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('extractoClientePdf', { clienteId, fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -2136,16 +2047,7 @@ async function descargarExtractoCliente() {
 async function descargarModelo347PDF() {
   const anio = document.getElementById('anio347').value.trim();
   if (!anio) { alert('Escribe un año primero.'); return; }
-  const r = await apiGet('modelo347Pdf', { anio }).catch(() => ({ ok: false, error: 'Sin conexión' }));
-  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
-  await descargarPDF(r.base64, r.nombre);
-}
-
-async function descargarFacturacionPeriodoPDF() {
-  const anio = document.getElementById('anioPeriodo').value.trim();
-  const agrupacion = document.getElementById('agrupacionPeriodo').value;
-  if (!anio) { alert('Escribe un año primero.'); return; }
-  const r = await apiGet('facturacionPeriodoPdf', { anio, agrupacion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('modelo347Pdf', { anio }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -2211,7 +2113,7 @@ async function guardarProveedor() {
     telefono: document.getElementById('prvFormTelefono').value.trim(),
     direccion: document.getElementById('prvFormDireccion').value.trim(),
     activo: document.getElementById('prvFormActivo').value,
-  }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
 
   if (r.ok) {
     msg.textContent = 'Proveedor guardado.';
@@ -2292,7 +2194,7 @@ async function guardarGasto() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet(id ? 'editarGasto' : 'crearGasto', id ? { ...datos, id } : datos).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet(id ? 'editarGasto' : 'crearGasto', id ? { ...datos, id } : datos).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (r.ok) {
     msg.textContent = 'Gasto guardado.';
     msg.className = 'form-msg is-ok';
@@ -2356,47 +2258,7 @@ async function descargarLibroGastos() {
   const ini = document.getElementById('gastosFechaIni').value;
   const fin = document.getElementById('gastosFechaFin').value;
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('libroGastosPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
-  if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
-  await descargarPDF(r.base64, r.nombre);
-}
-
-/* ============ LIQUIDACIÓN DE IVA ============ */
-async function buscarLiquidacionIva() {
-  const anio = document.getElementById('anioLiquidacion').value.trim();
-  const agrupacion = document.getElementById('agrupacionLiquidacion').value;
-  const cont = document.getElementById('listaLiquidacion');
-  if (!anio) { cont.innerHTML = '<div class="empty-state">Escribe un año.</div>'; return; }
-
-  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
-  const r = await apiGet('liquidacionIva', { anio, agrupacion }).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
-
-  const periodosConDatos = r.data.periodos.filter((p) => p.ivaRepercutido !== 0 || p.ivaSoportado !== 0);
-  if (!periodosConDatos.length) {
-    cont.innerHTML = '<div class="empty-state">Sin datos para ese año.</div>';
-    document.getElementById('liquidacionTotal').textContent = '';
-    return;
-  }
-
-  cont.innerHTML = periodosConDatos.map((p) => `
-    <div class="card">
-      <div class="card__top">
-        <div class="card__name">${escapeHtml(p.periodo)}</div>
-        <div class="card__total">${formatoEuros(p.ivaALiquidar)}</div>
-      </div>
-      <div class="card__products">Repercutido (ventas): ${formatoEuros(p.ivaRepercutido)} · Soportado (compras): ${formatoEuros(p.ivaSoportado)}</div>
-    </div>
-  `).join('');
-  document.getElementById('liquidacionTotal').textContent =
-    `Repercutido: ${formatoEuros(r.data.totalRepercutido)}  ·  Soportado: ${formatoEuros(r.data.totalSoportado)}  ·  A liquidar: ${formatoEuros(r.data.totalALiquidar)}`;
-}
-
-async function descargarLiquidacionIva() {
-  const anio = document.getElementById('anioLiquidacion').value.trim();
-  const agrupacion = document.getElementById('agrupacionLiquidacion').value;
-  if (!anio) { alert('Escribe un año primero.'); return; }
-  const r = await apiGet('liquidacionIvaPdf', { anio, agrupacion }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('libroGastosPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -2416,8 +2278,6 @@ function cablearCompras() {
     buscarGastos();
   });
   document.getElementById('btnDescargarLibroGastos').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroGastos));
-  document.getElementById('btnBuscarLiquidacion').addEventListener('click', buscarLiquidacionIva);
-  document.getElementById('btnDescargarLiquidacion').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLiquidacionIva));
 }
 
 /* ============ CERRAR AÑO (ARCHIVAR) ============ */
@@ -2438,7 +2298,7 @@ async function cerrarAnio() {
   msg.textContent = 'Archivando… puede tardar un poco, no cierres esta pantalla.';
   msg.className = 'form-msg';
 
-  const r = await apiGet('cerrarAnio', { anio }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('cerrarAnio', { anio }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (r.ok) {
     msg.textContent = `Listo — pedidos: ${r.pedidosArchivados}, facturas: ${r.facturasArchivadas}, gastos: ${r.gastosArchivados} movidos al archivo de ${r.anio}.`;
     msg.className = 'form-msg is-ok';
@@ -2494,7 +2354,7 @@ async function descargarBalance() {
   const ini = document.getElementById('balFechaIni').value;
   const fin = document.getElementById('balFechaFin').value;
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('balancePdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('balancePdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -2527,7 +2387,7 @@ async function hacerCopiaAhora() {
   const msg = document.getElementById('copiaMsg');
   msg.textContent = 'Haciendo la copia… puede tardar unos segundos.';
   msg.className = 'form-msg';
-  const r = await apiGet('copiaSeguridad').catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiGet('copiaSeguridad').catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (r.ok) {
     msg.textContent = `Copia guardada en tu Drive, carpeta "${r.carpeta}".`;
     msg.className = 'form-msg is-ok';

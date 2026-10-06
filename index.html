@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pedidos Pan</title>
-<meta name="theme-color" content="#A8632B">
+<meta name="theme-color" content="#2456A6">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -50,17 +50,6 @@
       </div>
     </header>
 
-    <nav class="desktop-toolbar" id="toolbarEscritorio">
-      <button class="toolbar-btn" data-tab="reparto"><span data-icon="reparto"></span>Reparto</button>
-      <button class="toolbar-btn" data-tab="pedidos"><span data-icon="pedidos"></span>Pedidos</button>
-      <button class="toolbar-btn" data-tab="nuevo" data-solo-admin="1"><span data-icon="nuevo"></span>Nuevo pedido</button>
-      <button class="toolbar-btn" data-tab="factura" data-solo-admin="1"><span data-icon="facturas"></span>Facturas</button>
-      <button class="toolbar-btn" data-tab="compras" data-solo-admin="1"><span data-icon="compras"></span>Compras</button>
-      <button class="toolbar-btn" data-tab="clientes" data-solo-admin="1"><span data-icon="clientes"></span>Clientes</button>
-      <button class="toolbar-btn" data-tab="productos" data-solo-admin="1"><span data-icon="productos"></span>Productos</button>
-      <button class="toolbar-btn" data-tab="estadisticas" data-solo-admin="1"><span data-icon="estadisticas"></span>Estadísticas</button>
-      <button class="toolbar-btn" data-tab="empresa" data-solo-admin="1"><span data-icon="empresa"></span>Empresa</button>
-    </nav>
 
     <main id="app">
 
@@ -92,7 +81,7 @@
       </div>
     </div>
 
-    <div class="global-search" id="bloqueBusquedaGlobal">
+    <div class="global-search">
       <input type="search" id="buscarGlobal" class="search-input" placeholder="Buscar cliente, pedido o factura…" style="margin-bottom:0;">
     </div>
     <div id="resultadosBusquedaGlobal"></div>
@@ -156,74 +145,56 @@
   <section class="tab tab--hidden" id="tab-pedidos">
     <div class="home-welcome">
       <div class="home-title">Pedidos</div>
-      <div class="home-sub">Consulta el estado de los pedidos y su historial</div>
+      <div class="home-sub">Consulta, crea y gestiona pedidos</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos-hoy"><span class="home-btn__icon" data-icon="pedidos"></span>Ver pedidos por día</button>
-      <button class="home-btn home-btn--pedidos" data-tab="clientes-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de un cliente</button>
+      <button class="home-btn home-btn--pedidos" data-tab="pedidos-lista"><span class="home-btn__icon" data-icon="pedidos"></span>Ver pedidos</button>
       <button class="home-btn home-btn--pedidos" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos-historial" data-solo-admin="1"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos</button>
-      <button class="home-btn home-btn--pedidos" data-tab="albaran-suelto" data-solo-admin="1"><span class="home-btn__icon" data-icon="facturas"></span>Nuevo albarán (sin facturar)</button>
       <a class="home-btn home-btn--pedidos" href="pedido-admin.html" data-solo-admin="1" style="text-decoration:none;">Pedido rápido (WhatsApp/llamada)</a>
     </div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-pedidos-hoy">
+  <section class="tab tab--hidden" id="tab-pedidos-lista">
     <button class="link-btn" data-volver="pedidos">← Pedidos</button>
     <div class="date-nav">
-      <button class="date-nav__btn" id="btnPedidosDiaAnterior">←</button>
-      <input type="date" id="pedidosFechaSeleccionada" class="date-nav__label" style="border:none; background:none; font-family:var(--font-data); font-weight:700; text-align:center; color:var(--ink); padding:9px 0;">
-      <button class="date-nav__btn" id="btnPedidosDiaSiguiente">→</button>
+      <button class="date-nav__btn" id="btnPedidosAnterior" aria-label="Periodo anterior">←</button>
+      <div class="date-nav__fechas">
+        <input type="date" id="pedidosFechaIni" aria-label="Desde">
+        <span>—</span>
+        <input type="date" id="pedidosFechaFin" aria-label="Hasta">
+      </div>
+      <button class="date-nav__btn" id="btnPedidosSiguiente" aria-label="Periodo siguiente">→</button>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <button class="chip-btn" data-pedidos-rapido="ayer">Ayer</button>
+      <button class="chip-btn" data-pedidos-rapido="hoy">Hoy</button>
+      <button class="chip-btn" data-pedidos-rapido="manana">Mañana</button>
+      <button class="chip-btn" data-pedidos-rapido="mes">Este mes</button>
+    </div>
+    <div id="bloquePedidosCliente" data-solo-admin="1">
+      <select id="selectClientePedidos" class="select-input" data-placeholder="Todos los clientes — escribe para elegir uno">
+        <option value="">Todos los clientes</option>
+      </select>
     </div>
     <div class="filtros-pedidos">
-      <input type="search" id="buscarPedido" class="search-input" placeholder="Buscar cliente…">
+      <input type="search" id="buscarPedido" class="search-input" placeholder="Filtrar por nombre…">
       <select id="filtroEstadoPedido" class="select-input select-input--auto">
         <option value="todos">Todos</option>
         <option value="pendiente">Pendientes</option>
         <option value="entregado">Entregados</option>
         <option value="cobrado">Cobrados</option>
+        <option value="anulado" data-solo-admin="1">Anulados</option>
       </select>
     </div>
     <div id="listaPedidos" class="stack">
       <div class="empty-state">Cargando pedidos…</div>
     </div>
+    <div class="period-total" id="pedidosResumen"></div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-albaran-suelto">
-    <button class="link-btn" data-volver="pedidos">← Pedidos</button>
-    <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Nuevo albarán</div>
-      <div class="home-sub">Para entregas que no se facturan — no crea ni pedido ni factura</div>
-    </div>
-
-    <label class="field-label" for="selectClienteAlbaran">Cliente</label>
-    <select id="selectClienteAlbaran" class="select-input">
-      <option value="">Selecciona un cliente…</option>
-    </select>
-
-    <div class="section-label">Productos</div>
-    <div class="product-row" style="gap:8px; align-items:flex-end;">
-      <select id="albaranProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
-        <option value="">Elige un producto…</option>
-      </select>
-      <input type="number" id="albaranProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
-      <button class="chip-btn" id="btnAnadirProducto_albaran">Añadir</button>
-    </div>
-    <div id="listaAlbaran" class="stack"></div>
-
-    <div class="section-label">Producto fuera de catálogo</div>
-    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
-      <input type="text" id="albaranLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 160px;">
-      <input type="number" id="albaranLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:70px;">
-      <button class="chip-btn" id="btnAnadirLibre_albaran">Añadir</button>
-    </div>
-
-    <button class="btn-primary" id="btnGenerarAlbaranSuelto" style="margin-top:16px;">Generar albarán</button>
-    <div class="form-msg" id="albaranSueltoMsg"></div>
-  </section>
 
   <section class="tab tab--hidden" id="tab-pedido-editar">
-    <button class="link-btn" data-volver="pedidos-hoy">← Pedidos</button>
+    <button class="link-btn" data-volver="pedidos-lista">← Pedidos</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Editar pedido</div>
       <div class="home-sub" id="editarPedidoCliente"></div>
@@ -263,18 +234,6 @@
     <div class="form-msg" id="editarPedidoMsg"></div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-pedidos-historial">
-    <button class="link-btn" data-volver="pedidos">← Pedidos</button>
-    <div class="date-range">
-      <input type="date" id="histFechaIni">
-      <span>—</span>
-      <input type="date" id="histFechaFin">
-      <button class="btn-secondary" id="btnBuscarHistorialPedidos">Buscar</button>
-    </div>
-    <div id="listaHistorialPedidos" class="stack">
-      <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
-    </div>
-  </section>
 
   <!-- NUEVO PEDIDO (directo) -->
   <section class="tab tab--hidden" id="tab-nuevo">
@@ -283,18 +242,22 @@
       <option value="">Selecciona un cliente…</option>
     </select>
 
-    <label class="field-label" for="selectFechaPedido">Pedido para</label>
-    <select id="selectFechaPedido" class="select-input">
-      <option value="manana">Mañana</option>
-      <option value="hoy">Hoy</option>
-    </select>
-
     <label class="field-label" for="selectTipoDocumento">Documento</label>
     <select id="selectTipoDocumento" class="select-input">
-      <option value="factura">Factura</option>
+      <option value="factura">Pedido con factura</option>
       <option value="albaran">Albarán (sin factura)</option>
+      <option value="facturaSuelta">Factura suelta (no entra en el reparto)</option>
     </select>
-    <div class="card__meta" id="avisoTipoDocumento" style="margin:-8px 0 14px; display:none;">Se guarda como pedido (cuenta en el reparto y en el total a preparar) pero no crea factura. Los albaranes de un día se imprimen todos juntos desde Reparto → Mañana.</div>
+    <div class="card__meta" id="avisoTipoDocumento" style="margin:-8px 0 14px; display:none;"></div>
+
+    <div id="bloqueFechaPedido">
+      <label class="field-label" for="selectFechaPedido">Pedido para</label>
+      <select id="selectFechaPedido" class="select-input">
+        <option value="manana">Mañana</option>
+        <option value="hoy">Hoy</option>
+      </select>
+    </div>
+
 
     <div class="section-label">Productos</div>
     <div class="product-row" style="gap:8px; align-items:flex-end;">
@@ -333,20 +296,9 @@
     <div class="home-grid">
       <button class="home-btn home-btn--clientes" data-tab="clientes-lista"><span class="home-btn__icon" data-icon="clientes"></span>Ver clientes</button>
       <button class="home-btn home-btn--clientes" id="btnNuevoClienteHub"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo cliente</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes-historial"><span class="home-btn__icon" data-icon="historial"></span>Historial de pedidos de un cliente</button>
     </div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-clientes-historial">
-    <button class="link-btn" data-volver="clientes">← Clientes</button>
-    <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Historial de pedidos de un cliente</div>
-    </div>
-    <select id="selectClienteHistorial" class="select-input">
-      <option value="">Elige un cliente…</option>
-    </select>
-    <div id="historialClienteResultado" class="stack"></div>
-  </section>
 
   <section class="tab tab--hidden" id="tab-clientes-lista">
     <button class="link-btn" data-volver="clientes">← Clientes</button>
@@ -373,19 +325,13 @@
         <input type="number" id="peInputPrecio" class="text-input" style="margin-bottom:0; width:90px;" step="0.01" min="0" placeholder="€">
         <button class="chip-btn" id="btnAnadirPrecioEspecial">Añadir</button>
       </div>
+      <div class="form-msg" id="peEstado" aria-live="polite"></div>
 
-      <div class="section-label">Historial reciente</div>
-      <div id="historialPedidos" class="stack"></div>
-
-      <div class="section-label">Facturas por periodo</div>
-      <div class="date-range">
-        <input type="date" id="fechaIni">
-        <span>—</span>
-        <input type="date" id="fechaFin">
-        <button class="btn-secondary" id="btnBuscarFacturas">Buscar</button>
+      <div class="section-label">Pedidos y facturas de este cliente</div>
+      <div class="product-row" style="gap:8px;">
+        <button class="btn-secondary" id="btnVerPedidosCliente">Ver pedidos</button>
+        <button class="btn-secondary" id="btnVerFacturasCliente">Ver facturas</button>
       </div>
-      <div id="listaFacturas" class="stack"></div>
-      <div class="period-total" id="periodoTotal"></div>
     </div>
   </section>
 
@@ -427,13 +373,12 @@
   <section class="tab tab--hidden" id="tab-compras">
     <div class="home-welcome">
       <div class="home-title">Compras</div>
-      <div class="home-sub">Lo que compráis vosotros — proveedores, gastos e IVA soportado</div>
+      <div class="home-sub">Lo que compráis vosotros — proveedores, gastos y balance</div>
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span>Proveedores</button>
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
-      <button class="home-btn home-btn--factura" data-tab="liquidacion-iva"><span class="home-btn__icon" data-icon="estadisticas"></span>Liquidación de IVA</button>
       <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
       <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
@@ -520,26 +465,6 @@
     <div class="period-total" id="gastosTotal"></div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-liquidacion-iva">
-    <button class="link-btn" data-volver="compras">← Compras</button>
-    <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Liquidación de IVA</div>
-      <div class="home-sub">IVA repercutido (ventas) menos IVA soportado (compras)</div>
-    </div>
-    <div class="product-row" style="gap:8px; align-items:flex-end; flex-wrap:wrap;">
-      <input type="number" id="anioLiquidacion" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
-      <select id="agrupacionLiquidacion" class="select-input select-input--auto" style="margin-bottom:0;">
-        <option value="trimestre">Por trimestre</option>
-        <option value="mes">Por mes</option>
-      </select>
-      <button class="btn-secondary" id="btnBuscarLiquidacion">Ver</button>
-      <button class="btn-secondary" id="btnDescargarLiquidacion">Descargar PDF</button>
-    </div>
-    <div id="listaLiquidacion" class="stack">
-      <div class="empty-state">Escribe un año y pulsa Ver.</div>
-    </div>
-    <div class="period-total" id="liquidacionTotal"></div>
-  </section>
 
   <section class="tab tab--hidden" id="tab-balance">
     <button class="link-btn" data-volver="compras">← Compras</button>
@@ -580,14 +505,13 @@
   <section class="tab tab--hidden" id="tab-factura">
     <div class="home-welcome">
       <div class="home-title">Facturas</div>
-      <div class="home-sub">Genera, consulta y gestiona el cobro de facturas</div>
+      <div class="home-sub">Consulta facturas, informes e IVA</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--factura" data-tab="factura-resumen"><span class="home-btn__icon" data-icon="estadisticas"></span>Resumen de facturas</button>
-      <button class="home-btn home-btn--factura" data-tab="factura-por-cliente"><span class="home-btn__icon" data-icon="buscar"></span>Ver factura por cliente</button>
-      <button class="home-btn home-btn--factura" data-tab="factura-crear"><span class="home-btn__icon" data-icon="nuevo"></span>Generar factura</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-lista"><span class="home-btn__icon" data-icon="estadisticas"></span>Facturas</button>
+      <button class="home-btn home-btn--factura" id="btnNuevaFacturaSuelta" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nueva factura suelta</button>
+      <button class="home-btn home-btn--factura" data-tab="factura-periodo"><span class="home-btn__icon" data-icon="estadisticas"></span>Resumen por periodo e IVA</button>
       <button class="home-btn home-btn--factura" data-tab="factura-347"><span class="home-btn__icon" data-icon="estadisticas"></span>Modelo 347 (por cliente)</button>
-      <button class="home-btn home-btn--factura" data-tab="factura-periodo"><span class="home-btn__icon" data-icon="estadisticas"></span>Facturación por periodo</button>
     </div>
   </section>
 
@@ -610,13 +534,14 @@
   <section class="tab tab--hidden" id="tab-factura-periodo">
     <button class="link-btn" data-volver="factura">← Facturas</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Facturación por periodo</div>
+      <div class="home-title">Resumen por periodo e IVA</div>
+      <div class="home-sub">Ventas de cada mes o trimestre y el IVA a liquidar (IVA de ventas menos IVA de compras)</div>
     </div>
     <div class="product-row" style="gap:8px; align-items:flex-end; flex-wrap:wrap;">
       <input type="number" id="anioPeriodo" class="text-input" style="margin-bottom:0;" placeholder="Año, ej: 2026">
       <select id="agrupacionPeriodo" class="select-input select-input--auto" style="margin-bottom:0;">
-        <option value="mes">Por mes</option>
         <option value="trimestre">Por trimestre</option>
+        <option value="mes">Por mes</option>
       </select>
       <button class="btn-secondary" id="btnBuscarPeriodo">Ver</button>
       <button class="btn-secondary" id="btnDescargarPeriodo">Descargar PDF</button>
@@ -627,22 +552,29 @@
     <div class="period-total" id="periodoTotalAnual"></div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-factura-resumen">
+  <section class="tab tab--hidden" id="tab-factura-lista">
     <button class="link-btn" data-volver="factura">← Facturas</button>
+    <select id="selectClienteFacturas" class="select-input" data-placeholder="Todos los clientes — escribe para elegir uno">
+      <option value="">Todos los clientes</option>
+    </select>
     <div class="date-range">
       <input type="date" id="resFechaIni">
       <span>—</span>
       <input type="date" id="resFechaFin">
       <button class="btn-secondary" id="btnBuscarResumenFacturas">Buscar</button>
-      <button class="btn-secondary" id="btnDescargarLibroFacturas">Libro de facturas (PDF)</button>
     </div>
-    <div class="product-row" style="gap:8px; margin-top:8px;">
+    <div class="product-row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
       <button class="chip-btn" id="btnResumenHoy">Hoy</button>
+      <button class="chip-btn" id="btnResumenMes">Este mes</button>
       <select id="filtroEstadoFactura" class="select-input select-input--auto" style="margin-bottom:0;">
         <option value="todas">Todas</option>
         <option value="Cobrado">Cobradas</option>
         <option value="Pendiente">Por cobrar</option>
       </select>
+    </div>
+    <div class="product-row" style="gap:8px; margin-top:8px; flex-wrap:wrap;">
+      <button class="btn-secondary" id="btnDescargarLibroFacturas">Libro de facturas (PDF)</button>
+      <button class="btn-secondary" id="btnDescargarExtractoCliente" disabled>Extracto del cliente (PDF)</button>
     </div>
     <div id="listaResumenFacturas" class="stack">
       <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
@@ -650,60 +582,7 @@
     <div class="period-total" id="resumenFacturasTotal"></div>
   </section>
 
-  <section class="tab tab--hidden" id="tab-factura-por-cliente">
-    <button class="link-btn" data-volver="factura">← Facturas</button>
-    <label class="field-label" for="selectClienteBuscarFactura">Cliente</label>
-    <select id="selectClienteBuscarFactura" class="select-input">
-      <option value="">Selecciona un cliente…</option>
-    </select>
-    <div class="date-range">
-      <input type="date" id="pcFechaIni">
-      <span>—</span>
-      <input type="date" id="pcFechaFin">
-      <button class="btn-secondary" id="btnBuscarFacturaPorCliente">Buscar</button>
-      <button class="btn-secondary" id="btnDescargarExtractoCliente">Extracto (PDF)</button>
-    </div>
-    <div id="listaFacturaPorCliente" class="stack">
-      <div class="empty-state">Elige un cliente y un rango de fechas.</div>
-    </div>
-    <div class="period-total" id="facturaPorClienteTotal"></div>
-  </section>
 
-  <section class="tab tab--hidden" id="tab-factura-crear">
-    <button class="link-btn" data-volver="factura">← Facturas</button>
-
-    <label class="field-label" for="selectClienteFactura">Cliente</label>
-    <select id="selectClienteFactura" class="select-input">
-      <option value="">Selecciona un cliente…</option>
-    </select>
-
-    <div class="section-label">Productos</div>
-    <div class="product-row" style="gap:8px; align-items:flex-end;">
-      <select id="fProductoSelect" class="select-input" style="margin-bottom:0; flex:1;">
-        <option value="">Elige un producto…</option>
-      </select>
-      <input type="number" id="fProductoCantidad" class="text-input" style="margin-bottom:0; width:70px;" min="1" value="1">
-      <button class="chip-btn" id="btnAnadirProducto_factura">Añadir</button>
-    </div>
-    <div id="listaProductosFactura" class="stack"></div>
-
-    <div class="section-label">Producto fuera de catálogo</div>
-    <div class="product-row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
-      <input type="text" id="fLibreNombre" class="text-input" placeholder="Nombre" style="margin-bottom:0; flex:1 1 120px;">
-      <input type="number" id="fLibrePrecio" class="text-input" placeholder="Precio €" step="0.01" min="0" style="margin-bottom:0; width:80px;">
-      <input type="number" id="fLibreIva" class="text-input" placeholder="IVA %" step="1" min="0" style="margin-bottom:0; width:70px;">
-      <input type="number" id="fLibreCantidad" class="text-input" placeholder="Cant." step="1" min="1" value="1" style="margin-bottom:0; width:60px;">
-      <button class="chip-btn" id="btnAnadirLibre_factura">Añadir</button>
-    </div>
-
-    <div class="new-order-total">
-      <span>Total</span>
-      <span id="facturaTotal">0,00 €</span>
-    </div>
-
-    <button class="btn-primary" id="btnCrearFactura">Crear factura</button>
-    <div class="form-msg" id="facturaMsg"></div>
-  </section>
 
   <section class="tab tab--hidden" id="tab-factura-editar">
     <button class="link-btn" data-volver="factura">← Facturas</button>

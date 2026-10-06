@@ -15,10 +15,37 @@ let idPedidoEnEdicion = null; // si ya existía un pedido para ese cliente+fecha
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
 
+// Solo se reintenta lo que es seguro repetir (leer datos). Crear o editar un pedido NO se
+// repite solo: si la respuesta llega rota se avisa de que puede que sí se haya guardado.
+const ACCIONES_REINTENTABLES = new Set(['clientes', 'productos', 'pedidoClienteFecha']);
+
 async function apiAdmin(action, extraParams) {
   const params = new URLSearchParams({ action, key: API_KEY, ...(extraParams || {}) });
-  const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
-  return res.json();
+  const url = `${WEB_APP_URL}?${params.toString()}`;
+  const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
+  let fallo;
+  for (let i = 0; i < intentos; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const res = await fetch(url);
+      const texto = await res.text();
+      try {
+        return JSON.parse(texto);
+      } catch (e) {
+        fallo = new Error('respuesta ilegible');
+        fallo.respuestaIlegible = true;
+      }
+    } catch (e) {
+      fallo = e; // sin conexión
+    }
+  }
+  throw fallo;
+}
+
+function errorDeRed(err) {
+  return err && err.respuestaIlegible
+    ? 'No se pudo confirmar. Puede que SÍ se haya guardado: míralo en la app de gestión (Pedidos → Ver pedidos) antes de repetirlo.'
+    : 'Sin conexión';
 }
 
 function formatoEuros(n) {
@@ -279,9 +306,9 @@ async function guardarPedidoAdmin() {
 
   let r;
   if (idPedidoEnEdicion) {
-    r = await apiAdmin('editarPedido', { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+    r = await apiAdmin('editarPedido', { idPedido: idPedidoEnEdicion, items: JSON.stringify(items) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   } else {
-    r = await apiAdmin('nuevoPedido', { clienteId: clienteSeleccionado.id, items: JSON.stringify(items), fechaEntrega: fechaSeleccionada, tipoDocumento: tipoSeleccionado }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+    r = await apiAdmin('nuevoPedido', { clienteId: clienteSeleccionado.id, items: JSON.stringify(items), fechaEntrega: fechaSeleccionada, tipoDocumento: tipoSeleccionado }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   }
 
   if (!r.ok) {

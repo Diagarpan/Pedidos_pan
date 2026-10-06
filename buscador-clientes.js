@@ -27,7 +27,7 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'text-input buscador-cliente__input';
-    input.placeholder = 'Escribe para buscar un cliente…';
+    input.placeholder = select.dataset.placeholder || 'Escribe para buscar un cliente…';
     input.autocomplete = 'off';
     input.setAttribute('aria-label', 'Buscar cliente');
     input.setAttribute('role', 'combobox');

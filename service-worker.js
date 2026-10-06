@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pedidos-pan-v8';
+const CACHE_NAME = 'pedidos-pan-v9';
 const APP_SHELL = [
   './index.html',
   './styles.css',
@@ -7,6 +7,7 @@ const APP_SHELL = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './apple-touch-icon.png',
   './logo.png',
   './logo-full.png',
 ];

@@ -76,8 +76,9 @@ button, input, select { font-family: inherit; }
   justify-content: center;
   position: relative;
   padding: calc(20px + env(safe-area-inset-top)) 18px 20px;
-  background: var(--crust);
-  color: #FFFFFF;
+  background: #FFFFFF;               /* blanco siempre (también en modo oscuro), como la barra lateral */
+  border-bottom: 4px solid var(--crust);
+  color: #16233A;
 }
 .topbar__brand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .topbar__logo { height: 190px; width: auto; }
@@ -92,13 +93,13 @@ button, input, select { font-family: inherit; }
 .icon-btn {
   width: 34px; height: 34px;
   border-radius: var(--radius);
-  border: 1px solid rgba(255,255,255,0.35);
-  background: rgba(255,255,255,0.12);
-  color: #FFFFFF;
+  border: 1px solid #C3D3E6;         /* colores fijos: la barra es blanca en los dos temas */
+  background: #EEF3FA;
+  color: #17396F;
   font-size: 16px;
   display: flex; align-items: center; justify-content: center;
 }
-.icon-btn:active { background: rgba(255,255,255,0.25); }
+.icon-btn:active { background: #DCE6F4; }
 
 /* ---------- MAIN / TABS ---------- */
 main { padding: 16px 16px 24px; max-width: 640px; margin: 0 auto; }

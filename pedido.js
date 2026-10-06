@@ -2,7 +2,7 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
@@ -10,10 +10,32 @@ let catalogo = [];
 let carrito = {}; // { productoId: cantidad }
 let fechaEntregaElegida = 'manana'; // siempre para mañana: se manda cada día
 
+// Si la respuesta llega rota o se corta la conexión, lo que es seguro repetir se reintenta
+// solo una vez. Enviar el pedido también lo es: si ya existe uno para mañana, se ACTUALIZA
+// (no se duplica).
+const ACCIONES_REINTENTABLES = new Set(['clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana', 'clienteCrearPedido']);
+
 async function apiCliente(action, extraParams) {
   const params = new URLSearchParams({ action, ...(extraParams || {}) });
-  const res = await fetch(`${WEB_APP_URL}?${params.toString()}`);
-  return res.json();
+  const url = `${WEB_APP_URL}?${params.toString()}`;
+  const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
+  let fallo;
+  for (let i = 0; i < intentos; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1200));
+    try {
+      const res = await fetch(url);
+      const texto = await res.text();
+      try {
+        return JSON.parse(texto);
+      } catch (e) {
+        fallo = new Error('respuesta ilegible');
+        fallo.respuestaIlegible = true;
+      }
+    } catch (e) {
+      fallo = e; // sin conexión
+    }
+  }
+  throw fallo;
 }
 
 function formatoEuros(n) {
@@ -326,7 +348,12 @@ async function enviarPedido() {
     telefono: telefonoCliente,
     items: JSON.stringify(items),
     fechaEntrega: fechaEntregaElegida,
-  }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  }).catch((err) => ({
+    ok: false,
+    error: err && err.respuestaIlegible
+      ? 'No hemos podido confirmar tu pedido. Puede que SÍ se haya enviado: vuelve a abrir la app y mira "Tu pedido de mañana" antes de repetirlo.'
+      : 'Sin conexión',
+  }));
 
   boton.disabled = false;
 

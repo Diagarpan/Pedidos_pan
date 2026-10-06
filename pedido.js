@@ -2,12 +2,31 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
 let nombreCliente = '';
 let catalogo = [];
 let carrito = {}; // { productoId: cantidad }
+let carritoTocado = false;      // ¿el cliente ya ha empezado a añadir cosas?
+let categoriaAbierta = null;    // categoría que se está viendo (null = la lista de categorías)
+let catalogoDeMemoriaMostrado = false;
+
+// El catálogo (con SUS precios) y el nombre se guardan en el móvil: la próxima vez la app
+// los enseña AL INSTANTE y los actualiza por detrás, en vez de esperar a Google.
+const CLAVE_MEMORIA_CLIENTE = 'memoriaClienteDA';
+function leerMemoriaCliente(tel) {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLAVE_MEMORIA_CLIENTE) || 'null');
+    return m && m.tel === tel && Array.isArray(m.catalogo) && m.catalogo.length ? m : null;
+  } catch (e) { return null; }
+}
+function guardarMemoriaCliente(tel, nombre, datos) {
+  try { localStorage.setItem(CLAVE_MEMORIA_CLIENTE, JSON.stringify({ tel: tel, nombre: nombre, catalogo: datos })); } catch (e) { /* sin espacio: no pasa nada */ }
+}
+function borrarMemoriaCliente() {
+  try { localStorage.removeItem(CLAVE_MEMORIA_CLIENTE); } catch (e) { /* nada */ }
+}
 let fechaEntregaElegida = 'manana'; // siempre para mañana: se manda cada día
 
 // Si la respuesta llega rota o se corta la conexión, lo que es seguro repetir se reintenta
@@ -55,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnCambiarTelefono').addEventListener('click', olvidarTelefono);
   document.getElementById('btnVolverCategorias').addEventListener('click', () => {
+    categoriaAbierta = null;
     document.getElementById('vistaProductos').classList.add('tab--hidden');
     document.getElementById('vistaCategorias').classList.remove('tab--hidden');
   });
@@ -67,17 +87,42 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnAnularMiPedido').addEventListener('click', anularMiPedido);
   document.getElementById('btnNuevoPedido').addEventListener('click', async () => {
     carrito = {};
+    carritoTocado = false;
     mostrarAvisoPedidoExistente(false);
     mostrarPantalla('catalogo');
     const carga = iniciarCargaCatalogo(telefonoCliente);
-    await cargarCatalogo(carga.catalogo);
+    await cargarCatalogo(carga.catalogo, { conservarVista: catalogo.length > 0 });
     await precargarPedidoExistente(carga.existente);
   });
 
-  if (telefonoCliente) {
-    identificarCliente(true);
-  }
+  if (telefonoCliente) arrancarConTelefonoGuardado();
 });
+
+// Quien ya entró antes NO ve la pantalla del teléfono: va directo al catálogo (de la memoria
+// del móvil si la hay, o con "Cargando…") mientras Google reconoce su teléfono por detrás.
+function arrancarConTelefonoGuardado() {
+  const memoria = leerMemoriaCliente(telefonoCliente);
+  mostrarPantalla('catalogo');
+  if (memoria) {
+    nombreCliente = memoria.nombre;
+    document.getElementById('saludoNombre').textContent = `¿Qué deseas para mañana, ${nombreCliente}?`;
+    aplicarCatalogo(memoria.catalogo);
+    catalogoDeMemoriaMostrado = true;
+  } else {
+    document.getElementById('saludoNombre').textContent = '¿Qué deseas para mañana?';
+    document.getElementById('vistaCategorias').innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
+  }
+  identificarCliente(true);
+}
+
+// Si no se puede reconocer al cliente al arrancar solo, se le devuelve a la pantalla del teléfono, con el aviso
+function volverAPantallaTelefono(texto) {
+  mostrarPantalla('telefono');
+  document.getElementById('inputTelefono').value = telefonoCliente || '';
+  const msg = document.getElementById('msgTelefono');
+  msg.textContent = texto;
+  msg.className = 'form-msg is-error';
+}
 
 function mostrarPantalla(nombre) {
   document.getElementById('pantallaTelefono').classList.toggle('tab--hidden', nombre !== 'telefono');
@@ -103,11 +148,15 @@ async function identificarCliente(esAutomatico) {
   const r = await apiCliente('clienteIdentificar', { telefono }).catch(() => ({ ok: false }));
 
   if (!r.ok) {
+    if (esAutomatico) { volverAPantallaTelefono('No se pudo conectar. Inténtalo de nuevo en un momento.'); return; }
     msg.textContent = 'No se pudo conectar. Inténtalo de nuevo en un momento.';
     msg.className = 'form-msg is-error';
     return;
   }
   if (!r.encontrado) {
+    borrarMemoriaCliente();
+    catalogoDeMemoriaMostrado = false;
+    if (esAutomatico) { volverAPantallaTelefono('Ese teléfono no está registrado. Contacta con nosotros para darte de alta.'); return; }
     msg.textContent = 'Ese teléfono no está registrado. Contacta con nosotros para darte de alta.';
     msg.className = 'form-msg is-error';
     return;
@@ -119,7 +168,8 @@ async function identificarCliente(esAutomatico) {
   document.getElementById('saludoNombre').textContent = `¿Qué deseas para mañana, ${nombreCliente}?`;
 
   mostrarPantalla('catalogo');
-  await cargarCatalogo(carga.catalogo);
+  await cargarCatalogo(carga.catalogo, { conservarVista: catalogoDeMemoriaMostrado });
+  catalogoDeMemoriaMostrado = false;
   await precargarPedidoExistente(carga.existente);
 }
 
@@ -139,13 +189,21 @@ async function precargarPedidoExistente(peticionYaLanzada) {
   const r = await (peticionYaLanzada || apiCliente('clientePedidoManana', { telefono: telefonoCliente }).catch(() => null));
   if (!r || !r.ok || !r.encontrado) return;
 
-  carrito = {};
+  const delPedido = {};
   r.items.forEach((it) => {
     if (it.tipo === 'catalogo' && it.productoId) {
-      carrito[it.productoId] = (carrito[it.productoId] || 0) + it.cantidad;
+      delPedido[it.productoId] = (delPedido[it.productoId] || 0) + it.cantidad;
     }
   });
+  if (carritoTocado) {
+    // Ya había empezado a añadir cosas mientras llegaba su pedido: se conserva lo que ha tocado
+    // y se añade lo que ya tenía pedido (puede quitarlo en la revisión).
+    Object.keys(delPedido).forEach((id) => { if (carrito[id] === undefined) carrito[id] = delPedido[id]; });
+  } else {
+    carrito = delPedido;
+  }
   recalcularCarrito();
+  if (categoriaAbierta) abrirCategoria(categoriaAbierta);   // si está mirando productos, se ven ya las cantidades
   mostrarAvisoPedidoExistente(true);
 }
 
@@ -161,17 +219,24 @@ async function anularMiPedido() {
   const r = await apiCliente('clienteAnularPedido', { telefono: telefonoCliente }).catch(() => ({ ok: false, error: 'Sin conexión' }));
   if (!r.ok) { alert(r.error || 'No se ha podido anular. Inténtalo de nuevo.'); return; }
   carrito = {};
+  carritoTocado = false;
   mostrarAvisoPedidoExistente(false);
   recalcularCarrito();
   mostrarPantalla('catalogo');
-  await cargarCatalogo();
+  await cargarCatalogo(undefined, { conservarVista: catalogo.length > 0 });
   alert('Tu pedido de mañana se ha anulado. Si quieres, puedes hacer otro hasta las 22:00.');
 }
 
 function olvidarTelefono() {
   localStorage.removeItem('telefonoCliente');
+  borrarMemoriaCliente();
   telefonoCliente = '';
+  catalogo = [];
+  catalogoAgrupado = {};
+  categoriaAbierta = null;
+  catalogoDeMemoriaMostrado = false;
   carrito = {};
+  carritoTocado = false;
   document.getElementById('inputTelefono').value = '';
   document.getElementById('msgTelefono').textContent = '';
   mostrarAvisoPedidoExistente(false);
@@ -179,39 +244,32 @@ function olvidarTelefono() {
 }
 
 const ORDEN_CATEGORIAS = ['Panadería', 'Dulces', 'Hielo'];
-const ICONO_CATEGORIA = {
-  'Panadería': `<svg viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="24" cy="21" rx="21" ry="9.5" fill="#B9782E"/>
-    <ellipse cx="24" cy="17.5" rx="19.5" ry="8" fill="#E3A85E"/>
-    <path d="M12.5 11 L9.5 21.5 M18.5 9 L16.5 22.5 M24 8 L23 23 M29.5 9 L31.5 22.5 M35.5 11 L38.5 21.5"
-          stroke="#A8672A" stroke-width="2.2" stroke-linecap="round" fill="none"/>
-  </svg>`,
-  'Dulces': `<svg viewBox="0 0 40 42" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10.5 21 L29.5 21 L26.8 37.5 Q26.4 39.5 24 39.5 L16 39.5 Q13.6 39.5 13.2 37.5 Z" fill="#A8611E"/>
-    <path d="M11.3 21 L28.7 21 L27.9 25.5 L12.1 25.5 Z" fill="#7A4413"/>
-    <path d="M8 21 Q6 14.5 10.5 12.5 Q10.5 6.5 16.5 8.5 Q18.5 3.5 22 6.5 Q26 3.5 28 8.5 Q34 6.5 31.5 13.5 Q36 16.5 32 21 Z" fill="#FFF4E3"/>
-    <circle cx="20" cy="7" r="2.4" fill="#C62828"/>
-  </svg>`,
-  'Hielo': `<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-    <rect x="4" y="17" width="17" height="17" rx="2.5" fill="#CDEBFB" stroke="#8FC9EA" stroke-width="1.2"/>
-    <rect x="20" y="5" width="17" height="17" rx="2.5" fill="#E4F5FD" stroke="#8FC9EA" stroke-width="1.2"/>
-    <path d="M8.5 21.5l3.5 3.5M24.5 9.5l3.5 3.5" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"/>
-  </svg>`,
-};
 let catalogoAgrupado = {};
 
-async function cargarCatalogo(peticionYaLanzada) {
+async function cargarCatalogo(peticionYaLanzada, opciones) {
   const cont = document.getElementById('vistaCategorias');
-  cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
-  document.getElementById('vistaProductos').classList.add('tab--hidden');
-  cont.classList.remove('tab--hidden');
+  // Si ya se está enseñando un catálogo (el de la memoria del móvil), se deja a la vista mientras llega el actualizado
+  const conservarVista = !!(opciones && opciones.conservarVista) && catalogo.length > 0;
+  if (!conservarVista) {
+    cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
+    document.getElementById('vistaProductos').classList.add('tab--hidden');
+    cont.classList.remove('tab--hidden');
+    categoriaAbierta = null;
+  }
 
   const r = await (peticionYaLanzada || apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch(() => ({ ok: false })));
-  if (!r.ok) { cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>'; return; }
+  if (!r.ok) {
+    if (!conservarVista) cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>';
+    return; // con el de la memoria se sigue; al enviar el pedido el servidor aplica los precios de verdad
+  }
+  aplicarCatalogo(r.data);
+  guardarMemoriaCliente(telefonoCliente, nombreCliente, r.data);
+}
 
-  catalogo = r.data;
-
-  // Agrupar por categoría y, dentro, por subcategoría
+// Pone un catálogo en pantalla (el de la memoria del móvil o el que acaba de llegar de Google)
+// sin molestar: si el cliente está viendo una categoría, se queda en ella y su carrito no se toca.
+function aplicarCatalogo(datos) {
+  catalogo = datos;
   catalogoAgrupado = {};
   catalogo.forEach((p) => {
     const cat = p.categoria || 'Panadería';
@@ -221,7 +279,15 @@ async function cargarCatalogo(peticionYaLanzada) {
     catalogoAgrupado[cat][sub].push(p);
   });
 
-  pintarCategorias();
+  if (categoriaAbierta && catalogoAgrupado[categoriaAbierta]) {
+    abrirCategoria(categoriaAbierta);
+  } else {
+    categoriaAbierta = null;
+    document.getElementById('vistaProductos').classList.add('tab--hidden');
+    document.getElementById('vistaCategorias').classList.remove('tab--hidden');
+    pintarCategorias();
+  }
+  recalcularCarrito();
 }
 
 function pintarCategorias() {
@@ -249,6 +315,7 @@ function pintarCategorias() {
 }
 
 function abrirCategoria(cat) {
+  categoriaAbierta = cat;
   document.getElementById('vistaCategorias').classList.add('tab--hidden');
   document.getElementById('vistaProductos').classList.remove('tab--hidden');
 
@@ -271,6 +338,7 @@ function abrirCategoria(cat) {
       const id = btn.dataset.id;
       const delta = btn.dataset.accion === 'mas' ? 1 : -1;
       carrito[id] = Math.max(0, (carrito[id] || 0) + delta);
+      carritoTocado = true;
       document.getElementById(`cant-${id}`).textContent = carrito[id];
       recalcularCarrito();
     });

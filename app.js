@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearListaFacturas();
   cablearIncidencias();
   cablearTelefonosYServidor();
+  cablearDuplicados();
   cablearVistasRapidas();
   cablearInformesFacturacion();
   cablearCompras();
@@ -61,8 +62,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (localStorage.getItem('rol')) {
     aplicarModoUI();
     cargarTabActual();
-    precargarListas();
-    apiGet('quienSoy').then((r) => {
+    apiGet('quienSoy', undefined, { fondo: true }).then((r) => {
       if (!r.ok) { abrirAjustes(); return; }
       const cambio = r.data.rol !== ROL || (r.data.ruta || '') !== RUTA;
       ROL = r.data.rol;
@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       localStorage.setItem('ruta', RUTA);
       if (cambio) { invalidarVistas(); aplicarModoUI(); cargarTabActual(); precargarListas(); }
     }).catch(() => { /* sin conexión: se queda con lo que ya hay */ });
+    precargarListas();   // después de la comprobación de clave: lo de fondo va de uno en uno
     return;
   }
 
@@ -166,6 +167,7 @@ function aplicarModoUI() {
   document.querySelectorAll('.sidebar__item[data-solo-admin]').forEach((btn) => {
     btn.style.display = esRepartidor ? 'none' : '';
   });
+  document.querySelectorAll('.solo-admin').forEach((el) => { el.style.display = esRepartidor ? 'none' : ''; });
   document.getElementById('resumenInicio').style.display = esRepartidor ? 'none' : '';
   const tabActivo = document.querySelector('.tabbar__item.is-active')?.dataset.tab;
   if (esRepartidor && (tabActivo === 'nuevo' || tabActivo === 'clientes')) {
@@ -194,7 +196,7 @@ function registrarServiceWorker() {
 const ACCIONES_REINTENTABLES = new Set([
   'quienSoy', 'resumenInicio', 'reparto', 'pedidos', 'facturas', 'clientes', 'productos',
   'preciosEspecialesCliente', 'resumenPeriodo', 'resumenManana', 'empresa', 'estadoCopias',
-  'itemsPedido', 'itemsFactura', 'revisarTelefonos',
+  'itemsPedido', 'itemsFactura', 'revisarTelefonos', 'buscarDuplicados',
   'guardarPrecioEspecial', 'eliminarPrecioEspecial', 'marcarEntregado', 'marcarCobrado', 'marcarFacturaCobrada', 'guardarIncidencia',
 ]);
 const MENSAJE_RESPUESTA_ILEGIBLE = 'Google devolvió una respuesta que no se pudo leer (tardó demasiado o hubo demasiadas peticiones seguidas). Puede que la operación SÍ se haya guardado: compruébalo antes de repetirla.';
@@ -208,11 +210,11 @@ function errorDeRed(err) {
 let peticionesEnCurso = 0;
 let registroFallos = null;
 
-async function apiGet(action, extraParams) {
+async function apiGet(action, extraParams, opciones) {
   peticionesEnCurso++;
   const cambio = registrarCambioLocal(action, extraParams);   // marcar entregado/cobrado o incidencia: se apunta mientras viaja
   try {
-    const respuesta = await apiGetInterno(action, extraParams);
+    const respuesta = await pedirConTurno(action, extraParams, opciones);
     if (registroFallos && respuesta && respuesta.ok === false) registroFallos.push(respuesta.error || 'El servidor no ha respondido bien');
     const bien = !!(respuesta && respuesta.ok === true);
     cerrarCambioLocal(cambio, bien);
@@ -227,16 +229,118 @@ async function apiGet(action, extraParams) {
   }
 }
 
+/* ---- Control de ritmo: Google rechaza (con una página de error) si le llegan demasiadas peticiones a la vez ----
+ * Como mucho 4 a la vez. Lo que pides TÚ tiene prioridad; el trabajo de fondo (precarga, refrescar clientes y
+ * productos, comprobar la clave) nunca ocupa más de 1 hueco, así que siempre hay sitio para lo tuyo. Si ya hay
+ * en marcha una lectura IGUAL, se comparte (no se pide dos veces; si estaba esperando como "de fondo" y la pides
+ * tú, pasa a tener prioridad). Y ninguna petición espera para siempre: a los 60 s se da por perdida. */
+const MAX_PETICIONES_A_LA_VEZ = 4;
+const MAX_DE_FONDO = 1;
+const TIEMPO_MAXIMO_PETICION_MS = 60000;
+const LECTURAS_COMPARTIBLES = new Set(['quienSoy', 'resumenInicio', 'reparto', 'pedidos', 'facturas', 'clientes', 'productos', 'resumenManana']);
+let turnosEnUso = 0;
+let turnosDeFondo = 0;
+const colaDeTurnos = [];        // { fondo, resolver, enCola }
+const lecturasEnVuelo = new Map();
+
+function puedeEmpezarTurno(fondo) {
+  return turnosEnUso < MAX_PETICIONES_A_LA_VEZ && (!fondo || turnosDeFondo < MAX_DE_FONDO);
+}
+function repartirTurnos() {
+  for (let i = 0; i < colaDeTurnos.length && turnosEnUso < MAX_PETICIONES_A_LA_VEZ;) {
+    const e = colaDeTurnos[i];
+    if (puedeEmpezarTurno(e.fondo)) {
+      colaDeTurnos.splice(i, 1);
+      e.enCola = false;
+      turnosEnUso++;
+      if (e.fondo) turnosDeFondo++;
+      e.resolver();
+    } else {
+      i++;
+    }
+  }
+}
+function ponerEnCola(entrada) {
+  if (entrada.fondo) colaDeTurnos.push(entrada);
+  else {
+    let i = colaDeTurnos.findIndex((e) => e.fondo);   // delante de los de fondo, detrás de las otras prioritarias
+    if (i === -1) i = colaDeTurnos.length;
+    colaDeTurnos.splice(i, 0, entrada);
+  }
+  entrada.enCola = true;
+}
+function adquirirTurno(entrada) {
+  return new Promise((resolver) => {
+    entrada.resolver = resolver;
+    ponerEnCola(entrada);
+    repartirTurnos();
+  });
+}
+function liberarTurno(entrada) {
+  turnosEnUso--;
+  if (entrada.fondo) turnosDeFondo--;
+  repartirTurnos();
+}
+function subirPrioridad(entrada) {
+  if (!entrada.enCola || !entrada.fondo) return;
+  colaDeTurnos.splice(colaDeTurnos.indexOf(entrada), 1);
+  entrada.fondo = false;
+  ponerEnCola(entrada);
+  repartirTurnos();
+}
+
+function pedirConTurno(action, extraParams, opciones) {
+  const fondo = !!(opciones && opciones.fondo);
+  let clave = null;
+  if (LECTURAS_COMPARTIBLES.has(action)) {
+    const p = extraParams || {};
+    clave = action + '|' + Object.keys(p).sort().map((k) => `${k}=${p[k]}`).join('&');
+    const existente = lecturasEnVuelo.get(clave);
+    if (existente) {
+      if (!fondo) subirPrioridad(existente.entrada);
+      return existente.promesa;
+    }
+  }
+  const entrada = { fondo: fondo, resolver: null, enCola: false };
+  const promesa = (async () => {
+    await adquirirTurno(entrada);
+    try { return await apiGetInterno(action, extraParams); } finally { liberarTurno(entrada); }
+  })();
+  if (clave) {
+    lecturasEnVuelo.set(clave, { promesa: promesa, entrada: entrada });
+    const quitar = () => lecturasEnVuelo.delete(clave);
+    promesa.then(quitar, quitar);
+  }
+  return promesa;
+}
+
+function fetchConTiempo(url) {
+  return new Promise((resolver, rechazar) => {
+    let terminado = false;
+    const control = typeof AbortController === 'function' ? new AbortController() : null;
+    const temporizador = setTimeout(() => {
+      if (terminado) return;
+      terminado = true;
+      if (control) { try { control.abort(); } catch (e) { /* nada */ } }
+      rechazar(new Error('Google tarda demasiado en responder.'));
+    }, TIEMPO_MAXIMO_PETICION_MS);
+    fetch(url, control ? { signal: control.signal } : undefined)
+      .then((res) => res.text())
+      .then((texto) => { if (terminado) return; terminado = true; clearTimeout(temporizador); resolver(texto); })
+      .catch((err) => { if (terminado) return; terminado = true; clearTimeout(temporizador); rechazar(err); });
+  });
+}
+
 async function apiGetInterno(action, extraParams) {
   const params = new URLSearchParams({ action, key: API_KEY, ...(extraParams || {}) });
   const url = `${WEB_APP_URL}?${params.toString()}`;
-  const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
+  // Crear algo con "idSolicitud" se puede repetir sin riesgo: si ya se creó, el servidor devuelve lo mismo y no duplica
+  const intentos = (ACCIONES_REINTENTABLES.has(action) || (extraParams && extraParams.idSolicitud)) ? 2 : 1;
   let fallo;
   for (let i = 0; i < intentos; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1200));
     try {
-      const res = await fetch(url);
-      const texto = await res.text();
+      const texto = await fetchConTiempo(url);
       try {
         const respuesta = JSON.parse(texto);
         if (respuesta && respuesta.tipoError === 'desactualizado') mostrarAvisoServidor();
@@ -445,7 +549,7 @@ async function cargarVista(o) {
 
   const inicio = Date.now();
   let r;
-  try { r = await apiGet(o.accion, o.params); } catch (err) { r = { ok: false, error: textoDeFallo(err) }; }
+  try { r = await apiGet(o.accion, o.params); } catch (err) { r = { ok: false, error: textoDeFalloLectura(err) }; }
   if (turno !== turnosVista[o.pantalla]) return { obsoleto: true, pintado: !!guardada };
 
   if (!r || r.ok !== true) {
@@ -454,6 +558,15 @@ async function cargarVista(o) {
     } else {
       ocultarEstado();
       if (o.alFallar) o.alFallar(r);
+      if (o.contenedor) {   // botón para volver a intentarlo ahí mismo
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn-secondary';
+        b.style.marginTop = '12px';
+        b.textContent = 'Reintentar';
+        b.addEventListener('click', () => cargarVista(o));
+        o.contenedor.appendChild(b);
+      }
     }
     return { ok: false, pintado: !!guardada };
   }
@@ -473,15 +586,16 @@ let precargando = false;
 let ultimaPrecarga = 0;
 let temporizadorPrecarga = null;
 
-function programarPrecarga() {
+function programarPrecarga(ms) {
   clearTimeout(temporizadorPrecarga);
-  temporizadorPrecarga = setTimeout(precargarVistas, 700);
+  temporizadorPrecarga = setTimeout(precargarVistas, ms || 700);
 }
 
 // Pide EXACTAMENTE lo mismo que pedirá cada pantalla al abrirse, para que lo guardado le sirva
 async function precargarVistas() {
   if (precargando || actualizandoAhora || document.hidden || !WEB_APP_URL || !API_KEY) return;
   if (Date.now() - ultimaPrecarga < 120000) return;   // como mucho cada 2 minutos
+  if (peticionesEnCurso > 0) { programarPrecarga(2500); return; }   // lo que pides tú va primero: se espera a que haya calma
   precargando = true;
   try {
     const hoy = formatoFechaES(hoyISO());
@@ -490,14 +604,16 @@ async function precargarVistas() {
       ['pedidos', { fechaIni: hoy, fechaFin: hoy }],
     ];
     if (ROL === 'admin') lista.push(['facturas', { fechaIni: formatoFechaES(primeroDeMesISO()), fechaFin: hoy }]);
+    let completa = true;
     for (const [accion, params] of lista) {
-      if (actualizandoAhora || document.hidden) break;
+      if (actualizandoAhora || document.hidden) { completa = false; break; }
+      if (peticionesEnCurso > 0) { completa = false; programarPrecarga(2500); break; }   // ha empezado a pedir algo: se cede el paso
       const inicio = Date.now();
-      const r = await apiGet(accion, params).catch(() => null);
-      if (!r || r.ok !== true) break;                  // si falla una, se para (casi seguro sin conexión)
+      const r = await apiGet(accion, params, { fondo: true }).catch(() => null);
+      if (!r || r.ok !== true) { completa = false; break; }   // si falla una, se para (casi seguro sin conexión)
       guardarVista(claveVista(accion, params), aplicarCambiosLocales(accion, r.data, inicio), accion);
     }
-    ultimaPrecarga = Date.now();
+    if (completa) ultimaPrecarga = Date.now();
   } finally {
     precargando = false;
   }
@@ -535,6 +651,13 @@ function mostrarAviso(texto, tipo, ms) {
   el.className = 'toast toast--' + (tipo || 'info');
   clearTimeout(temporizadorAviso);
   if (ms) temporizadorAviso = setTimeout(() => el.classList.add('tab--hidden'), ms);
+}
+
+// Para las LISTAS (que solo leen): el aviso de "puede que la operación SÍ se haya guardado" no tiene sentido
+function textoDeFalloLectura(err) {
+  const t = String((err && err.message) || err || '');
+  if (t === MENSAJE_RESPUESTA_ILEGIBLE || /respuesta que no se pudo leer/.test(t)) return 'Google no ha respondido bien (puede estar saturado). Prueba otra vez en unos segundos.';
+  return textoDeFallo(err);
 }
 
 // Texto claro de un fallo (de red, del servidor o ya escrito)
@@ -880,7 +1003,7 @@ async function cargarReparto() {
   const offset = offsetRepartoSeleccionado;
 
   const res = await cargarVista({
-    pantalla: 'reparto', accion: 'reparto', params: { fecha: fechaOffsetDDMMYYYY(offset) },
+    pantalla: 'reparto', accion: 'reparto', params: { fecha: fechaOffsetDDMMYYYY(offset) }, contenedor: contProductos,
     antesDePedir: () => {
       contProductos.innerHTML = '<div class="empty-state">Cargando…</div>';
       document.getElementById('repartoClientes').innerHTML = '';
@@ -978,7 +1101,7 @@ function pintarReparto(data) {
       } else {
         btn.disabled = true;
       }
-      const r = await apiGet('marcar' + (accion === 'entregado' ? 'Entregado' : 'Cobrado'), { idPedido: btn.dataset.id }).catch(() => ({ ok: false }));
+      const r = await apiGet('marcar' + (accion === 'entregado' ? 'Entregado' : 'Cobrado'), { idPedido: btn.dataset.id }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
       if (!r.ok) {
         alert('No se pudo actualizar: ' + (r.error || 'error'));
         if (c && antes) { Object.assign(c, antes); pintarReparto(ultimoReparto); } else { btn.disabled = false; }
@@ -1082,7 +1205,7 @@ async function cargarPedidos() {
   if (clienteId) params.clienteId = clienteId;
 
   await cargarVista({
-    pantalla: 'pedidos', accion: 'pedidos', params: params,
+    pantalla: 'pedidos', accion: 'pedidos', params: params, contenedor: cont,
     antesDePedir: () => { cont.innerHTML = '<div class="empty-state">Cargando…</div>'; },
     pintar: (datos) => pintarPedidos(datos),
     alFallar: (r) => { cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`; },
@@ -1363,7 +1486,7 @@ async function buscarResumenFacturas() {
   if (clienteId) params.clienteId = clienteId;
 
   await cargarVista({
-    pantalla: 'facturas', accion: 'facturas', params: params,
+    pantalla: 'facturas', accion: 'facturas', params: params, contenedor: cont,
     antesDePedir: () => { cont.innerHTML = '<div class="empty-state">Buscando…</div>'; },
     pintar: (datos) => {
       resumenFacturasCache = datos.facturas;
@@ -1539,8 +1662,29 @@ async function cargarFormularioNuevo(opciones) {
 }
 
 
+// Un código único por cada intento de crear algo: si el servidor ya lo procesó, devuelve lo que creó
+// entonces en vez de crear otro. Así, tocar dos veces o repetir tras una respuesta perdida NO duplica.
+function idUnico() {
+  try { if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID(); } catch (e) { /* nada */ }
+  return 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+}
+
+// Pregunta cuando el servidor dice que YA existe algo igual
+function preguntarDuplicado(r) {
+  if (r.idFacturaExistente) {
+    return confirm(`Ya hay una factura IGUAL de ${r.cliente} de hoy (nº ${r.idFacturaExistente}).\n\n¿Crear otra igual de todas formas?`);
+  }
+  const que = r.tipoDocumento === 'albaran' ? 'albarán' : 'pedido';
+  return confirm(`Ya hay un ${que} IGUAL de ${r.cliente} para el ${r.fechaEntrega} (nº ${r.idPedidoExistente}, creado el ${r.creadoExistente}).\n\n¿Crear otro igual de todas formas?`);
+}
+
+let solicitudPedido = null;     // { id, huella }: el intento en curso; se reutiliza si se repite EXACTAMENTE lo mismo
+let guardandoPedido = false;
+
 async function crearPedidoManual() {
+  if (guardandoPedido) return;   // segundo toque mientras guarda: se ignora
   const msg = document.getElementById('nuevoMsg');
+  const boton = document.getElementById('btnCrearPedido');
   const clienteId = document.getElementById('selectCliente').value;
   const tipoDocumento = document.getElementById('selectTipoDocumento').value;
   const items = itemsNuevo.map((it) => it.tipo === 'catalogo'
@@ -1551,30 +1695,65 @@ async function crearPedidoManual() {
   if (!clienteId) { msg.textContent = 'Selecciona un cliente.'; msg.className = 'form-msg is-error'; return; }
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
 
-  msg.textContent = 'Guardando…';
+  // Mismo pedido que el intento anterior (p. ej. tras un fallo de conexión): MISMO código, y el servidor no lo duplica.
+  const huella = JSON.stringify([clienteId, tipoDocumento, fechaPedidoSeleccion, items]);
+  if (!solicitudPedido || solicitudPedido.huella !== huella) solicitudPedido = { id: idUnico(), huella: huella };
+
+  guardandoPedido = true;
+  const textoBoton = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = 'Guardando…';
+  msg.textContent = 'Guardando… no hace falta pulsar otra vez.';
   msg.className = 'form-msg';
+  const lento = setTimeout(() => { msg.textContent = 'Sigue guardando… Google va lento. Espera: aunque pulsaras otra vez, NO se duplicaría.'; }, 8000);
 
-  const cuando = fechaPedidoSeleccion === 'manana' ? 'mañana' : 'HOY';
-  const r = await apiGet('nuevoPedido', { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion, tipoDocumento }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
-  if (!r.ok) {
-    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
-    msg.className = 'form-msg is-error';
-    return;
-  }
+  try {
+    const cuando = fechaPedidoSeleccion === 'manana' ? 'mañana' : 'HOY';
+    let r;
+    let confirmar = false;
+    for (;;) {
+      const params = { clienteId, items: JSON.stringify(items), fechaEntrega: fechaPedidoSeleccion, tipoDocumento, idSolicitud: solicitudPedido.id };
+      if (confirmar) params.confirmarDuplicado = '1';
+      r = await apiGet('nuevoPedido', params).catch((err) => ({ ok: false, error: textoDeFallo(err), sinRespuesta: true }));
+      if (r && r.duplicadoProbable) {
+        if (preguntarDuplicado(r)) { confirmar = true; continue; }
+        msg.textContent = 'No se ha creado: ya había uno igual.';
+        msg.className = 'form-msg';
+        solicitudPedido = null;
+        return;
+      }
+      break;
+    }
 
-  document.getElementById('selectCliente').value = '';
-  await cargarFormularioNuevo({ conservarTipo: true });
+    if (!r.ok) {
+      msg.textContent = r.sinRespuesta
+        ? `No hemos podido confirmar si se guardó (${String(r.error).replace(/\.$/, '')}). Pulsa «Crear pedido» otra vez: es seguro, no se duplicará.`
+        : 'Error: ' + (r.error || 'inténtalo de nuevo');
+      msg.className = 'form-msg is-error';
+      return;   // el formulario se queda como estaba
+    }
 
-  if (tipoDocumento === 'facturaSuelta') {
-    msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}). Generando PDF…`;
+    solicitudPedido = null;
+    document.getElementById('selectCliente').value = '';
+    await cargarFormularioNuevo({ conservarTipo: true });
+
+    const yaEstaba = r.repetido ? ' (ya estaba creado: no se ha duplicado)' : '';
+    if (tipoDocumento === 'facturaSuelta') {
+      msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)})${yaEstaba}. Generando PDF…`;
+      msg.className = 'form-msg is-ok';
+      const rPdf = await apiGet('facturaDirectaPdf', { idFactura: r.idFactura }).catch(() => ({ ok: false }));
+      if (rPdf.ok) descargarPDF(rPdf.base64, rPdf.nombre);
+      msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)})${yaEstaba}.`;
+      return;
+    }
+    msg.textContent = `${tipoDocumento === 'albaran' ? 'Albarán' : 'Pedido'} #${r.idPedido} creado para ${cuando} (${formatoEuros(r.total)})${yaEstaba}.`;
     msg.className = 'form-msg is-ok';
-    const rPdf = await apiGet('facturaDirectaPdf', { idFactura: r.idFactura }).catch(() => ({ ok: false }));
-    if (rPdf.ok) descargarPDF(rPdf.base64, rPdf.nombre);
-    msg.textContent = `Factura #${r.idFactura} creada (${formatoEuros(r.total)}).`;
-    return;
+  } finally {
+    clearTimeout(lento);
+    guardandoPedido = false;
+    boton.disabled = false;
+    boton.textContent = textoBoton;
   }
-  msg.textContent = `${tipoDocumento === 'albaran' ? 'Albarán' : 'Pedido'} #${r.idPedido} creado para ${cuando} (${formatoEuros(r.total)}).`;
-  msg.className = 'form-msg is-ok';
 }
 
 /* ============ CLIENTES ============ */
@@ -1687,10 +1866,16 @@ function leerCache(clave) {
 let _enCursoClientes = null;
 let _enCursoProductos = null;
 
+function priorizarLectura(accion) {
+  const e = lecturasEnVuelo.get(accion + '|');
+  if (e) subirPrioridad(e.entrada);
+}
+
 function cargarClientesCache(forzar) {
   if (clientesCache.length && !forzar) return Promise.resolve();
+  if (_enCursoClientes && !forzar) priorizarLectura('clientes');   // alguien la necesita ya: deja de ser "de fondo"
   if (!_enCursoClientes) {
-    _enCursoClientes = apiGet('clientes')
+    _enCursoClientes = apiGet('clientes', undefined, { fondo: !!forzar })
       .then((r) => { if (r && r.ok) { clientesCache = r.data; guardarCache('clientes', r.data); } })
       .catch(() => {})
       .then(() => { _enCursoClientes = null; });
@@ -1700,8 +1885,9 @@ function cargarClientesCache(forzar) {
 
 function cargarProductosCache(forzar) {
   if (productosCache.length && !forzar) return Promise.resolve();
+  if (_enCursoProductos && !forzar) priorizarLectura('productos');
   if (!_enCursoProductos) {
-    _enCursoProductos = apiGet('productos')
+    _enCursoProductos = apiGet('productos', undefined, { fondo: !!forzar })
       .then((r) => { if (r && r.ok) { productosCache = r.data; guardarCache('productos', r.data); } })
       .catch(() => {})
       .then(() => { _enCursoProductos = null; });
@@ -1865,6 +2051,7 @@ function cablearClientesForm() {
 }
 
 function abrirFormularioCliente(cliente) {
+  solicitudCliente = null;   // formulario nuevo: intento nuevo
   document.getElementById('clienteFormTitulo').textContent = cliente ? 'Editar cliente' : 'Nuevo cliente';
   document.getElementById('clFormId').value = cliente ? cliente.id : '';
   document.getElementById('clFormNombre').value = cliente ? cliente.nombre || '' : '';
@@ -1880,15 +2067,17 @@ function abrirFormularioCliente(cliente) {
   cambiarTab('cliente-form');
 }
 
+let solicitudCliente = null;
+let guardandoCliente = false;
+
 async function guardarCliente() {
+  if (guardandoCliente) return;
   const msg = document.getElementById('clienteFormMsg');
+  const boton = document.getElementById('btnGuardarCliente');
   const nombre = document.getElementById('clFormNombre').value.trim();
   if (!nombre) { msg.textContent = 'Pon un nombre.'; msg.className = 'form-msg is-error'; return; }
 
-  msg.textContent = 'Guardando…';
-  msg.className = 'form-msg';
-
-  const r = await apiGet('guardarCliente', {
+  const datos = {
     id: document.getElementById('clFormId').value,
     nombre: nombre,
     telefono: document.getElementById('clFormTelefono').value.trim(),
@@ -1899,17 +2088,52 @@ async function guardarCliente() {
     descuento: String((Number(document.getElementById('clFormDescuento').value) || 0) / 100),
     recargoEquivalencia: document.getElementById('clFormRecargo').value,
     activo: document.getElementById('clFormActivo').value,
-  }).catch((err) => ({ ok: false, error: String(err) }));
+  };
+  const creando = !datos.id;
+  if (creando) {   // cliente NUEVO: lleva código (editar uno existente no lo necesita)
+    const huella = JSON.stringify(datos);
+    if (!solicitudCliente || solicitudCliente.huella !== huella) solicitudCliente = { id: idUnico(), huella: huella };
+    datos.idSolicitud = solicitudCliente.id;
+  }
 
-  if (r.ok) {
-    msg.textContent = 'Cliente guardado.';
-    msg.className = 'form-msg is-ok';
-    clientesCache = []; // fuerza a refrescar el caché en otras pantallas
-    olvidarListaGuardada('clientes');
-    setTimeout(() => cambiarTab('clientes-lista'), 500);
-  } else {
-    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
-    msg.className = 'form-msg is-error';
+  guardandoCliente = true;
+  const textoBoton = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = 'Guardando…';
+  msg.textContent = 'Guardando… no hace falta pulsar otra vez.';
+  msg.className = 'form-msg';
+
+  try {
+    let r;
+    for (;;) {
+      r = await apiGet('guardarCliente', datos).catch((err) => ({ ok: false, error: textoDeFallo(err), sinRespuesta: true }));
+      if (r && r.duplicadoProbable) {
+        const c = r.clienteExistente || {};
+        const seguir = confirm(`Ya existe un cliente igual (${r.motivo}): ${c.nombre} (nº ${c.id}${c.nif ? ', NIF ' + c.nif : ''}${c.telefono ? ', tel. ' + c.telefono : ''}).\n\n¿Crear otro de todas formas?`);
+        if (!seguir) { msg.textContent = 'No se ha creado: ya existía.'; msg.className = 'form-msg'; solicitudCliente = null; return; }
+        datos.confirmarDuplicado = '1';
+        continue;
+      }
+      break;
+    }
+
+    if (r.ok) {
+      solicitudCliente = null;
+      msg.textContent = r.repetido ? 'Cliente guardado (ya estaba creado: no se ha duplicado).' : 'Cliente guardado.';
+      msg.className = 'form-msg is-ok';
+      clientesCache = []; // fuerza a refrescar el caché en otras pantallas
+      olvidarListaGuardada('clientes');
+      setTimeout(() => cambiarTab('clientes-lista'), 500);
+    } else {
+      msg.textContent = r.sinRespuesta
+        ? `No hemos podido confirmar si se guardó (${String(r.error).replace(/\.$/, '')}). Pulsa «Guardar» otra vez: es seguro, no se duplicará.`
+        : 'Error: ' + (r.error || 'inténtalo de nuevo');
+      msg.className = 'form-msg is-error';
+    }
+  } finally {
+    guardandoCliente = false;
+    boton.disabled = false;
+    boton.textContent = textoBoton;
   }
 }
 
@@ -2256,6 +2480,63 @@ function cablearIncidencias() {
   });
 }
 
+
+/* ============ BUSCAR DUPLICADOS (los que ya hay) ============ */
+function cablearDuplicados() {
+  ['btnBuscarDuplicados', 'btnBuscarDuplicadosClientes'].forEach((id) => document.getElementById(id).addEventListener('click', buscarDuplicados));
+  document.getElementById('btnCerrarDuplicados').addEventListener('click', () => document.getElementById('modalDuplicados').classList.add('tab--hidden'));
+}
+
+async function buscarDuplicados() {
+  const cont = document.getElementById('duplicadosResultado');
+  document.getElementById('modalDuplicados').classList.remove('tab--hidden');
+  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
+  const r = await apiGet('buscarDuplicados', { dias: 14 }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo buscar: ${escapeHtml(r.error || '')}</div>`; return; }
+  const d = r.data;
+  if (!d.pedidos.length && !d.clientes.length) {
+    cont.innerHTML = '<div class="empty-state">✓ No hay pedidos duplicados (últimos 14 días y próximos 7) ni clientes duplicados.</div>';
+    return;
+  }
+  let html = '';
+  if (d.pedidos.length) {
+    html += `<div class="section-label">Pedidos iguales (${d.pedidos.length})</div>`;
+    html += d.pedidos.map((g) => `
+      <div class="card">
+        <div class="card__name">${escapeHtml(g.cliente)} · ${escapeHtml(g.fechaEntrega)}</div>
+        <div class="card__meta">${escapeHtml(g.tipo)} · ${formatoEuros(g.total)} · ${escapeHtml(g.pedido)}</div>
+        ${g.pedidos.map((p, i) => `
+          <div class="product-row" style="margin-top:8px; align-items:center; gap:8px;">
+            <div style="flex:1; font-size:13.5px;">
+              <strong>#${escapeHtml(String(p.id))}</strong> · creado ${escapeHtml(p.creado)} · ${escapeHtml(p.canal || '')}
+              ${p.entregado ? ' · <em>entregado</em>' : ''}${p.cobrado ? ' · <em>cobrado</em>' : ''}
+              ${i === 0 ? ' · <span style="color:var(--ok, #2E7D4F); font-weight:700;">se conserva</span>' : ''}
+            </div>
+            ${i === 0 ? '' : `<button class="chip-btn" data-anular-duplicado="${escapeHtml(String(p.id))}" data-cliente="${escapeHtml(g.cliente)}">Anular #${escapeHtml(String(p.id))}</button>`}
+          </div>`).join('')}
+      </div>`).join('');
+  }
+  if (d.clientes.length) {
+    html += `<div class="section-label" style="margin-top:14px;">Clientes iguales (${d.clientes.length})</div>`;
+    html += d.clientes.map((g) => `
+      <div class="card">
+        <div class="card__meta" style="font-weight:700;">${escapeHtml(g.motivo)}</div>
+        ${g.clientes.map((c) => `<div style="font-size:13.5px; margin-top:6px;"><strong>${escapeHtml(c.nombre)}</strong> (nº ${escapeHtml(String(c.id))})${c.nif ? ' · NIF ' + escapeHtml(c.nif) : ''}${c.telefono ? ' · ' + escapeHtml(String(c.telefono)) : ''}${c.activo ? '' : ' · <em>inactivo</em>'}</div>`).join('')}
+        <div class="card__meta" style="margin-top:8px;">Revísalos en Clientes: si sobra uno, ponlo como inactivo (Activo = No) para no perder su historial.</div>
+      </div>`).join('');
+  }
+  cont.innerHTML = html;
+  cont.querySelectorAll('[data-anular-duplicado]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.anularDuplicado;
+      if (!confirm(`¿Anular el pedido #${id} de ${btn.dataset.cliente}? Se conserva el otro, que es igual. Se borrará también su factura y no se puede deshacer.`)) return;
+      btn.disabled = true;
+      const rr = await apiGet('anularPedido', { idPedido: id }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!rr.ok) { alert('No se pudo anular: ' + (rr.error || 'error')); btn.disabled = false; return; }
+      buscarDuplicados();
+    });
+  });
+}
 
 /* ============ TELÉFONOS DE LOS CLIENTES Y ESTADO DEL SERVIDOR ============ */
 // Aviso en pantalla: alguna petición ha dado "x is not defined" = falta pegar/actualizar un archivo de Apps Script

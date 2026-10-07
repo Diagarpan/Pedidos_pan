@@ -171,6 +171,7 @@
 
   <section class="tab tab--hidden" id="tab-pedidos-lista">
     <button class="link-btn" data-volver="pedidos">← Pedidos</button>
+    <button class="link-btn solo-admin" id="btnBuscarDuplicados" style="float:right;">Buscar pedidos duplicados</button>
     <div class="date-nav">
       <button class="date-nav__btn" id="btnPedidosAnterior" aria-label="Periodo anterior">←</button>
       <div class="date-nav__fechas">
@@ -320,7 +321,8 @@
     <button class="link-btn" data-volver="clientes">← Clientes</button>
     <div id="clientesListaVista">
       <button class="btn-primary" id="btnNuevoCliente" style="margin-bottom:12px;">+ Nuevo cliente</button>
-      <button class="btn-secondary" id="btnRevisarTelefonos" style="width:100%; margin-bottom:12px;">Revisar teléfonos de los clientes</button>
+      <button class="btn-secondary" id="btnRevisarTelefonos" style="width:100%; margin-bottom:8px;">Revisar teléfonos de los clientes</button>
+      <button class="btn-secondary solo-admin" id="btnBuscarDuplicadosClientes" style="width:100%; margin-bottom:12px;">Buscar pedidos y clientes duplicados</button>
       <input type="search" id="buscarCliente" class="search-input" placeholder="Buscar cliente…">
       <div id="listaClientes" class="stack"></div>
     </div>
@@ -791,6 +793,16 @@
 
     <button class="btn-secondary" id="btnCopiarEnlace" style="width:100%; margin-top:14px;">🔗 Copiar enlace para compartir</button>
     <div class="form-msg" id="enlaceMsg"></div>
+  </div>
+</div>
+
+<!-- MODAL DUPLICADOS (pedidos y clientes iguales que ya hay) -->
+<div class="modal-backdrop tab--hidden" id="modalDuplicados">
+  <div class="modal">
+    <h2>Posibles duplicados</h2>
+    <p class="modal-help">Pedidos iguales (mismo cliente, día, líneas y tipo; últimos 14 días y próximos 7) y clientes iguales (mismo NIF, o mismo nombre y teléfono). Al anular uno, se conserva el primero.</p>
+    <div id="duplicadosResultado" class="stack" style="max-height:55vh; overflow-y:auto;"></div>
+    <button class="btn-secondary" id="btnCerrarDuplicados" style="width:100%; margin-top:10px;">Cerrar</button>
   </div>
 </div>
 

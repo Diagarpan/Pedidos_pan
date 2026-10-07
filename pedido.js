@@ -2,10 +2,10 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 // Versión de esta app (aparece en el diagnóstico, para saber qué copia tiene cada cliente)
-const VERSION_APP = '2026.10.7';
+const VERSION_APP = '2026.10.8';
 // ¿Está pegada la URL del servidor? (cualquier dirección de script.google.com; solo se queja si sigue el texto de relleno)
 const URL_CONFIGURADA = /^https:\/\/script\.google\.com\//.test(WEB_APP_URL) && WEB_APP_URL.indexOf('PEGA_AQUI') === -1;
 const TIEMPO_MAXIMO_MS = 12000; // si Google no contesta en este tiempo, se avisa (antes se quedaba cargando para siempre)
@@ -46,7 +46,7 @@ let fechaEntregaElegida = 'manana'; // siempre para mañana: se manda cada día
 
 // Lo que es seguro repetir se reintenta solo UNA vez si falla (enviar el pedido también lo es: si ya
 // existe uno para mañana, se ACTUALIZA, no se duplica).
-const ACCIONES_REINTENTABLES = new Set(['clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana', 'clienteCrearPedido']);
+const ACCIONES_REINTENTABLES = new Set(['clienteInicio', 'clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana', 'clienteCrearPedido']);
 
 // Cada fallo tiene su causa y su código (C1…C8), para que el cliente y la panadería sepan qué pasa
 function crearError(tipo) { const e = new Error(tipo); e.tipo = tipo; return e; }
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     carritoTocado = false;
     mostrarAvisoPedidoExistente(false);
     mostrarPantalla('catalogo');
-    const carga = iniciarCargaCatalogo(telefonoCliente);
+    const carga = cargarEntrada(telefonoCliente);
     await cargarCatalogo(carga.catalogo, { conservarVista: catalogo.length > 0 });
     await precargarPedidoExistente(carga.existente);
   });
@@ -195,7 +195,26 @@ function mostrarPantalla(nombre) {
   document.getElementById('pantallaConfirmacion').classList.toggle('tab--hidden', nombre !== 'confirmacion');
 }
 
+// Al teclear el teléfono: el botón se bloquea mientras comprueba (si no, cada toque lanza otra petición y todo va
+// más lento) y, si tarda, se le dice por qué. Al entrar solo (teléfono guardado) no hace falta nada de esto.
 async function identificarCliente(esAutomatico) {
+  if (esAutomatico) return identificarClienteInterno(true);
+  const boton = document.getElementById('btnContinuar');
+  const msg = document.getElementById('msgTelefono');
+  if (boton.disabled) return;
+  boton.disabled = true;
+  const lento = setTimeout(() => {
+    if (/^Comprobando/.test(msg.textContent)) msg.textContent = 'Sigue comprobando… la primera vez del día puede tardar unos segundos. No hace falta pulsar otra vez.';
+  }, 6000);
+  try {
+    await identificarClienteInterno(false);
+  } finally {
+    clearTimeout(lento);
+    boton.disabled = false;
+  }
+}
+
+async function identificarClienteInterno(esAutomatico) {
   const msg = document.getElementById('msgTelefono');
   const telefono = esAutomatico ? telefonoCliente : document.getElementById('inputTelefono').value.trim();
 
@@ -207,10 +226,9 @@ async function identificarCliente(esAutomatico) {
   }
   ocultarAvisoConexion();
 
-  // Las tres peticiones salen A LA VEZ (antes iban una detrás de otra). Si el
-  // teléfono no está registrado, las otras dos simplemente se descartan.
-  const carga = iniciarCargaCatalogo(telefono);
-  const r = await apiCliente('clienteIdentificar', { telefono: telefono }).catch((err) => ({ ok: false, _err: err }));
+  // Una sola petición trae todo (si el teléfono no está registrado, solo trae eso).
+  const carga = cargarEntrada(telefono);
+  const r = await carga.identificar;
 
   if (!r.ok) {
     const d = anotarError(r._err ? describirError(r._err) : (describirRespuesta(r) || describirError(null)));
@@ -267,12 +285,34 @@ function mostrarErrorDeCarga(d) {
   document.getElementById('vistaCategorias').firstChild.textContent = 'No se ha podido cargar el catálogo.';
 }
 
-// Lanza ya la petición del catálogo (con SUS precios) y la de su pedido de mañana
-function iniciarCargaCatalogo(telefono) {
-  return {
+// UNA sola petición para entrar: reconoce al cliente y trae su catálogo (con SUS precios) y su pedido de mañana.
+// Antes eran tres a la vez: tres ejecuciones en Google, que se pisaban entre sí y entre los demás clientes (y a
+// Google no le gusta). Si el servidor aún es el antiguo (no conoce "clienteInicio"), se usan las tres de siempre.
+let servidorSinInicio = false;
+
+function cargarEntrada(telefono) {
+  const antigua = () => ({
+    identificar: apiCliente('clienteIdentificar', { telefono: telefono }).catch((err) => ({ ok: false, _err: err })),
     catalogo: apiCliente('clienteCatalogo', { telefono: telefono }).catch((err) => ({ ok: false, _err: err })),
     existente: apiCliente('clientePedidoManana', { telefono: telefono }).catch(() => null),
-  };
+  });
+  if (servidorSinInicio) return antigua();
+
+  const todo = apiCliente('clienteInicio', { telefono: telefono })
+    .then((r) => {
+      if (r && r.identificar) return { nuevo: r };
+      // servidor antiguo: no conoce la acción y la trata como una petición de administrador
+      if (r && /clave|acci[oó]n/i.test(String(r.error || ''))) { servidorSinInicio = true; return { antigua: antigua() }; }
+      return { error: r || { ok: false } };    // el servidor contestó con un error
+    })
+    .catch((err) => ({ error: { ok: false, _err: err } }));
+
+  const parte = (nombre) => todo.then((x) => {
+    if (x.nuevo) return nombre === 'existente' ? (x.nuevo.existente || null) : (x.nuevo[nombre] || { ok: false, error: 'Respuesta incompleta del servidor.' });
+    if (x.antigua) return x.antigua[nombre];
+    return nombre === 'existente' ? null : x.error;
+  });
+  return { identificar: parte('identificar'), catalogo: parte('catalogo'), existente: parte('existente') };
 }
 
 // Si el cliente ya envió un pedido para mañana, se precarga el carrito

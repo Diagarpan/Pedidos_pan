@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearProductosLibres();
   cablearEdicion();
   cablearListaFacturas();
+  cablearIncidencias();
+  cablearTelefonosYServidor();
   cablearInformesFacturacion();
   cablearCompras();
   cablearCerrarAnio();
@@ -190,8 +192,8 @@ function registrarServiceWorker() {
 const ACCIONES_REINTENTABLES = new Set([
   'quienSoy', 'resumenInicio', 'reparto', 'pedidos', 'facturas', 'clientes', 'productos',
   'preciosEspecialesCliente', 'resumenPeriodo', 'resumenManana', 'empresa', 'estadoCopias',
-  'itemsPedido', 'itemsFactura',
-  'guardarPrecioEspecial', 'eliminarPrecioEspecial', 'marcarEntregado', 'marcarCobrado', 'marcarFacturaCobrada',
+  'itemsPedido', 'itemsFactura', 'revisarTelefonos',
+  'guardarPrecioEspecial', 'eliminarPrecioEspecial', 'marcarEntregado', 'marcarCobrado', 'marcarFacturaCobrada', 'guardarIncidencia',
 ]);
 const MENSAJE_RESPUESTA_ILEGIBLE = 'Google devolvió una respuesta que no se pudo leer (tardó demasiado o hubo demasiadas peticiones seguidas). Puede que la operación SÍ se haya guardado: compruébalo antes de repetirla.';
 
@@ -211,7 +213,9 @@ async function apiGet(action, extraParams) {
       const res = await fetch(url);
       const texto = await res.text();
       try {
-        return JSON.parse(texto);
+        const respuesta = JSON.parse(texto);
+        if (respuesta && respuesta.tipoError === 'desactualizado') mostrarAvisoServidor();
+        return respuesta;
       } catch (e) {
         fallo = new Error(MENSAJE_RESPUESTA_ILEGIBLE);
         fallo.toString = () => MENSAJE_RESPUESTA_ILEGIBLE;
@@ -348,6 +352,13 @@ async function cargarResumenInicio() {
   document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
   document.getElementById('riEntregados').textContent = `${r.data.entregados} / ${r.data.pedidosHoy}`;
   document.getElementById('riPendiente').textContent = formatoEuros(r.data.pendiente);
+  const avisoInc = document.getElementById('avisoIncidencias');
+  if (r.data.incidencias > 0) {
+    avisoInc.textContent = `⚠ ${r.data.incidencias} pedido${r.data.incidencias === 1 ? '' : 's'} de hoy con incidencia — ver`;
+    avisoInc.classList.remove('tab--hidden');
+  } else {
+    avisoInc.classList.add('tab--hidden');
+  }
 
   // Insignias de "Reparto" y "Pedidos" con los mismos datos (sin pedir nada más)
   const total = r.data.pedidosHoy;
@@ -511,6 +522,7 @@ function pintarReparto(data) {
     const total = data.clientes.length;
     const entregados = data.clientes.filter((c) => c.entregado).length;
     const cobrados = data.clientes.filter((c) => c.cobrado).length;
+    const incidencias = data.clientes.filter((c) => c.incidencia).length;
     const recaudado = data.clientes.filter((c) => c.cobrado).reduce((s, c) => s + Number(c.total || 0), 0);
     const totalEsperado = data.clientes.reduce((s, c) => s + Number(c.total || 0), 0);
 
@@ -519,6 +531,7 @@ function pintarReparto(data) {
         <div class="stats-row__item"><span class="stats-row__num">${entregados}/${total}</span><span class="stats-row__label">Entregados</span></div>
         <div class="stats-row__item"><span class="stats-row__num">${cobrados}/${total}</span><span class="stats-row__label">Cobrados</span></div>
         <div class="stats-row__item"><span class="stats-row__num">${formatoEuros(recaudado)}</span><span class="stats-row__label">Recaudado de ${formatoEuros(totalEsperado)}</span></div>
+        ${incidencias ? `<div class="stats-row__item"><span class="stats-row__num" style="color:var(--warn-red)">${incidencias}</span><span class="stats-row__label">Incidencias</span></div>` : ''}
       </div>
     `;
     document.getElementById('repartoResumen').classList.remove('tab--hidden');
@@ -537,10 +550,12 @@ function pintarReparto(data) {
       </div>
       <div class="card__products">${escapeHtml(c.productos)}</div>
       ${mostrarSeguimiento && c.entregado && c.horaEntrega ? `<div class="card__meta" style="margin-top:4px;">Entregado a las ${escapeHtml(c.horaEntrega)}</div>` : ''}
+      ${htmlIncidencia(c)}
       ${mostrarSeguimiento ? `
         <div class="card__actions">
           ${!c.entregado ? `<button class="chip-btn" data-reparto-accion="entregado" data-id="${c.id}">Marcar entregado</button>` : ''}
           ${!c.cobrado ? `<button class="chip-btn" data-reparto-accion="cobrado" data-id="${c.id}">Marcar cobrado</button>` : ''}
+          <button class="chip-btn" data-reparto-accion="incidencia" data-id="${c.id}">${c.incidencia ? 'Editar incidencia' : 'Incidencia'}</button>
         </div>` : ''}
     </div>
   `).join('');
@@ -549,6 +564,7 @@ function pintarReparto(data) {
     btn.addEventListener('click', async () => {
       // Se ve al instante; si Google falla, se deshace y se avisa
       const accion = btn.dataset.repartoAccion;
+      if (accion === 'incidencia') { abrirIncidencia(btn.dataset.id); return; }
       const c = ultimoReparto && ultimoReparto.clientes.find((x) => String(x.id) === String(btn.dataset.id));
       const antes = c ? { entregado: c.entregado, cobrado: c.cobrado, horaEntrega: c.horaEntrega } : null;
       if (c) {
@@ -644,7 +660,7 @@ async function prepararPedidosLista() {
     fijarRangoPedidos(f.ini, f.fin);
     selCliente.value = f.clienteId || '';
     document.getElementById('buscarPedido').value = '';
-    selEstado.value = 'todos';
+    selEstado.value = f.estado || 'todos';
   } else if (!document.getElementById('pedidosFechaIni').value) {
     fijarRangoPedidos(hoyISO(), hoyISO());
   }
@@ -732,6 +748,7 @@ function pintarPedidos(pedidos) {
 
   const filtrados = pedidos.filter((p) => {
     if (!coincideBusqueda(p.cliente, filtroTexto)) return false;
+    if (filtroEstado === 'incidencia') return !p.anulado && !!p.incidencia;
     const estado = estadoDePedido(p).toLowerCase();
     return filtroEstado === 'todos' ? estado !== 'anulado' : estado === filtroEstado;
   });
@@ -744,7 +761,9 @@ function pintarPedidos(pedidos) {
   const suma = filtrados.reduce((s, p) => s + (Number(p.total) || 0), 0);
   resumen.textContent = filtroEstado === 'anulado'
     ? `${filtrados.length} pedido(s) anulado(s)`
-    : `${filtrados.length} pedido(s) · Total ${formatoEuros(suma)}`;
+    : filtroEstado === 'incidencia'
+      ? `${filtrados.length} pedido(s) con incidencia`
+      : `${filtrados.length} pedido(s) · Total ${formatoEuros(suma)}`;
 
   cont.innerHTML = filtrados.map((p) => {
     const estado = estadoDePedido(p);
@@ -752,6 +771,7 @@ function pintarPedidos(pedidos) {
       <div class="card__actions">
         ${!p.entregado ? `<button class="chip-btn" data-accion="entregado" data-id="${p.id}">Marcar entregado</button>` : ''}
         ${!p.cobrado ? `<button class="chip-btn" data-accion="cobrado" data-id="${p.id}">Marcar cobrado</button>` : ''}
+        <button class="chip-btn" data-accion="incidencia" data-id="${p.id}">${p.incidencia ? 'Editar incidencia' : 'Incidencia'}</button>
         <button class="chip-btn" data-accion="albaran" data-id="${p.id}">Albarán PDF</button>
         ${ROL === 'admin' && p.documento !== 'Albarán' ? `<button class="chip-btn" data-accion="factura" data-id="${p.id}">Factura PDF</button>` : ''}
         ${ROL === 'admin' ? `<button class="chip-btn" data-accion="editar" data-id="${p.id}">Editar pedido</button>` : ''}
@@ -771,6 +791,7 @@ function pintarPedidos(pedidos) {
       </div>
       <div class="card__products">${escapeHtml(p.pedido)}</div>
       ${p.entregado && p.horaEntrega && !p.anulado ? `<div class="card__meta" style="margin-top:6px;">Entregado a las ${escapeHtml(p.horaEntrega)}</div>` : ''}
+      ${htmlIncidencia(p)}
       ${p.observaciones ? `<div class="card__meta" style="color:var(--stamp-red); margin-top:6px;">${escapeHtml(p.observaciones)}</div>` : ''}
       ${acciones}
     </div>
@@ -782,6 +803,8 @@ function pintarPedidos(pedidos) {
       const accion = btn.dataset.accion;
       if (accion === 'entregado' || accion === 'cobrado') {
         cambiarEstadoPedido(btn.dataset.id, accion);
+      } else if (accion === 'incidencia') {
+        abrirIncidencia(btn.dataset.id);
       } else if (accion === 'anular') {
         anularPedido(btn.dataset.id);
       } else if (accion === 'editar') {
@@ -1023,6 +1046,7 @@ async function cargarEmpresa() {
   document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
   document.getElementById('empSerie').value = r.data.serie || '';
   cargarEstadoCopias();
+  comprobarServidor();
   msg.textContent = '';
 }
 
@@ -1733,6 +1757,148 @@ function quitarPrecioEspecial(idCliente, idProducto) {
     errorPrecios = `No se pudo quitar ${quitado ? quitado.producto : 'el precio'}: ${r.error || 'error'}`;
     mostrarEstadoPrecios();
   }, op);
+}
+
+
+/* ============ INCIDENCIAS: por qué no se pudo entregar (o cualquier problema con un pedido) ============ */
+const MOTIVOS_INCIDENCIA = ['Cliente ausente', 'Negocio cerrado', 'No puede pagar', 'Pide que volvamos más tarde', 'Falta producto', 'Pedido equivocado'];
+let incidenciaIdEnEdicion = null;
+
+// Cuadro rojo con la incidencia (si la hay) dentro de la tarjeta de un pedido
+function htmlIncidencia(p) {
+  if (!p.incidencia) return '';
+  return `<div class="card__incidencia"><strong>⚠ Incidencia:</strong> ${escapeHtml(p.incidencia)}${p.horaIncidencia ? ` <span>(${escapeHtml(p.horaIncidencia)})</span>` : ''}</div>`;
+}
+
+// El pedido que se está viendo, esté en la lista de Pedidos o en el Reparto
+function encontrarPedidoLocal(id) {
+  const enLista = ultimosPedidos.find((p) => String(p.id) === String(id));
+  if (enLista) return enLista;
+  return ultimoReparto ? ultimoReparto.clientes.find((p) => String(p.id) === String(id)) : null;
+}
+
+// Cambia la incidencia en lo que hay en pantalla (lista y reparto) y lo repinta
+function aplicarIncidenciaLocal(id, texto, hora) {
+  [ultimosPedidos, ultimoReparto ? ultimoReparto.clientes : []].forEach((lista) => {
+    lista.forEach((p) => { if (String(p.id) === String(id)) { p.incidencia = texto; p.horaIncidencia = hora; } });
+  });
+  if (ultimosPedidos.length) pintarPedidos(ultimosPedidos);
+  if (ultimoReparto) pintarReparto(ultimoReparto);
+}
+
+function abrirIncidencia(id) {
+  const p = encontrarPedidoLocal(id);
+  if (!p) return;
+  incidenciaIdEnEdicion = id;
+  document.getElementById('incidenciaPara').textContent = `${p.cliente} · ${formatoEuros(p.total)}`;
+  document.getElementById('incidenciaTexto').value = p.incidencia || '';
+  document.getElementById('btnQuitarIncidencia').style.display = p.incidencia ? '' : 'none';
+  document.getElementById('incidenciaMsg').textContent = '';
+  document.getElementById('modalIncidencia').classList.remove('tab--hidden');
+  document.getElementById('incidenciaTexto').focus();
+}
+
+function cerrarIncidencia() {
+  document.getElementById('modalIncidencia').classList.add('tab--hidden');
+  incidenciaIdEnEdicion = null;
+}
+
+// Se ve al instante; si Google falla, vuelve a como estaba y se avisa
+async function guardarIncidencia(quitar) {
+  const id = incidenciaIdEnEdicion;
+  if (id === null) return;
+  const texto = quitar ? '' : document.getElementById('incidenciaTexto').value.replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (!quitar && !texto) {
+    const msg = document.getElementById('incidenciaMsg');
+    msg.textContent = 'Escribe qué ha pasado, o pulsa "Quitar la incidencia".';
+    msg.className = 'form-msg is-error';
+    return;
+  }
+  const p = encontrarPedidoLocal(id);
+  const antes = p ? { incidencia: p.incidencia || '', hora: p.horaIncidencia || '' } : { incidencia: '', hora: '' };
+  cerrarIncidencia();
+  aplicarIncidenciaLocal(id, texto, texto ? horaAhoraCorta() : '');
+
+  const r = await apiGet('guardarIncidencia', { idPedido: id, texto }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) {
+    alert('No se pudo guardar la incidencia: ' + (r.error || 'error'));
+    aplicarIncidenciaLocal(id, antes.incidencia, antes.hora);
+  }
+}
+
+function cablearIncidencias() {
+  const contMotivos = document.getElementById('incidenciaMotivos');
+  contMotivos.innerHTML = MOTIVOS_INCIDENCIA.map((m) => `<button type="button" class="chip-btn" data-motivo="${escapeHtml(m)}">${escapeHtml(m)}</button>`).join('');
+  contMotivos.querySelectorAll('[data-motivo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ta = document.getElementById('incidenciaTexto');
+      const actual = ta.value.trim();
+      ta.value = actual ? (/[.!?]$/.test(actual) ? actual + ' ' : actual + '. ') + btn.dataset.motivo : btn.dataset.motivo;
+      ta.focus();
+    });
+  });
+  document.getElementById('btnGuardarIncidencia').addEventListener('click', () => guardarIncidencia(false));
+  document.getElementById('btnQuitarIncidencia').addEventListener('click', () => guardarIncidencia(true));
+  document.getElementById('btnCerrarIncidencia').addEventListener('click', cerrarIncidencia);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && incidenciaIdEnEdicion !== null) cerrarIncidencia(); });
+  // El aviso de Inicio abre la lista de pedidos de hoy con incidencia
+  document.getElementById('avisoIncidencias').addEventListener('click', () => {
+    pedidosFiltroPendiente = { ini: hoyISO(), fin: hoyISO(), clienteId: '', estado: 'incidencia' };
+    cambiarTab('pedidos-lista');
+  });
+}
+
+
+/* ============ TELÉFONOS DE LOS CLIENTES Y ESTADO DEL SERVIDOR ============ */
+// Aviso en pantalla: alguna petición ha dado "x is not defined" = falta pegar/actualizar un archivo de Apps Script
+function mostrarAvisoServidor() {
+  const aviso = document.getElementById('avisoServidor');
+  aviso.textContent = '⚠ El servidor (Apps Script) parece estar a medio actualizar: falta pegar algún archivo. Mira Empresa → Estado del servidor.';
+  aviso.classList.remove('tab--hidden');
+}
+
+async function comprobarServidor() {
+  const caja = document.getElementById('estadoServidor');
+  caja.textContent = 'Comprobando…';
+  const r = await apiGet('ping').catch((err) => ({ ok: false, error: String(err) }));
+  if (!r || !r.ok) {
+    caja.innerHTML = `<strong style="color:var(--warn-red)">⚠ El servidor no responde bien a la comprobación.</strong><br>Puede ser que falte pegar <code>api_pwa.gs</code> o publicar una nueva versión (Implementar → Gestionar implementaciones → Nueva versión).<br><span style="color:var(--ink-muted)">${escapeHtml((r && r.error) || '')}</span>`;
+    mostrarAvisoServidor();
+    return;
+  }
+  if (r.coherente) {
+    caja.innerHTML = `✓ <strong>Servidor al día</strong> · versión ${escapeHtml(r.version)}<br><span style="color:var(--ink-muted)">Todos los archivos de Apps Script son de la misma tanda.</span>`;
+    document.getElementById('avisoServidor').classList.add('tab--hidden');
+  } else {
+    caja.innerHTML = `<strong style="color:var(--warn-red)">⚠ Servidor a medio actualizar</strong> · versión ${escapeHtml(r.version)}<br>Falta pegar o actualizar:<br>${r.faltan.map((f) => '· ' + escapeHtml(f.split(':')[0])).filter((v, i, a) => a.indexOf(v) === i).join('<br>')}<br><span style="color:var(--ink-muted)">Pega esos archivos y vuelve a publicar la versión.</span>`;
+    mostrarAvisoServidor();
+  }
+}
+
+async function revisarTelefonos() {
+  const cont = document.getElementById('telefonosResultado');
+  cont.innerHTML = '<div class="empty-state">Revisando…</div>';
+  document.getElementById('modalTelefonos').classList.remove('tab--hidden');
+  const r = await apiGet('revisarTelefonos').catch((err) => ({ ok: false, error: String(err) }));
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo revisar: ${escapeHtml(r.error || '')}</div>`; return; }
+  if (!r.data.conProblema) {
+    cont.innerHTML = `<div class="empty-state">✓ Los ${r.data.totalClientes} clientes tienen un teléfono válido y sin repetir.</div>`;
+    return;
+  }
+  cont.innerHTML = `<div class="card__meta" style="margin-bottom:6px;">${r.data.conProblema} de ${r.data.totalClientes} clientes con algo que revisar:</div>` +
+    r.data.clientes.map((c) => `
+      <div class="card">
+        <div class="card__name">${escapeHtml(c.nombre)}${c.activo ? '' : ' <span class="card__meta">(inactivo)</span>'}</div>
+        <div class="card__meta">En el Sheet: ${c.telefono ? escapeHtml(c.telefono) : '(vacío)'}</div>
+        ${c.problemas.map((p) => `<div class="card__incidencia">${escapeHtml(p)}</div>`).join('')}
+      </div>
+    `).join('');
+}
+
+function cablearTelefonosYServidor() {
+  document.getElementById('btnRevisarTelefonos').addEventListener('click', revisarTelefonos);
+  document.getElementById('btnCerrarTelefonos').addEventListener('click', () => document.getElementById('modalTelefonos').classList.add('tab--hidden'));
+  document.getElementById('btnComprobarServidor').addEventListener('click', comprobarServidor);
 }
 
 /* ============ PRODUCTOS EN NUEVO PEDIDO / EDITAR

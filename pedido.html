@@ -39,6 +39,7 @@
   @media (max-width: 360px) {
     .pedido-header img { height: 130px; }
   }
+  .aviso-conexion { margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--warn-red); border-radius: var(--radius); background: var(--paper-raised); color: var(--warn-red); font-size: 14px; font-weight: 600; }
   main.pedido-main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
 
   .telefono-box { text-align: center; padding: 24px 8px; }
@@ -109,6 +110,8 @@
 
 <main class="pedido-main">
 
+  <div class="aviso-conexion tab--hidden" id="avisoConexion" role="alert"></div>
+
   <!-- PASO 1: teléfono -->
   <section id="pantallaTelefono" class="telefono-box">
     <h2>¿Cuál es tu teléfono?</h2>
@@ -165,7 +168,23 @@
     <button class="btn-secondary" id="btnNuevoPedido" style="margin-top:20px;">Hacer otro pedido</button>
   </section>
 
+  <div style="text-align:center; margin-top:28px;">
+    <button type="button" class="saludo__cambiar" id="btnDiagnostico">¿Problemas para entrar? Ver diagnóstico</button>
+  </div>
+
 </main>
+
+<!-- DIAGNÓSTICO: se abre, se pulsa Comprobar y se manda una captura a la panadería -->
+<div class="modal-backdrop tab--hidden" id="modalDiagnostico">
+  <div class="modal">
+    <h2>Diagnóstico</h2>
+    <p class="modal-help">Si la aplicación no te carga, pulsa <strong>Comprobar ahora</strong> y envíale una captura de esta pantalla a la panadería.</p>
+    <pre id="diagnosticoTexto" style="white-space:pre-wrap; word-break:break-word; font-size:12.5px; line-height:1.5; background:var(--paper); border:1px solid var(--wheat-line); border-radius:var(--radius); padding:10px; margin:0 0 12px;"></pre>
+    <button type="button" class="btn-primary" id="btnComprobarDiagnostico">Comprobar ahora</button>
+    <button type="button" class="btn-secondary" id="btnCopiarDiagnostico" style="width:100%; margin-top:8px;">Copiar</button>
+    <button type="button" class="btn-secondary" id="btnCerrarDiagnostico" style="width:100%; margin-top:8px;">Cerrar</button>
+  </div>
+</div>
 
 <script src="pedido.js"></script>
 </body>

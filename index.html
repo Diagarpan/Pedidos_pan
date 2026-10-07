@@ -54,6 +54,8 @@
 
     <main id="app">
 
+  <div class="aviso-incidencias tab--hidden" id="avisoServidor" role="alert"></div>
+
   <nav class="breadcrumb tab--hidden" id="breadcrumb"></nav>
 
   <!-- INICIO -->
@@ -81,6 +83,8 @@
         <span class="resumen-inicio__num resumen-inicio__num--alerta" id="riPendiente">—</span>
       </div>
     </div>
+
+    <button class="aviso-incidencias tab--hidden" id="avisoIncidencias" data-solo-admin="1"></button>
 
     <div class="global-search">
       <input type="search" id="buscarGlobal" class="search-input" placeholder="Buscar cliente, pedido o factura…" style="margin-bottom:0;">
@@ -184,6 +188,7 @@
         <option value="pendiente">Pendientes</option>
         <option value="entregado">Entregados</option>
         <option value="cobrado">Cobrados</option>
+        <option value="incidencia">Con incidencia</option>
         <option value="anulado" data-solo-admin="1">Anulados</option>
       </select>
     </div>
@@ -305,6 +310,7 @@
     <button class="link-btn" data-volver="clientes">← Clientes</button>
     <div id="clientesListaVista">
       <button class="btn-primary" id="btnNuevoCliente" style="margin-bottom:12px;">+ Nuevo cliente</button>
+      <button class="btn-secondary" id="btnRevisarTelefonos" style="width:100%; margin-bottom:12px;">Revisar teléfonos de los clientes</button>
       <input type="search" id="buscarCliente" class="search-input" placeholder="Buscar cliente…">
       <div id="listaClientes" class="stack"></div>
     </div>
@@ -659,6 +665,11 @@
       <button class="btn-secondary" id="btnCopiaAhora" style="width:100%; margin-top:10px;">Hacer una copia ahora</button>
       <div class="form-msg" id="copiaMsg"></div>
     </div>
+    <div class="section-label" style="margin-top:28px;">Estado del servidor</div>
+    <div class="card">
+      <div class="card__meta" id="estadoServidor">Comprobando…</div>
+      <button class="btn-secondary" id="btnComprobarServidor" style="width:100%; margin-top:10px;">Comprobar ahora</button>
+    </div>
     <div class="form-msg" id="empresaMsg"></div>
   </section>
 
@@ -763,6 +774,31 @@
 
     <button class="btn-secondary" id="btnCopiarEnlace" style="width:100%; margin-top:14px;">🔗 Copiar enlace para compartir</button>
     <div class="form-msg" id="enlaceMsg"></div>
+  </div>
+</div>
+
+<!-- MODAL REVISIÓN DE TELÉFONOS (por qué a un cliente puede decirle "no estás registrado") -->
+<div class="modal-backdrop tab--hidden" id="modalTelefonos">
+  <div class="modal">
+    <h2>Teléfonos de los clientes</h2>
+    <p class="modal-help">La app de clientes reconoce a cada cliente por su teléfono. Si en el Sheet está vacío, mal escrito o repetido, ese cliente no entra o entra como otro.</p>
+    <div id="telefonosResultado" class="stack" style="max-height:50vh; overflow-y:auto;"></div>
+    <button class="btn-secondary" id="btnCerrarTelefonos" style="width:100%; margin-top:10px;">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL INCIDENCIA (por qué no se pudo entregar, o cualquier problema con un pedido) -->
+<div class="modal-backdrop tab--hidden" id="modalIncidencia">
+  <div class="modal">
+    <h2>Incidencia</h2>
+    <p class="modal-help" id="incidenciaPara"></p>
+    <div class="incidencia-motivos" id="incidenciaMotivos"></div>
+    <label class="field-label" for="incidenciaTexto">Qué ha pasado</label>
+    <textarea id="incidenciaTexto" class="text-input" rows="3" maxlength="300" placeholder="Ej: no había nadie, el local estaba cerrado…"></textarea>
+    <div class="form-msg" id="incidenciaMsg"></div>
+    <button class="btn-primary" id="btnGuardarIncidencia">Guardar incidencia</button>
+    <button class="btn-secondary" id="btnQuitarIncidencia" style="width:100%; margin-top:8px;">Quitar la incidencia</button>
+    <button class="btn-secondary" id="btnCerrarIncidencia" style="width:100%; margin-top:8px;">Cancelar</button>
   </div>
 </div>
 

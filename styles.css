@@ -726,3 +726,33 @@ button:focus:not(:focus-visible) { outline: none; }
 }
 .date-nav__fechas span { color: var(--ink-muted); }
 .date-nav__btn:last-child { border-right: none; border-left: 1px solid var(--wheat-line); }
+
+/* ---------- INCIDENCIAS (por qué no se pudo entregar) ---------- */
+.card__incidencia {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--warn-red);
+  background: var(--wheat);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.35;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  overflow-wrap: anywhere;
+}
+.card__incidencia strong { color: var(--warn-red); }
+.card__incidencia span { color: var(--ink-muted); font-size: 12px; white-space: nowrap; }
+.aviso-incidencias {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--warn-red);
+  background: var(--paper-raised);
+  border: 1px solid var(--warn-red);
+  border-radius: var(--radius);
+}
+.incidencia-motivos { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+textarea.text-input { resize: vertical; min-height: 78px; font-family: inherit; line-height: 1.35; }

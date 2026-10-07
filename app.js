@@ -46,7 +46,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearEstadisticas();
   cablearBusquedaGlobal();
 
-  document.getElementById('btnRefrescar').addEventListener('click', () => cargarTabActual());
+  document.getElementById('btnRefrescar').addEventListener('click', actualizarTodo);
+  document.getElementById('avisoEstado').addEventListener('click', () => document.getElementById('avisoEstado').classList.add('tab--hidden'));
 
   if (!WEB_APP_URL || !API_KEY || vinoDeEnlace) {
     abrirAjustes();
@@ -202,7 +203,25 @@ function errorDeRed(err) {
   return err && err.toString && String(err) === MENSAJE_RESPUESTA_ILEGIBLE ? MENSAJE_RESPUESTA_ILEGIBLE : 'Sin conexión';
 }
 
+// Cuántas peticiones a Google hay en marcha, y (solo mientras se pulsa Actualizar) los fallos que van saliendo
+let peticionesEnCurso = 0;
+let registroFallos = null;
+
 async function apiGet(action, extraParams) {
+  peticionesEnCurso++;
+  try {
+    const respuesta = await apiGetInterno(action, extraParams);
+    if (registroFallos && respuesta && respuesta.ok === false) registroFallos.push(respuesta.error || 'El servidor no ha respondido bien');
+    return respuesta;
+  } catch (err) {
+    if (registroFallos) registroFallos.push(err);
+    throw err;
+  } finally {
+    peticionesEnCurso--;
+  }
+}
+
+async function apiGetInterno(action, extraParams) {
   const params = new URLSearchParams({ action, key: API_KEY, ...(extraParams || {}) });
   const url = `${WEB_APP_URL}?${params.toString()}`;
   const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
@@ -225,6 +244,99 @@ async function apiGet(action, extraParams) {
     }
   }
   throw fallo;
+}
+
+/* ============ BOTÓN ACTUALIZAR ============
+ * Pulsarlo: sale "Actualizando…" (y gira el icono), se comprueba que el servidor responde y que la
+ * clave vale, se ponen al día los clientes y productos del móvil (admin) y se vuelve a pedir lo que se
+ * está viendo, con los filtros que haya puesto y SIN vaciar lo que se esté escribiendo. Al terminar:
+ * "✓ Actualizado", o el motivo si falla. */
+let temporizadorAviso = null;
+function mostrarAviso(texto, tipo, ms) {
+  const el = document.getElementById('avisoEstado');
+  el.textContent = texto;
+  el.className = 'toast toast--' + (tipo || 'info');
+  clearTimeout(temporizadorAviso);
+  if (ms) temporizadorAviso = setTimeout(() => el.classList.add('tab--hidden'), ms);
+}
+
+// Texto claro de un fallo (de red, del servidor o ya escrito)
+function textoDeFallo(err) {
+  const t = String((err && err.message) || err || '');
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(t)) return 'No hay conexión con Internet.';
+  return t.replace(/^(Error|TypeError):\s*/, '') || 'Inténtalo de nuevo en un momento.';
+}
+
+// Pantallas que se vuelven a cargar al actualizar (con los filtros que tengan)
+const RECARGA_AL_ACTUALIZAR = {
+  inicio: () => pintarInicio(),
+  'reparto-dia': () => cargarReparto(),
+  'pedidos-lista': () => cargarPedidos(),
+  'clientes-lista': () => { if (!document.getElementById('clientesListaVista').classList.contains('tab--hidden')) filtrarListaClientes(); },   // la ficha abierta no se cierra
+  'factura-lista': () => buscarResumenFacturas(),
+  'factura-periodo': () => buscarResumenPeriodo(),
+  productos: () => cargarProductosGestion(),
+  proveedores: () => cargarProveedores(),
+  'gastos-ver': () => buscarGastos(),
+  estadisticas: () => buscarEstadisticas(),
+  balance: () => buscarBalance(),
+  'factura-347': () => buscarModelo347(),
+  empresa: () => { comprobarServidor(); cargarEstadoCopias(); },   // sin tocar los campos que se estén editando
+};
+// Formularios: NO se recargan (se perdería lo que se está escribiendo)
+const PANTALLAS_DE_FORMULARIO = ['nuevo', 'pedido-editar', 'factura-editar', 'gasto-nuevo', 'proveedor-form', 'cerrar-anio'];
+
+// Espera a que acaben las peticiones (que haya silencio 0,3 s seguidos), con un máximo de ~45 s
+async function esperarFinDePeticiones() {
+  let tranquilo = 0;
+  for (let i = 0; i < 750; i++) {
+    await new Promise((r) => setTimeout(r, 60));
+    tranquilo = peticionesEnCurso === 0 ? tranquilo + 60 : 0;
+    if (tranquilo >= 300) return true;
+  }
+  return false;
+}
+
+let actualizandoAhora = false;
+async function actualizarTodo() {
+  if (actualizandoAhora) return;
+  if (!WEB_APP_URL || !API_KEY) { mostrarAviso('Falta configurar la app: entra en Ajustes.', 'error', 8000); return; }
+
+  const boton = document.getElementById('btnRefrescar');
+  actualizandoAhora = true;
+  boton.disabled = true;
+  boton.classList.add('is-cargando');
+  mostrarAviso('Actualizando…', 'info');
+  registroFallos = [];
+
+  try {
+    // 1) ¿responde el servidor y la clave sigue valiendo?
+    const q = await apiGet('quienSoy');
+    if (q && q.ok) {
+      // 2) las listas guardadas en el móvil, al día (solo el administrador las usa)
+      if (ROL === 'admin') {
+        const [cl, pr] = await Promise.all([apiGet('clientes'), apiGet('productos')]);
+        if (cl && cl.ok) { clientesCache = cl.data; guardarCache('clientes', cl.data); }
+        if (pr && pr.ok) { productosCache = pr.data; guardarCache('productos', pr.data); }
+      }
+      // 3) lo que se está viendo
+      if (!PANTALLAS_DE_FORMULARIO.includes(tabActualNombre)) {
+        const recarga = RECARGA_AL_ACTUALIZAR[tabActualNombre] || (() => pintarInicio());   // los menús: se ponen al día las insignias
+        recarga();
+        const terminado = await esperarFinDePeticiones();
+        if (!terminado) registroFallos.push('Google tarda demasiado en responder.');
+      }
+    }
+    if (registroFallos.length) throw registroFallos[0];
+    mostrarAviso('✓ Actualizado', 'ok', 2200);
+  } catch (err) {
+    mostrarAviso('No se pudo actualizar: ' + textoDeFallo(err), 'error', 9000);
+  } finally {
+    registroFallos = null;
+    actualizandoAhora = false;
+    boton.disabled = false;
+    boton.classList.remove('is-cargando');
+  }
 }
 
 /* ============ MIGAS DE PAN ============ */
@@ -309,7 +421,10 @@ function claveMenuPadre(nombre) {
   return nombre;
 }
 
+let tabActualNombre = 'inicio';
+
 function cambiarTab(nombre) {
+  tabActualNombre = nombre;
   document.querySelectorAll('.tab').forEach((t) => t.classList.add('tab--hidden'));
   document.getElementById(`tab-${nombre}`).classList.remove('tab--hidden');
   const clave = claveMenuPadre(nombre);
@@ -320,7 +435,7 @@ function cambiarTab(nombre) {
 }
 
 function cargarTabActual(nombre) {
-  const activo = nombre || document.querySelector('.tabbar__item.is-active')?.dataset.tab || 'inicio';
+  const activo = nombre || tabActualNombre || 'inicio';
   if (!WEB_APP_URL || !API_KEY) return;
   if (activo === 'inicio') pintarInicio();
   if (activo === 'reparto-dia') cargarReparto();

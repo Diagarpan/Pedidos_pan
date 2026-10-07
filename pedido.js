@@ -2,9 +2,24 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
-let telefonoCliente = localStorage.getItem('telefonoCliente') || '';
+// Versión de esta app (aparece en el diagnóstico, para saber qué copia tiene cada cliente)
+const VERSION_APP = '2026.10.7';
+// ¿Está pegada la URL del servidor? (cualquier dirección de script.google.com; solo se queja si sigue el texto de relleno)
+const URL_CONFIGURADA = /^https:\/\/script\.google\.com\//.test(WEB_APP_URL) && WEB_APP_URL.indexOf('PEGA_AQUI') === -1;
+const TIEMPO_MAXIMO_MS = 12000; // si Google no contesta en este tiempo, se avisa (antes se quedaba cargando para siempre)
+
+// El almacenamiento del móvil puede estar bloqueado (iPhone con "bloquear cookies", navegadores
+// integrados…): en ese caso la app sigue funcionando, solo que no recuerda el teléfono.
+const almacen = {
+  leer: function (clave) { try { return window.localStorage.getItem(clave); } catch (e) { return null; } },
+  guardar: function (clave, valor) { try { window.localStorage.setItem(clave, valor); return true; } catch (e) { return false; } },
+  borrar: function (clave) { try { window.localStorage.removeItem(clave); } catch (e) { /* nada */ } },
+  funciona: function () { try { window.localStorage.setItem('_prueba', '1'); window.localStorage.removeItem('_prueba'); return true; } catch (e) { return false; } },
+};
+
+let telefonoCliente = almacen.leer('telefonoCliente') || '';
 let nombreCliente = '';
 let catalogo = [];
 let carrito = {}; // { productoId: cantidad }
@@ -17,41 +32,81 @@ let catalogoDeMemoriaMostrado = false;
 const CLAVE_MEMORIA_CLIENTE = 'memoriaClienteDA';
 function leerMemoriaCliente(tel) {
   try {
-    const m = JSON.parse(localStorage.getItem(CLAVE_MEMORIA_CLIENTE) || 'null');
+    const m = JSON.parse(almacen.leer(CLAVE_MEMORIA_CLIENTE) || 'null');
     return m && m.tel === tel && Array.isArray(m.catalogo) && m.catalogo.length ? m : null;
   } catch (e) { return null; }
 }
 function guardarMemoriaCliente(tel, nombre, datos) {
-  try { localStorage.setItem(CLAVE_MEMORIA_CLIENTE, JSON.stringify({ tel: tel, nombre: nombre, catalogo: datos })); } catch (e) { /* sin espacio: no pasa nada */ }
+  almacen.guardar(CLAVE_MEMORIA_CLIENTE, JSON.stringify({ tel: tel, nombre: nombre, catalogo: datos }));
 }
 function borrarMemoriaCliente() {
-  try { localStorage.removeItem(CLAVE_MEMORIA_CLIENTE); } catch (e) { /* nada */ }
+  almacen.borrar(CLAVE_MEMORIA_CLIENTE);
 }
 let fechaEntregaElegida = 'manana'; // siempre para mañana: se manda cada día
 
-// Si la respuesta llega rota o se corta la conexión, lo que es seguro repetir se reintenta
-// solo una vez. Enviar el pedido también lo es: si ya existe uno para mañana, se ACTUALIZA
-// (no se duplica).
+// Lo que es seguro repetir se reintenta solo UNA vez si falla (enviar el pedido también lo es: si ya
+// existe uno para mañana, se ACTUALIZA, no se duplica).
 const ACCIONES_REINTENTABLES = new Set(['clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana', 'clienteCrearPedido']);
 
+// Cada fallo tiene su causa y su código (C1…C8), para que el cliente y la panadería sepan qué pasa
+function crearError(tipo) { const e = new Error(tipo); e.tipo = tipo; return e; }
+function describirError(err) {
+  switch (err && err.tipo) {
+    case 'sin-configurar': return { codigo: 'C1', texto: 'La aplicación no está bien configurada (falta la dirección del servidor). Avisa a la panadería.' };
+    case 'sin-conexion': return { codigo: 'C2', texto: 'No hay conexión con Internet. Comprueba tu cobertura o el wifi y vuelve a intentarlo.' };
+    case 'tiempo': return { codigo: 'C3', texto: 'La conexión va muy lenta y no hemos podido cargar tus datos. Inténtalo de nuevo.' };
+    case 'ilegible': return { codigo: 'C4', texto: 'El servidor no ha respondido bien (puede estar muy ocupado). Inténtalo de nuevo en un minuto.' };
+    case 'navegador-antiguo': return { codigo: 'C8', texto: 'Tu navegador es demasiado antiguo para esta aplicación. Actualízalo o prueba con otro (Chrome o Safari).' };
+    default: return { codigo: 'C5', texto: 'No se ha podido conectar. Inténtalo de nuevo en un momento.' };
+  }
+}
+// Cuando el servidor SÍ contesta pero con un error (por ejemplo, está a medio actualizar)
+function describirRespuesta(r) {
+  if (r && r.tipoError === 'desactualizado') return { codigo: 'C6', texto: 'Estamos actualizando la aplicación. Vuelve a intentarlo en unos minutos.' };
+  if (r && r.tipoError === 'servidor') return { codigo: 'C7', texto: 'El servidor ha tenido un problema. Inténtalo de nuevo en un momento.' };
+  return null;
+}
+let ultimoErrorCodigo = '';
+let ultimoErrorHora = 0;
+function anotarError(d) { ultimoErrorCodigo = d.codigo; ultimoErrorHora = Date.now(); return d; }
+const conCodigo = (d) => d.texto + ' (' + d.codigo + ')';
+
+function pedirTexto(url) {
+  return new Promise(function (resolve, reject) {
+    let terminado = false;
+    const control = typeof AbortController === 'function' ? new AbortController() : null;
+    const temporizador = setTimeout(function () {
+      if (terminado) return;
+      terminado = true;
+      if (control) { try { control.abort(); } catch (e) { /* nada */ } }
+      reject(crearError('tiempo'));
+    }, TIEMPO_MAXIMO_MS);
+    fetch(url, control ? { signal: control.signal } : undefined)
+      .then(function (res) { return res.text(); })
+      .then(function (texto) { if (terminado) return; terminado = true; clearTimeout(temporizador); resolve(texto); })
+      .catch(function () { if (terminado) return; terminado = true; clearTimeout(temporizador); reject(crearError('sin-conexion')); });
+  });
+}
+
 async function apiCliente(action, extraParams) {
-  const params = new URLSearchParams({ action, ...(extraParams || {}) });
-  const url = `${WEB_APP_URL}?${params.toString()}`;
+  if (!URL_CONFIGURADA) throw crearError('sin-configurar');
+  if (typeof fetch !== 'function') throw crearError('navegador-antiguo');
+  const url = WEB_APP_URL + '?' + new URLSearchParams(Object.assign({ action: action }, extraParams || {})).toString();
   const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
   let fallo;
   for (let i = 0; i < intentos; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1200));
     try {
-      const res = await fetch(url);
-      const texto = await res.text();
+      const texto = await pedirTexto(url);
       try {
         return JSON.parse(texto);
       } catch (e) {
-        fallo = new Error('respuesta ilegible');
+        fallo = crearError('ilegible');
         fallo.respuestaIlegible = true;
       }
     } catch (e) {
-      fallo = e; // sin conexión
+      fallo = e && e.tipo ? e : crearError('sin-conexion');
+      if (fallo.tipo === 'tiempo') fallo.respuestaIlegible = true; // pudo llegar al servidor aunque no volviera la respuesta
     }
   }
   throw fallo;
@@ -68,6 +123,8 @@ function escapeHtml(str) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  cablearDiagnostico();
+  if (!URL_CONFIGURADA) mostrarAvisoConexion(anotarError(describirError({ tipo: 'sin-configurar' })), false);
   document.getElementById('btnContinuar').addEventListener('click', () => identificarCliente(false));
   document.getElementById('inputTelefono').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') identificarCliente();
@@ -111,9 +168,16 @@ function arrancarConTelefonoGuardado() {
   } else {
     document.getElementById('saludoNombre').textContent = '¿Qué deseas para mañana?';
     document.getElementById('vistaCategorias').innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
+    // si tarda, se le dice (no es que se haya colgado)
+    temporizadorLentoArranque = setTimeout(() => {
+      if (!catalogo.length && document.getElementById('avisoConexion').classList.contains('tab--hidden')) {
+        document.getElementById('vistaCategorias').innerHTML = '<div class="empty-state">Sigue cargando… la conexión va un poco lenta. Un momento.</div>';
+      }
+    }, 6000);
   }
   identificarCliente(true);
 }
+let temporizadorLentoArranque = null;
 
 // Si no se puede reconocer al cliente al arrancar solo, se le devuelve a la pantalla del teléfono, con el aviso
 function volverAPantallaTelefono(texto) {
@@ -141,15 +205,17 @@ async function identificarCliente(esAutomatico) {
     msg.textContent = 'Comprobando…';
     msg.className = 'form-msg';
   }
+  ocultarAvisoConexion();
 
   // Las tres peticiones salen A LA VEZ (antes iban una detrás de otra). Si el
   // teléfono no está registrado, las otras dos simplemente se descartan.
   const carga = iniciarCargaCatalogo(telefono);
-  const r = await apiCliente('clienteIdentificar', { telefono }).catch(() => ({ ok: false }));
+  const r = await apiCliente('clienteIdentificar', { telefono: telefono }).catch((err) => ({ ok: false, _err: err }));
 
   if (!r.ok) {
-    if (esAutomatico) { volverAPantallaTelefono('No se pudo conectar. Inténtalo de nuevo en un momento.'); return; }
-    msg.textContent = 'No se pudo conectar. Inténtalo de nuevo en un momento.';
+    const d = anotarError(r._err ? describirError(r._err) : (describirRespuesta(r) || describirError(null)));
+    if (esAutomatico) { mostrarErrorDeCarga(d); return; }
+    msg.textContent = conCodigo(d);
     msg.className = 'form-msg is-error';
     return;
   }
@@ -164,7 +230,7 @@ async function identificarCliente(esAutomatico) {
 
   telefonoCliente = telefono;
   nombreCliente = r.nombre;
-  localStorage.setItem('telefonoCliente', telefono);
+  almacen.guardar('telefonoCliente', telefono);
   document.getElementById('saludoNombre').textContent = `¿Qué deseas para mañana, ${nombreCliente}?`;
 
   mostrarPantalla('catalogo');
@@ -173,11 +239,39 @@ async function identificarCliente(esAutomatico) {
   await precargarPedidoExistente(carga.existente);
 }
 
+// Aviso de conexión: se ve en cualquier pantalla, con el motivo y un botón para reintentar
+function mostrarAvisoConexion(d, conReintento) {
+  const aviso = document.getElementById('avisoConexion');
+  aviso.innerHTML = '<div>⚠ ' + escapeHtml(conCodigo(d)) + '</div>' +
+    (conReintento ? '<button type="button" class="btn-secondary" id="btnReintentar" style="width:100%; margin-top:8px;">Reintentar</button>' : '');
+  aviso.classList.remove('tab--hidden');
+  if (conReintento) document.getElementById('btnReintentar').addEventListener('click', reintentarCarga);
+}
+function ocultarAvisoConexion() { document.getElementById('avisoConexion').classList.add('tab--hidden'); }
+function reintentarCarga() {
+  ocultarAvisoConexion();
+  const cont = document.getElementById('vistaCategorias');
+  if (!catalogo.length) cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
+  identificarCliente(true);
+}
+
+// No se ha podido cargar: si ya se está viendo el catálogo de la memoria del móvil, se deja y se avisa;
+// si no, se explica la causa en su sitio, con el botón de reintentar (antes: "Cargando…" para siempre)
+function mostrarErrorDeCarga(d) {
+  if (temporizadorLentoArranque) { clearTimeout(temporizadorLentoArranque); temporizadorLentoArranque = null; }
+  catalogoDeMemoriaMostrado = false;
+  mostrarPantalla('catalogo');
+  if (catalogo.length) { mostrarAvisoConexion(d, true); return; }
+  document.getElementById('vistaCategorias').innerHTML = '<div class="empty-state"></div>';
+  mostrarAvisoConexion(d, true);
+  document.getElementById('vistaCategorias').firstChild.textContent = 'No se ha podido cargar el catálogo.';
+}
+
 // Lanza ya la petición del catálogo (con SUS precios) y la de su pedido de mañana
 function iniciarCargaCatalogo(telefono) {
   return {
-    catalogo: apiCliente('clienteCatalogo', { telefono }).catch(() => ({ ok: false })),
-    existente: apiCliente('clientePedidoManana', { telefono }).catch(() => null),
+    catalogo: apiCliente('clienteCatalogo', { telefono: telefono }).catch((err) => ({ ok: false, _err: err })),
+    existente: apiCliente('clientePedidoManana', { telefono: telefono }).catch(() => null),
   };
 }
 
@@ -216,7 +310,7 @@ function mostrarAvisoPedidoExistente(visible) {
 // El cliente anula su pedido de mañana (hasta las 22:00, lo comprueba el servidor)
 async function anularMiPedido() {
   if (!confirm('¿Seguro que quieres anular tu pedido de mañana?')) return;
-  const r = await apiCliente('clienteAnularPedido', { telefono: telefonoCliente }).catch(() => ({ ok: false, error: 'Sin conexión' }));
+  const r = await apiCliente('clienteAnularPedido', { telefono: telefonoCliente }).catch((err) => ({ ok: false, error: conCodigo(anotarError(describirError(err))) }));
   if (!r.ok) { alert(r.error || 'No se ha podido anular. Inténtalo de nuevo.'); return; }
   carrito = {};
   carritoTocado = false;
@@ -228,7 +322,7 @@ async function anularMiPedido() {
 }
 
 function olvidarTelefono() {
-  localStorage.removeItem('telefonoCliente');
+  almacen.borrar('telefonoCliente');
   borrarMemoriaCliente();
   telefonoCliente = '';
   catalogo = [];
@@ -250,17 +344,22 @@ async function cargarCatalogo(peticionYaLanzada, opciones) {
   const cont = document.getElementById('vistaCategorias');
   // Si ya se está enseñando un catálogo (el de la memoria del móvil), se deja a la vista mientras llega el actualizado
   const conservarVista = !!(opciones && opciones.conservarVista) && catalogo.length > 0;
+  let temporizadorLento = null;
   if (!conservarVista) {
     cont.innerHTML = '<div class="empty-state">Cargando catálogo…</div>';
     document.getElementById('vistaProductos').classList.add('tab--hidden');
     cont.classList.remove('tab--hidden');
     categoriaAbierta = null;
+    // si tarda, se le dice (no es que se haya colgado)
+    temporizadorLento = setTimeout(() => { if (!catalogo.length) cont.innerHTML = '<div class="empty-state">Sigue cargando… la conexión va un poco lenta. Un momento.</div>'; }, 6000);
   }
 
-  const r = await (peticionYaLanzada || apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch(() => ({ ok: false })));
+  const r = await (peticionYaLanzada || apiCliente('clienteCatalogo', { telefono: telefonoCliente }).catch((err) => ({ ok: false, _err: err })));
+  if (temporizadorLento) clearTimeout(temporizadorLento);
   if (!r.ok) {
-    if (!conservarVista) cont.innerHTML = '<div class="empty-state">No se pudo cargar el catálogo. Recarga la página.</div>';
-    return; // con el de la memoria se sigue; al enviar el pedido el servidor aplica los precios de verdad
+    // con el catálogo de la memoria se sigue; al enviar el pedido el servidor aplica los precios de verdad
+    mostrarErrorDeCarga(anotarError(r._err ? describirError(r._err) : (describirRespuesta(r) || describirError(null))));
+    return;
   }
   aplicarCatalogo(r.data);
   guardarMemoriaCliente(telefonoCliente, nombreCliente, r.data);
@@ -269,6 +368,7 @@ async function cargarCatalogo(peticionYaLanzada, opciones) {
 // Pone un catálogo en pantalla (el de la memoria del móvil o el que acaba de llegar de Google)
 // sin molestar: si el cliente está viendo una categoría, se queda en ella y su carrito no se toca.
 function aplicarCatalogo(datos) {
+  if (temporizadorLentoArranque) { clearTimeout(temporizadorLentoArranque); temporizadorLentoArranque = null; }
   catalogo = datos;
   catalogoAgrupado = {};
   catalogo.forEach((p) => {
@@ -416,17 +516,21 @@ async function enviarPedido() {
     telefono: telefonoCliente,
     items: JSON.stringify(items),
     fechaEntrega: fechaEntregaElegida,
-  }).catch((err) => ({
-    ok: false,
-    error: err && err.respuestaIlegible
-      ? 'No hemos podido confirmar tu pedido. Puede que SÍ se haya enviado: vuelve a abrir la app y mira "Tu pedido de mañana" antes de repetirlo.'
-      : 'Sin conexión',
-  }));
+  }).catch((err) => {
+    const d = anotarError(describirError(err));
+    return {
+      ok: false,
+      textoCompleto: err && err.respuestaIlegible
+        ? 'No hemos podido confirmar tu pedido. Puede que SÍ se haya enviado: vuelve a abrir la app y mira "Tu pedido de mañana" antes de repetirlo. (' + d.codigo + ')'
+        : conCodigo(d),
+    };
+  });
 
   boton.disabled = false;
 
   if (!r.ok) {
-    msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
+    const dr = describirRespuesta(r);
+    msg.textContent = r.textoCompleto || (dr ? conCodigo(anotarError(dr)) : 'Error: ' + (r.error || 'inténtalo de nuevo'));
     msg.className = 'form-msg is-error';
     return;
   }
@@ -439,4 +543,60 @@ async function enviarPedido() {
     `Gracias, ${nombreCliente}. Hemos recibido tu pedido para mañana, por un total de ${formatoEuros(r.total)}.`;
   document.getElementById('confirmacionNum').textContent = `Nº de pedido: ${r.idPedido}`;
   mostrarPantalla('confirmacion');
+}
+
+/* ============ DIAGNÓSTICO: "no me carga" ============
+ * El cliente lo abre, pulsa Comprobar y le manda una captura a la panadería: se ve de un vistazo
+ * si falla la configuración, el móvil, la conexión o el servidor. */
+async function ejecutarDiagnostico() {
+  const pantalla = document.getElementById('diagnosticoTexto');
+  pantalla.textContent = 'Comprobando…';
+  const lineas = [];
+  const ok = (t) => '✓ ' + t, mal = (t) => '✗ ' + t;
+  lineas.push('Versión de la app: ' + VERSION_APP);
+  lineas.push(URL_CONFIGURADA ? ok('Dirección del servidor: configurada') : mal('Dirección del servidor: FALTA configurarla (C1)'));
+  lineas.push(almacen.funciona() ? ok('Memoria del móvil: funciona') : mal('Memoria del móvil: bloqueada (no recordará tu teléfono, pero puedes pedir)'));
+  lineas.push(typeof navigator.onLine === 'boolean' && !navigator.onLine ? mal('Internet: el móvil dice que no hay conexión') : ok('Internet: conectado'));
+  lineas.push('Teléfono guardado: ' + (telefonoCliente ? 'sí (termina en ' + String(telefonoCliente).replace(/\D/g, '').slice(-3) + ')' : 'no'));
+
+  if (URL_CONFIGURADA) {
+    const t0 = Date.now();
+    try {
+      const r = await apiCliente('ping');
+      const ms = Date.now() - t0;
+      if (r && r.ok) {
+        lineas.push(ok('Servidor: responde en ' + ms + ' ms · versión ' + r.version));
+        lineas.push(r.coherente ? ok('Servidor: archivos al día') : mal('Servidor: a medio actualizar (' + (r.faltan || []).length + ' piezas)'));
+      } else {
+        lineas.push(mal('Servidor: responde pero no entiende la comprobación (' + (r && r.error ? String(r.error).slice(0, 60) : 'sin detalle') + ')'));
+      }
+    } catch (err) {
+      lineas.push(mal('Servidor: no responde — ' + conCodigo(describirError(err))));
+    }
+    if (telefonoCliente) {
+      try {
+        const r2 = await apiCliente('clienteIdentificar', { telefono: telefonoCliente });
+        lineas.push(r2 && r2.ok ? (r2.encontrado ? ok('Tu teléfono: reconocido') : mal('Tu teléfono: NO está registrado en la panadería')) : mal('Tu teléfono: no se pudo comprobar'));
+      } catch (err) {
+        lineas.push(mal('Tu teléfono: no se pudo comprobar — ' + conCodigo(describirError(err))));
+      }
+    }
+  }
+  lineas.push(ultimoErrorCodigo ? 'Último error en esta sesión: ' + ultimoErrorCodigo + ' (hace ' + Math.round((Date.now() - ultimoErrorHora) / 1000) + ' s)' : 'Último error en esta sesión: ninguno');
+  lineas.push('Navegador: ' + String(navigator.userAgent || '').replace(/\s+/g, ' ').slice(0, 110));
+  lineas.push('Hora del móvil: ' + new Date().toLocaleString('es-ES'));
+  pantalla.textContent = lineas.join('\n');
+}
+
+function cablearDiagnostico() {
+  document.getElementById('btnDiagnostico').addEventListener('click', () => {
+    document.getElementById('modalDiagnostico').classList.remove('tab--hidden');
+    ejecutarDiagnostico();
+  });
+  document.getElementById('btnComprobarDiagnostico').addEventListener('click', ejecutarDiagnostico);
+  document.getElementById('btnCerrarDiagnostico').addEventListener('click', () => document.getElementById('modalDiagnostico').classList.add('tab--hidden'));
+  document.getElementById('btnCopiarDiagnostico').addEventListener('click', () => {
+    const texto = document.getElementById('diagnosticoTexto').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).catch(() => {});
+  });
 }

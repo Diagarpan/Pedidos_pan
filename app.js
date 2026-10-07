@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearListaFacturas();
   cablearIncidencias();
   cablearTelefonosYServidor();
+  cablearVistasRapidas();
   cablearInformesFacturacion();
   cablearCompras();
   cablearCerrarAnio();
@@ -68,7 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       RUTA = r.data.ruta || '';
       localStorage.setItem('rol', ROL);
       localStorage.setItem('ruta', RUTA);
-      if (cambio) { aplicarModoUI(); cargarTabActual(); precargarListas(); }
+      if (cambio) { invalidarVistas(); aplicarModoUI(); cargarTabActual(); precargarListas(); }
     }).catch(() => { /* sin conexión: se queda con lo que ya hay */ });
     return;
   }
@@ -209,11 +210,16 @@ let registroFallos = null;
 
 async function apiGet(action, extraParams) {
   peticionesEnCurso++;
+  const cambio = registrarCambioLocal(action, extraParams);   // marcar entregado/cobrado o incidencia: se apunta mientras viaja
   try {
     const respuesta = await apiGetInterno(action, extraParams);
     if (registroFallos && respuesta && respuesta.ok === false) registroFallos.push(respuesta.error || 'El servidor no ha respondido bien');
+    const bien = !!(respuesta && respuesta.ok === true);
+    cerrarCambioLocal(cambio, bien);
+    if (bien) despuesDeEscribir(action, cambio);
     return respuesta;
   } catch (err) {
+    cerrarCambioLocal(cambio, false);
     if (registroFallos) registroFallos.push(err);
     throw err;
   } finally {
@@ -244,6 +250,277 @@ async function apiGetInterno(action, extraParams) {
     }
   }
   throw fallo;
+}
+
+/* ============ VISTAS RÁPIDAS: lo último que viste, al instante ============
+ * Inicio, Reparto, Pedidos y Facturas se abren con lo último que se vio (guardado en este móvil) y se
+ * ponen al día por detrás. Mientras tanto, una barrita y un texto pequeño avisan: "Actualizando…",
+ * "Actualizado a las 10:32" o, si no se puede, "No se ha podido actualizar… Estás viendo datos de las
+ * 09:10" con un botón para reintentar.
+ * Reglas:
+ *  - Los FORMULARIOS (nuevo pedido, editar…) nunca usan lo guardado: siempre cargan lo actual.
+ *  - Lo que acabas de tocar (entregado, cobrado, incidencia) no se pisa cuando llegan los datos nuevos.
+ *  - Cualquier cambio que afecte a las listas (crear, editar o anular un pedido…) borra lo guardado.
+ *  - Lo guardado es de UN usuario (rol, ruta y clave): otro usuario del mismo móvil no lo ve. */
+const VISTA_PREFIJO = 'vista_';
+const VISTA_INDICE = 'vista_indice';
+const VISTA_MAX_ENTRADAS = 14;
+const VISTA_MAX_BYTES = 250000;               // una vista más grande no se guarda
+const VISTA_MAX_EDAD_MS = 6 * 3600 * 1000;    // más vieja que esto no se enseña
+const VISTA_VIEJA_MS = 5 * 60 * 1000;         // más vieja que esto se avisa en ámbar
+let modoManual = false;                       // true mientras se pulsa Actualizar (no se enseña lo guardado)
+
+function propietarioVista() {
+  let h = 5381;
+  const k = String(API_KEY || '');
+  for (let i = 0; i < k.length; i++) h = ((h * 33) ^ k.charCodeAt(i)) >>> 0;
+  return `${ROL || '-'}:${RUTA || '-'}:${h.toString(36)}`;
+}
+
+function claveVista(accion, params) {
+  const p = params || {};
+  const ordenado = Object.keys(p).sort().map((k) => `${k}=${p[k]}`).join('&');
+  return `${VISTA_PREFIJO}${propietarioVista()}|${accion}|${ordenado}`;
+}
+
+function leerIndiceVistas() {
+  try { const x = JSON.parse(localStorage.getItem(VISTA_INDICE) || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; }
+}
+
+function guardarVista(clave, datos, accion) {
+  try {
+    const texto = JSON.stringify({ ts: Date.now(), datos: datos });
+    if (texto.length > VISTA_MAX_BYTES) return;
+    localStorage.setItem(clave, texto);
+    const indice = leerIndiceVistas().filter((e) => e.k !== clave);
+    indice.push({ k: clave, a: accion || clave.split('|')[1] });
+    while (indice.length > VISTA_MAX_ENTRADAS) localStorage.removeItem(indice.shift().k);
+    localStorage.setItem(VISTA_INDICE, JSON.stringify(indice));
+  } catch (e) { /* sin espacio o almacenamiento bloqueado: la app funciona igual, sin esto */ }
+}
+
+function leerVista(clave) {
+  try {
+    const v = JSON.parse(localStorage.getItem(clave) || 'null');
+    if (!v || !v.ts || Date.now() - v.ts > VISTA_MAX_EDAD_MS) return null;
+    return v;
+  } catch (e) { return null; }
+}
+
+// Borra lo guardado (todo, o solo de ciertas acciones)
+function invalidarVistas(acciones) {
+  try {
+    const indice = leerIndiceVistas();
+    const quedan = [];
+    indice.forEach((e) => {
+      if (!acciones || acciones.includes(e.a)) localStorage.removeItem(e.k); else quedan.push(e);
+    });
+    localStorage.setItem(VISTA_INDICE, JSON.stringify(quedan));
+  } catch (e) { /* nada */ }
+}
+
+// ---- Lo que acabas de tocar no debe "volver atrás" cuando llegan datos que salieron antes de tu cambio ----
+let cambiosLocales = [];   // { id, cambios, fin (null = aún viajando), descartado }
+
+function registrarCambioLocal(accion, params) {
+  const p = params || {};
+  if (!p.idPedido) return null;
+  let cambios = null;
+  if (accion === 'marcarEntregado') cambios = { entregado: true, horaEntrega: horaAhoraCorta() };
+  else if (accion === 'marcarCobrado') cambios = { cobrado: true };
+  else if (accion === 'guardarIncidencia') {
+    const texto = String(p.texto == null ? '' : p.texto).replace(/\s+/g, ' ').trim().slice(0, 300);
+    cambios = { incidencia: texto, horaIncidencia: texto ? horaAhoraCorta() : '' };
+  }
+  if (!cambios) return null;
+  const entrada = { id: String(p.idPedido), accion: accion, cambios: cambios, fin: null, descartado: false };
+  cambiosLocales.push(entrada);
+  return entrada;
+}
+
+function cerrarCambioLocal(entrada, bien) {
+  if (!entrada) return;
+  entrada.fin = Date.now();
+  if (!bien) entrada.descartado = true;   // el que llamó ya lo deshace en pantalla
+}
+
+function aplicarCambiosLocales(accion, datos, inicioPeticion) {
+  const ahora = Date.now();
+  cambiosLocales = cambiosLocales.filter((e) => !e.descartado && (e.fin === null || ahora - e.fin < 180000));
+  if (!cambiosLocales.length) return datos;
+  const lista = accion === 'reparto' ? (datos && datos.clientes) : (accion === 'pedidos' ? datos : null);
+  if (!Array.isArray(lista)) return datos;
+  lista.forEach((p) => {
+    cambiosLocales.forEach((e) => {
+      // vale si el cambio aún viaja, o terminó después de salir esta petición (los datos pueden ser anteriores a él)
+      if (String(p.id) === e.id && (e.fin === null || e.fin >= inicioPeticion - 300)) Object.assign(p, e.cambios);
+    });
+  });
+  return datos;
+}
+
+// Tras guardar algo en Google: lo guardado en el móvil se corrige o se borra
+function despuesDeEscribir(accion, cambio) {
+  if (cambio) {
+    // cambio pequeño y conocido: se aplica también a las copias guardadas (sin cambiar su hora)
+    try {
+      leerIndiceVistas().filter((e) => e.a === 'reparto' || e.a === 'pedidos').forEach((e) => {
+        const v = JSON.parse(localStorage.getItem(e.k) || 'null');
+        if (!v) return;
+        const lista = e.a === 'reparto' ? v.datos && v.datos.clientes : v.datos;
+        if (!Array.isArray(lista)) return;
+        let toco = false;
+        lista.forEach((p) => { if (String(p.id) === cambio.id) { Object.assign(p, cambio.cambios); toco = true; } });
+        if (toco) localStorage.setItem(e.k, JSON.stringify(v));
+      });
+    } catch (e) { /* nada */ }
+    invalidarVistas(accion === 'marcarCobrado' ? ['resumenInicio', 'facturas'] : ['resumenInicio']);
+    return;
+  }
+  if (ACCIONES_QUE_CAMBIAN_LISTAS.includes(accion)) invalidarVistas();
+}
+const ACCIONES_QUE_CAMBIAN_LISTAS = ['nuevoPedido', 'anularPedido', 'editarPedido', 'editarFactura', 'marcarFacturaCobrada', 'cerrarAnio', 'guardarCliente', 'guardarProducto'];
+
+// ---- El aviso de estado (barrita + texto) ----
+function pantallaDeTab(tab) {
+  return ({ inicio: 'inicio', 'reparto-dia': 'reparto', 'pedidos-lista': 'pedidos', 'factura-lista': 'facturas' })[tab] || null;
+}
+const pad2 = (n) => String(n).padStart(2, '0');
+function hhmm(ts) { const d = new Date(ts); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function mismoDia(ts) { const a = new Date(ts), b = new Date(); return a.toDateString() === b.toDateString(); }
+// "a las 10:32" / "el 04/10 a las 21:15" y "de las 10:32" / "del 04/10 a las 21:15"
+function cuandoFue(ts, forma) {
+  if (mismoDia(ts)) return (forma === 'de' ? 'de las ' : 'a las ') + hhmm(ts);
+  const d = new Date(ts);
+  return (forma === 'de' ? 'del ' : 'el ') + `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} a las ${hhmm(ts)}`;
+}
+
+let reintentarVista = null;
+function marcarEstado(pantalla, tipo, ts, motivo, reintentar) {
+  if (pantallaDeTab(tabActualNombre) !== pantalla) return;
+  const caja = document.getElementById('estadoDatos');
+  const texto = document.getElementById('estadoDatosTexto');
+  const boton = document.getElementById('btnReintentarDatos');
+  let t = '', clase = 'estado-datos';
+  reintentarVista = null;
+  boton.classList.add('tab--hidden');
+  if (tipo === 'cargando') {
+    const vieja = ts && Date.now() - ts > VISTA_VIEJA_MS;
+    t = ts ? (vieja ? `Datos ${cuandoFue(ts, 'de')} · actualizando…` : 'Actualizando…') : (modoManual ? 'Actualizando…' : 'Cargando…');
+    clase += ' estado-datos--cargando' + (vieja ? ' estado-datos--viejo' : '');
+  } else if (tipo === 'listo') {
+    t = `Actualizado ${cuandoFue(ts, 'a')}`;
+    clase += ' estado-datos--listo';
+  } else if (tipo === 'error') {
+    t = `No se ha podido actualizar${motivo ? ' (' + String(motivo).replace(/\.$/, '') + ')' : ''}. Estás viendo datos ${cuandoFue(ts, 'de')}.`;
+    clase += ' estado-datos--error';
+    reintentarVista = reintentar;
+    boton.classList.remove('tab--hidden');
+  }
+  texto.textContent = t;
+  caja.className = clase;
+}
+function ocultarEstado() {
+  const caja = document.getElementById('estadoDatos');
+  if (caja) caja.classList.add('tab--hidden');
+  reintentarVista = null;
+}
+
+// ---- Cargar: primero lo guardado (si lo hay), luego lo nuevo ----
+const turnosVista = {};   // por pantalla: solo vale la última petición (si cambias de día o de filtro, las anteriores se ignoran)
+
+async function cargarVista(o) {
+  const clave = claveVista(o.accion, o.params);
+  turnosVista[o.pantalla] = (turnosVista[o.pantalla] || 0) + 1;
+  const turno = turnosVista[o.pantalla];
+
+  const guardada = modoManual ? null : leerVista(clave);
+  if (guardada) {
+    o.pintar(guardada.datos);
+    marcarEstado(o.pantalla, 'cargando', guardada.ts);
+  } else {
+    if (o.antesDePedir && !modoManual) o.antesDePedir();   // al actualizar a mano se deja lo que hay a la vista
+    marcarEstado(o.pantalla, 'cargando', null);
+  }
+
+  const inicio = Date.now();
+  let r;
+  try { r = await apiGet(o.accion, o.params); } catch (err) { r = { ok: false, error: textoDeFallo(err) }; }
+  if (turno !== turnosVista[o.pantalla]) return { obsoleto: true, pintado: !!guardada };
+
+  if (!r || r.ok !== true) {
+    if (guardada) {
+      marcarEstado(o.pantalla, 'error', guardada.ts, textoDeFallo((r && r.error) || 'sin conexión'), () => cargarVista(o));
+    } else {
+      ocultarEstado();
+      if (o.alFallar) o.alFallar(r);
+    }
+    return { ok: false, pintado: !!guardada };
+  }
+
+  const datos = aplicarCambiosLocales(o.accion, r.data, inicio);
+  guardarVista(clave, datos, o.accion);
+  const y = window.scrollY;
+  o.pintar(datos);
+  if (guardada) window.scrollTo(0, y);   // no salta la pantalla al llegar lo nuevo
+  marcarEstado(o.pantalla, 'listo', Date.now());
+  if (o.pantalla === 'inicio') programarPrecarga();
+  return { ok: true, pintado: true };
+}
+
+// ---- Precarga: mientras miras Inicio, se van pidiendo lo que vas a abrir ----
+let precargando = false;
+let ultimaPrecarga = 0;
+let temporizadorPrecarga = null;
+
+function programarPrecarga() {
+  clearTimeout(temporizadorPrecarga);
+  temporizadorPrecarga = setTimeout(precargarVistas, 700);
+}
+
+// Pide EXACTAMENTE lo mismo que pedirá cada pantalla al abrirse, para que lo guardado le sirva
+async function precargarVistas() {
+  if (precargando || actualizandoAhora || document.hidden || !WEB_APP_URL || !API_KEY) return;
+  if (Date.now() - ultimaPrecarga < 120000) return;   // como mucho cada 2 minutos
+  precargando = true;
+  try {
+    const hoy = formatoFechaES(hoyISO());
+    const lista = [
+      ['reparto', { fecha: fechaOffsetDDMMYYYY(0) }],
+      ['pedidos', { fechaIni: hoy, fechaFin: hoy }],
+    ];
+    if (ROL === 'admin') lista.push(['facturas', { fechaIni: formatoFechaES(primeroDeMesISO()), fechaFin: hoy }]);
+    for (const [accion, params] of lista) {
+      if (actualizandoAhora || document.hidden) break;
+      const inicio = Date.now();
+      const r = await apiGet(accion, params).catch(() => null);
+      if (!r || r.ok !== true) break;                  // si falla una, se para (casi seguro sin conexión)
+      guardarVista(claveVista(accion, params), aplicarCambiosLocales(accion, r.data, inicio), accion);
+    }
+    ultimaPrecarga = Date.now();
+  } finally {
+    precargando = false;
+  }
+}
+
+// ---- Al volver a la app tras un rato, se pone al día lo que se está viendo ----
+let ocultaDesde = 0;
+function refrescoSilencioso() {
+  if (actualizandoAhora || !WEB_APP_URL || !API_KEY) return;
+  if (PANTALLAS_DE_FORMULARIO.includes(tabActualNombre)) return;
+  const recarga = ({ inicio: () => pintarInicio(), 'reparto-dia': () => cargarReparto(), 'pedidos-lista': () => cargarPedidos(), 'factura-lista': () => buscarResumenFacturas() })[tabActualNombre];
+  if (recarga) recarga();
+  programarPrecarga();
+}
+
+function cablearVistasRapidas() {
+  document.getElementById('btnReintentarDatos').addEventListener('click', () => { if (reintentarVista) reintentarVista(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { ocultaDesde = Date.now(); return; }
+    if (!ocultaDesde || Date.now() - ocultaDesde < 60000) return;
+    ocultaDesde = 0;
+    refrescoSilencioso();
+  });
 }
 
 /* ============ BOTÓN ACTUALIZAR ============
@@ -304,10 +581,13 @@ async function actualizarTodo() {
 
   const boton = document.getElementById('btnRefrescar');
   actualizandoAhora = true;
+  modoManual = true;
   boton.disabled = true;
   boton.classList.add('is-cargando');
   mostrarAviso('Actualizando…', 'info');
   registroFallos = [];
+  const pantallaRapida = pantallaDeTab(tabActualNombre);
+  if (pantallaRapida) marcarEstado(pantallaRapida, 'cargando', null);
 
   try {
     // 1) ¿responde el servidor y la clave sigue valiendo?
@@ -333,6 +613,7 @@ async function actualizarTodo() {
     mostrarAviso('No se pudo actualizar: ' + textoDeFallo(err), 'error', 9000);
   } finally {
     registroFallos = null;
+    modoManual = false;
     actualizandoAhora = false;
     boton.disabled = false;
     boton.classList.remove('is-cargando');
@@ -425,6 +706,7 @@ let tabActualNombre = 'inicio';
 
 function cambiarTab(nombre) {
   tabActualNombre = nombre;
+  ocultarEstado();
   document.querySelectorAll('.tab').forEach((t) => t.classList.add('tab--hidden'));
   document.getElementById(`tab-${nombre}`).classList.remove('tab--hidden');
   const clave = claveMenuPadre(nombre);
@@ -461,8 +743,10 @@ function pintarInicio() {
 }
 
 async function cargarResumenInicio() {
-  const r = await apiGet('resumenInicio').catch(() => null);
-  if (!r || !r.ok) return;
+  await cargarVista({ pantalla: 'inicio', accion: 'resumenInicio', params: {}, pintar: (d) => pintarResumenInicio({ data: d }) });
+}
+
+function pintarResumenInicio(r) {
   document.getElementById('riRecaudado').textContent = formatoEuros(r.data.recaudado);
   document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
   document.getElementById('riEntregados').textContent = `${r.data.entregados} / ${r.data.pedidosHoy}`;
@@ -485,16 +769,16 @@ async function cargarResumenInicio() {
 async function cargarBadgesInicio() {
   const badgeReparto = document.getElementById('badgeReparto');
   const badgePedidos = document.getElementById('badgePedidos');
-  badgeReparto.textContent = '';
-  badgePedidos.textContent = '';
-
-  const r = await apiGet('pedidos').catch(() => null);
-  if (!r || !r.ok) return;
-
-  const total = r.data.length;
-  const pendientes = r.data.filter((p) => !p.entregado).length;
-  badgeReparto.textContent = total ? `${total} hoy` : '';
-  badgePedidos.textContent = pendientes ? `${pendientes} pendientes` : (total ? 'Al día' : '');
+  await cargarVista({
+    pantalla: 'inicio', accion: 'pedidos', params: {},
+    antesDePedir: () => { badgeReparto.textContent = ''; badgePedidos.textContent = ''; },
+    pintar: (datos) => {
+      const total = datos.length;
+      const pendientes = datos.filter((p) => !p.entregado).length;
+      badgeReparto.textContent = total ? `${total} hoy` : '';
+      badgePedidos.textContent = pendientes ? `${pendientes} pendientes` : (total ? 'Al día' : '');
+    },
+  });
 }
 
 /* ============ AJUSTES / CONEXIÓN ============ */
@@ -516,6 +800,7 @@ function cablearAjustes() {
     API_KEY = key;
     localStorage.setItem('webAppUrl', url);
     localStorage.setItem('apiKey', key);
+    invalidarVistas();   // lo guardado era de otra clave
 
     msg.textContent = 'Comprobando conexión…';
     msg.className = 'form-msg';
@@ -592,16 +877,21 @@ function fechaOffsetDDMMYYYY(offset) {
 async function cargarReparto() {
   const contProductos = document.getElementById('repartoProductos');
   document.getElementById('repartoDiaTitulo').textContent = etiquetaFechaOffset(offsetRepartoSeleccionado);
+  const offset = offsetRepartoSeleccionado;
 
-  const r = await apiGet('reparto', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch(() => null);
-  if (!r || !r.ok) {
-    contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
-    return;
-  }
-  pintarReparto(r.data);
+  const res = await cargarVista({
+    pantalla: 'reparto', accion: 'reparto', params: { fecha: fechaOffsetDDMMYYYY(offset) },
+    antesDePedir: () => {
+      contProductos.innerHTML = '<div class="empty-state">Cargando…</div>';
+      document.getElementById('repartoClientes').innerHTML = '';
+    },
+    pintar: (datos) => pintarReparto(datos),
+    alFallar: (r) => { contProductos.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`; },
+  });
+  if (res.obsoleto || !res.pintado) return;
 
   const bloqueFaltan = document.getElementById('bloqueFaltanManana');
-  if (offsetRepartoSeleccionado === 1) {
+  if (offset === 1) {
     bloqueFaltan.classList.remove('tab--hidden');
     cargarFaltanManana();
   } else {
@@ -728,7 +1018,6 @@ async function cargarFaltanManana() {
 /* ============ PEDIDOS: un día, un rango de fechas y/o un cliente, en UNA pantalla ============ */
 let pedidosFiltroPendiente = null;  // { ini, fin, clienteId }: lo que pide quien abre la pantalla (ej. la ficha de un cliente)
 let rangoPedidosAnterior = null;    // para saber si se estaba mirando UN solo día
-let peticionPedidos = 0;            // número de la última petición (se ignoran las respuestas atrasadas)
 
 // Fechas en hora LOCAL (valueAsDate trabaja en UTC y cerca de medianoche daba el día anterior)
 function aISO(d) {
@@ -792,14 +1081,12 @@ async function cargarPedidos() {
   const clienteId = ROL === 'admin' ? document.getElementById('selectClientePedidos').value : '';
   if (clienteId) params.clienteId = clienteId;
 
-  const miPeticion = ++peticionPedidos;
-  const r = await apiGet('pedidos', params).catch(() => null);
-  if (miPeticion !== peticionPedidos) return; // llegó tarde: ya se pidió otra cosa
-  if (!r || !r.ok) {
-    cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`;
-    return;
-  }
-  pintarPedidos(r.data);
+  await cargarVista({
+    pantalla: 'pedidos', accion: 'pedidos', params: params,
+    antesDePedir: () => { cont.innerHTML = '<div class="empty-state">Cargando…</div>'; },
+    pintar: (datos) => pintarPedidos(datos),
+    alFallar: (r) => { cont.innerHTML = `<div class="empty-state">No se pudo cargar (${(r && r.error) || 'sin conexión'})</div>`; },
+  });
 }
 
 function cablearNavegacionPedidos() {
@@ -1071,18 +1358,22 @@ async function buscarResumenFacturas() {
   const fin = document.getElementById('resFechaFin').value;
   if (!ini || !fin) { cont.innerHTML = '<div class="empty-state">Elige las dos fechas.</div>'; return; }
 
-  cont.innerHTML = '<div class="empty-state">Buscando…</div>';
   const params = { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) };
   const clienteId = document.getElementById('selectClienteFacturas').value;
   if (clienteId) params.clienteId = clienteId;
-  const r = await apiGet('facturas', params).catch((err) => ({ ok: false, error: String(err) }));
-  if (!r || !r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r ? r.error : 'sin conexión')}</div>`; return; }
 
-  resumenFacturasCache = r.data.facturas;
-  document.getElementById('resumenFacturasTotal').textContent =
-    `Facturado: ${formatoEuros(r.data.total)}  ·  Cobrado: ${formatoEuros(r.data.totalCobrado)}  ·  Pendiente: ${formatoEuros(r.data.totalPendiente)}` +
-    (r.data.numAnuladas ? `  ·  ${r.data.numAnuladas} anulada(s)` : '');
-  pintarResumenFacturas();
+  await cargarVista({
+    pantalla: 'facturas', accion: 'facturas', params: params,
+    antesDePedir: () => { cont.innerHTML = '<div class="empty-state">Buscando…</div>'; },
+    pintar: (datos) => {
+      resumenFacturasCache = datos.facturas;
+      document.getElementById('resumenFacturasTotal').textContent =
+        `Facturado: ${formatoEuros(datos.total)}  ·  Cobrado: ${formatoEuros(datos.totalCobrado)}  ·  Pendiente: ${formatoEuros(datos.totalPendiente)}` +
+        (datos.numAnuladas ? `  ·  ${datos.numAnuladas} anulada(s)` : '');
+      pintarResumenFacturas();
+    },
+    alFallar: (r) => { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r && r.error ? r.error : 'sin conexión')}</div>`; },
+  });
 }
 
 function pintarResumenFacturas() {
@@ -1987,7 +2278,7 @@ async function comprobarServidor() {
     caja.innerHTML = `✓ <strong>Servidor al día</strong> · versión ${escapeHtml(r.version)}<br><span style="color:var(--ink-muted)">Todos los archivos de Apps Script son de la misma tanda.</span>`;
     document.getElementById('avisoServidor').classList.add('tab--hidden');
   } else {
-    caja.innerHTML = `<strong style="color:var(--warn-red)">⚠ Servidor a medio actualizar</strong> · versión ${escapeHtml(r.version)}<br>Falta pegar o actualizar:<br>${r.faltan.map((f) => '· ' + escapeHtml(f.split(':')[0])).filter((v, i, a) => a.indexOf(v) === i).join('<br>')}<br><span style="color:var(--ink-muted)">Pega esos archivos y vuelve a publicar la versión.</span>`;
+    caja.innerHTML = `<strong style="color:var(--warn-red)">⚠ Servidor a medio actualizar</strong> · versión ${escapeHtml(r.version)}<br>Falta pegar o actualizar:<br>${(r.faltan || []).map((f) => '· ' + escapeHtml(String(f).split(':')[0])).filter((v, i, a) => a.indexOf(v) === i).join('<br>')}<br><span style="color:var(--ink-muted)">Pega esos archivos y vuelve a publicar la versión.</span>`;
     mostrarAvisoServidor();
   }
 }

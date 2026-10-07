@@ -1045,6 +1045,7 @@ async function cargarEmpresa() {
   document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
   document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
   document.getElementById('empSerie').value = r.data.serie || '';
+  document.getElementById('empFechaFactura').value = r.data.fechaFactura === 'entrega' ? 'entrega' : 'pedido';
   cargarEstadoCopias();
   comprobarServidor();
   msg.textContent = '';
@@ -1064,6 +1065,7 @@ async function guardarEmpresa() {
     logoFileId: document.getElementById('empLogoFileId').value.trim(),
     numeroInicialFactura: document.getElementById('empNumeroInicialFactura').value.trim(),
     serie: document.getElementById('empSerie').value.trim(),
+    fechaFactura: document.getElementById('empFechaFactura').value,
   }).catch(() => ({ ok: false }));
 
   if (r.ok) {

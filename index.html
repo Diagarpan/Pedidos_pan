@@ -654,6 +654,13 @@
     <input type="text" id="empSerie" class="text-input" placeholder="Ej: 4">
     <div class="card__meta" style="margin: -8px 0 14px;">Si tu gestor lleva una serie que sube cada año (ej. Serie 4 este año), ponla aquí — sale impresa en cada factura. Cámbiala tú mismo cuando toque (ej. a 5 en enero). Deja en blanco si no la usáis.</div>
 
+    <label class="field-label" for="empFechaFactura">Fecha que lleva la factura de un pedido</label>
+    <select id="empFechaFactura" class="select-input">
+      <option value="pedido">El día en que se apunta el pedido (como hasta ahora)</option>
+      <option value="entrega">El día de la entrega</option>
+    </select>
+    <div class="card__meta" style="margin: -8px 0 14px;">El pedido se apunta casi siempre la víspera de entregarlo. Con "el día de la entrega", la factura lleva la fecha en que se entrega (sale en "Facturas de hoy" y cae en el trimestre y año de la operación). Con el otro, lleva la del día en que se apuntó y en el PDF se indica además la fecha de entrega. Pregunta a tu gestor cuál prefiere; solo afecta a las facturas NUEVAS.</div>
+
     <label class="field-label" for="empNumeroInicialFactura">Próxima factura empieza en (opcional)</label>
     <input type="number" id="empNumeroInicialFactura" class="text-input" placeholder="Deja en blanco si no hace falta">
     <div class="card__meta" style="margin: -8px 0 14px;">Solo rellena esto si cambias de otro programa de facturación a mitad de año y quieres seguir su numeración, para no repetir un número ya usado allí. Deja en blanco en el uso normal.</div>

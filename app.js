@@ -324,7 +324,7 @@ function fetchConTiempo(url) {
       if (control) { try { control.abort(); } catch (e) { /* nada */ } }
       rechazar(new Error('Google tarda demasiado en responder.'));
     }, TIEMPO_MAXIMO_PETICION_MS);
-    fetch(url, control ? { signal: control.signal } : undefined)
+    fetch(url, control ? { signal: control.signal, cache: 'no-store' } : { cache: 'no-store' })
       .then((res) => res.text())
       .then((texto) => { if (terminado) return; terminado = true; clearTimeout(temporizador); resolver(texto); })
       .catch((err) => { if (terminado) return; terminado = true; clearTimeout(temporizador); rechazar(err); });

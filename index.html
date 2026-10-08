@@ -396,11 +396,30 @@
     </div>
     <div class="home-grid">
       <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span>Proveedores</button>
+      <button class="home-btn home-btn--factura" data-tab="pedido-proveedores"><span class="home-btn__icon" data-icon="compras"></span>Pedido a proveedores</button>
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
       <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
       <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-pedido-proveedores">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Pedido a proveedores</div>
+      <div class="home-sub">Lo que hay que comprar para los pedidos de clientes de un día, agrupado por proveedor</div>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <button class="chip-btn" data-pp-rapido="hoy">Hoy</button>
+      <button class="chip-btn" data-pp-rapido="manana">Mañana</button>
+      <input type="date" id="ppFecha" class="text-input" style="max-width:190px;" aria-label="Día de entrega">
+    </div>
+    <button class="btn-secondary" id="btnPedidoProveedoresTodos" style="width:100%; margin-bottom:12px;">PDF de todos los proveedores</button>
+    <div id="listaPedidoProveedores" class="stack">
+      <div class="empty-state">Cargando…</div>
+    </div>
+    <div class="form-msg" id="ppMsg"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-proveedores">
@@ -728,6 +747,8 @@
     <input type="text" id="prFormSubcategoria" class="text-input" placeholder="Deja en blanco si no aplica">
     <label class="field-label" for="prFormCoste">Coste de fábrica (€ por caja, sin IVA) — solo lo ves tú</label>
     <input type="number" id="prFormCoste" class="text-input" step="0.01" min="0" placeholder="Lo que te cuesta a ti. Déjalo en blanco si no lo sabes">
+    <label class="field-label" for="prFormProveedor">Proveedor (quién te lo suministra) — solo lo ves tú</label>
+    <select id="prFormProveedor" class="select-input"><option value="">Sin proveedor</option></select>
     <label class="field-label" for="prFormUnidadesCaja">Unidades por caja (se ve en la app de clientes)</label>
     <input type="text" id="prFormUnidadesCaja" class="text-input" placeholder="Ej: 25 uds, Saco de 5 bolsas… deja en blanco si no aplica">
     <label class="field-label" for="prFormActivo">Activo</label>

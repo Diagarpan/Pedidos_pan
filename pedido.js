@@ -2,13 +2,14 @@
 // (Implementar → Gestionar implementaciones → la que termina en /exec).
 // Es la MISMA URL que usa la app de gestión, solo que aquí va fija en
 // el código porque los clientes no tienen que configurar nada.
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwirzOGAOMLbaV3DLDNeLAaYg1W3-OnfCnh05NdGpA8a6Gq3dAKJv6s1MV9Kw2kmuI/exec';
+const WEB_APP_URL = 'PEGA_AQUI_TU_URL_DEL_WEB_APP';
 
 // Versión de esta app (aparece en el diagnóstico, para saber qué copia tiene cada cliente)
-const VERSION_APP = '2026.10.8';
+const VERSION_APP = '2026.10.9';
 // ¿Está pegada la URL del servidor? (cualquier dirección de script.google.com; solo se queja si sigue el texto de relleno)
 const URL_CONFIGURADA = /^https:\/\/script\.google\.com\//.test(WEB_APP_URL) && WEB_APP_URL.indexOf('PEGA_AQUI') === -1;
-const TIEMPO_MAXIMO_MS = 12000; // si Google no contesta en este tiempo, se avisa (antes se quedaba cargando para siempre)
+const TIEMPO_MAXIMO_MS = 12000;            // lecturas
+const TIEMPO_MAXIMO_ESCRITURA_MS = 45000;   // guardar un pedido puede tardar mucho más (el servidor hace unas 40 operaciones en la hoja) // si Google no contesta en este tiempo, se avisa (antes se quedaba cargando para siempre)
 
 // El almacenamiento del móvil puede estar bloqueado (iPhone con "bloquear cookies", navegadores
 // integrados…): en ese caso la app sigue funcionando, solo que no recuerda el teléfono.
@@ -46,7 +47,7 @@ let fechaEntregaElegida = 'manana'; // siempre para mañana: se manda cada día
 
 // Lo que es seguro repetir se reintenta solo UNA vez si falla (enviar el pedido también lo es: si ya
 // existe uno para mañana, se ACTUALIZA, no se duplica).
-const ACCIONES_REINTENTABLES = new Set(['clienteInicio', 'clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana', 'clienteCrearPedido']);
+const ACCIONES_REINTENTABLES = new Set(['clienteInicio', 'clienteIdentificar', 'clienteCatalogo', 'clientePedidoManana']);
 
 // Cada fallo tiene su causa y su código (C1…C8), para que el cliente y la panadería sepan qué pasa
 function crearError(tipo) { const e = new Error(tipo); e.tipo = tipo; return e; }
@@ -71,7 +72,7 @@ let ultimoErrorHora = 0;
 function anotarError(d) { ultimoErrorCodigo = d.codigo; ultimoErrorHora = Date.now(); return d; }
 const conCodigo = (d) => d.texto + ' (' + d.codigo + ')';
 
-function pedirTexto(url) {
+function pedirTexto(url, tiempoMaximo) {
   return new Promise(function (resolve, reject) {
     let terminado = false;
     const control = typeof AbortController === 'function' ? new AbortController() : null;
@@ -80,24 +81,25 @@ function pedirTexto(url) {
       terminado = true;
       if (control) { try { control.abort(); } catch (e) { /* nada */ } }
       reject(crearError('tiempo'));
-    }, TIEMPO_MAXIMO_MS);
-    fetch(url, control ? { signal: control.signal } : undefined)
+    }, tiempoMaximo || TIEMPO_MAXIMO_MS);
+    fetch(url, control ? { signal: control.signal, cache: 'no-store' } : { cache: 'no-store' })
       .then(function (res) { return res.text(); })
       .then(function (texto) { if (terminado) return; terminado = true; clearTimeout(temporizador); resolve(texto); })
       .catch(function () { if (terminado) return; terminado = true; clearTimeout(temporizador); reject(crearError('sin-conexion')); });
   });
 }
 
-async function apiCliente(action, extraParams) {
+async function apiCliente(action, extraParams, opciones) {
   if (!URL_CONFIGURADA) throw crearError('sin-configurar');
   if (typeof fetch !== 'function') throw crearError('navegador-antiguo');
-  const url = WEB_APP_URL + '?' + new URLSearchParams(Object.assign({ action: action }, extraParams || {})).toString();
+  // "_" distinto en cada petición: el móvil o Google nunca reutilizan una respuesta guardada de antes
+  const url = WEB_APP_URL + '?' + new URLSearchParams(Object.assign({ action: action }, extraParams || {}, { _: String(Date.now()) })).toString();
   const intentos = ACCIONES_REINTENTABLES.has(action) ? 2 : 1;
   let fallo;
   for (let i = 0; i < intentos; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1200));
     try {
-      const texto = await pedirTexto(url);
+      const texto = await pedirTexto(url, opciones && opciones.tiempoMaximo);
       try {
         return JSON.parse(texto);
       } catch (e) {
@@ -339,6 +341,19 @@ async function precargarPedidoExistente(peticionYaLanzada) {
   recalcularCarrito();
   if (categoriaAbierta) abrirCategoria(categoriaAbierta);   // si está mirando productos, se ven ya las cantidades
   mostrarAvisoPedidoExistente(true);
+  describirPedidoExistente(r, delPedido);
+}
+
+// Dice QUÉ tiene guardado el servidor (productos, cantidades y total), para que el cliente no tenga dudas
+function describirPedidoExistente(r, delPedido) {
+  const resumen = Object.keys(delPedido).map((id) => {
+    const prod = catalogo.find((x) => String(x.id) === String(id));
+    return delPedido[id] + '× ' + (prod ? prod.nombre : 'producto');
+  }).join(', ');
+  const aviso = document.getElementById('avisoPedidoExistente');
+  aviso.innerHTML = '✏️ <strong>Tu pedido de mañana</strong>' + (r.idPedido ? ' (nº ' + escapeHtml(String(r.idPedido)) + ')' : '') + ': ' + escapeHtml(resumen) +
+    (typeof r.total === 'number' && r.total > 0 ? ' — ' + escapeHtml(formatoEuros(r.total)) : '') +
+    '.<br>Puedes añadir, quitar o cambiar cantidades y volver a enviarlo.';
 }
 
 // Muestra/oculta el aviso de "ya tienes un pedido" y el botón de anularlo (van juntos)
@@ -540,7 +555,37 @@ function pintarRepaso() {
   recalcularCarrito();
 }
 
+// ¿Es el pedido que el servidor tiene guardado el MISMO que hemos mandado? (mismos productos y cantidades)
+function mismoPedido(items, existente) {
+  if (!existente || !existente.ok || !existente.encontrado) return false;
+  const mandado = {};
+  items.forEach((i) => { mandado[i.productoId] = (mandado[i.productoId] || 0) + i.cantidad; });
+  const guardado = {};
+  let hayOtrosProductos = false;
+  (existente.items || []).forEach((i) => {
+    if (i.tipo === 'catalogo') guardado[i.productoId] = (guardado[i.productoId] || 0) + i.cantidad; else hayOtrosProductos = true;
+  });
+  if (hayOtrosProductos) return false;
+  const claves = Object.keys(mandado);
+  return claves.length === Object.keys(guardado).length && claves.every((k) => guardado[k] === mandado[k]);
+}
+
+// Cuando no sabemos si el pedido llegó (Google tardó o la respuesta se perdió) NO se vuelve a mandar: se COMPRUEBA
+// leyendo si el servidor ya lo tiene. Mientras guarda (puede tardar) se mira cada pocos segundos.
+async function comprobarSiSeGuardo(items, msg) {
+  for (let i = 0; i < 12; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    msg.textContent = 'Estamos comprobando que tu pedido ha llegado… (' + (i + 1) + ')';
+    const e = await apiCliente('clientePedidoManana', { telefono: telefonoCliente }).catch(() => null);
+    if (mismoPedido(items, e)) return e;
+  }
+  return null;
+}
+
+let enviandoPedido = false;
+
 async function enviarPedido() {
+  if (enviandoPedido) return;   // segundo toque mientras envía: se ignora
   const msg = document.getElementById('msgPedido');
   const boton = document.getElementById('btnEnviarPedido');
   const itemsDetalle = itemsCarrito(); // se guarda antes de limpiar, para poder mostrarlo en la confirmación
@@ -548,41 +593,55 @@ async function enviarPedido() {
 
   if (!items.length) { msg.textContent = 'Añade al menos un producto.'; msg.className = 'form-msg is-error'; return; }
 
+  enviandoPedido = true;
   boton.disabled = true;
-  msg.textContent = 'Enviando…';
+  msg.textContent = 'Enviando tu pedido… puede tardar unos segundos. No cierres la app.';
   msg.className = 'form-msg';
+  const lento = setTimeout(() => { msg.textContent = 'Sigue enviando… Google va un poco lento. No cierres la app ni pulses otra vez.'; }, 8000);
 
-  const r = await apiCliente('clienteCrearPedido', {
-    telefono: telefonoCliente,
-    items: JSON.stringify(items),
-    fechaEntrega: fechaEntregaElegida,
-  }).catch((err) => {
-    const d = anotarError(describirError(err));
-    return {
-      ok: false,
-      textoCompleto: err && err.respuestaIlegible
-        ? 'No hemos podido confirmar tu pedido. Puede que SÍ se haya enviado: vuelve a abrir la app y mira "Tu pedido de mañana" antes de repetirlo. (' + d.codigo + ')'
-        : conCodigo(d),
-    };
-  });
+  try {
+    let r = await apiCliente('clienteCrearPedido', {
+      telefono: telefonoCliente,
+      items: JSON.stringify(items),
+      fechaEntrega: fechaEntregaElegida,
+    }, { tiempoMaximo: TIEMPO_MAXIMO_ESCRITURA_MS }).catch((err) => ({ ok: false, _err: err }));
 
-  boton.disabled = false;
+    if (!r.ok && r._err) {
+      // No sabemos si llegó: se comprueba (sin volver a mandar nada)
+      const d = anotarError(describirError(r._err));
+      msg.textContent = 'Estamos comprobando que tu pedido ha llegado…';
+      const guardado = await comprobarSiSeGuardo(items, msg);
+      if (guardado) {
+        r = { ok: true, idPedido: guardado.idPedido, total: guardado.total, comprobado: true };
+      } else {
+        msg.textContent = 'No hemos podido confirmar que tu pedido haya llegado (' + d.texto.replace(/\.$/, '') + ' ' + d.codigo + '). ' +
+          'Pulsa «Enviar pedido» otra vez: es seguro, tu pedido de mañana se sustituye, no se duplica.';
+        msg.className = 'form-msg is-error';
+        return;
+      }
+    }
 
-  if (!r.ok) {
-    const dr = describirRespuesta(r);
-    msg.textContent = r.textoCompleto || (dr ? conCodigo(anotarError(dr)) : 'Error: ' + (r.error || 'inténtalo de nuevo'));
-    msg.className = 'form-msg is-error';
-    return;
+    if (!r.ok) {
+      const dr = describirRespuesta(r);
+      msg.textContent = dr ? conCodigo(anotarError(dr)) : 'Error: ' + (r.error || 'inténtalo de nuevo');
+      msg.className = 'form-msg is-error';
+      return;
+    }
+
+    document.getElementById('confirmacionDetalle').innerHTML = itemsDetalle.map((it) => `
+      <div class="client-row"><span>${it.cantidad}x ${escapeHtml(it.producto.nombre)}</span></div>
+    `).join('');
+
+    const total = typeof r.total === 'number' ? `, por un total de ${formatoEuros(r.total)}` : '';
+    document.getElementById('confirmacionTexto').textContent =
+      `Gracias, ${nombreCliente}. Hemos recibido tu pedido para mañana${total}.${r.comprobado ? ' (Hemos comprobado que está guardado.)' : ''}`;
+    document.getElementById('confirmacionNum').textContent = r.idPedido ? `Nº de pedido: ${r.idPedido}` : '';
+    mostrarPantalla('confirmacion');
+  } finally {
+    clearTimeout(lento);
+    enviandoPedido = false;
+    boton.disabled = false;
   }
-
-  document.getElementById('confirmacionDetalle').innerHTML = itemsDetalle.map((it) => `
-    <div class="client-row"><span>${it.cantidad}x ${escapeHtml(it.producto.nombre)}</span></div>
-  `).join('');
-
-  document.getElementById('confirmacionTexto').textContent =
-    `Gracias, ${nombreCliente}. Hemos recibido tu pedido para mañana, por un total de ${formatoEuros(r.total)}.`;
-  document.getElementById('confirmacionNum').textContent = `Nº de pedido: ${r.idPedido}`;
-  mostrarPantalla('confirmacion');
 }
 
 /* ============ DIAGNÓSTICO: "no me carga" ============

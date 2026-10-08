@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   cablearIncidencias();
   cablearTelefonosYServidor();
   cablearDuplicados();
+  cablearPedidoProveedores();
   cablearVistasRapidas();
   cablearInformesFacturacion();
   cablearCompras();
@@ -212,6 +213,8 @@ let registroFallos = null;
 
 async function apiGet(action, extraParams, opciones) {
   peticionesEnCurso++;
+  const larga = esAccionLarga(action);
+  if (larga) peticionesLargasEnCurso++;
   const cambio = registrarCambioLocal(action, extraParams);   // marcar entregado/cobrado o incidencia: se apunta mientras viaja
   try {
     const respuesta = await pedirConTurno(action, extraParams, opciones);
@@ -226,6 +229,7 @@ async function apiGet(action, extraParams, opciones) {
     throw err;
   } finally {
     peticionesEnCurso--;
+    if (larga) peticionesLargasEnCurso--;
   }
 }
 
@@ -237,6 +241,14 @@ async function apiGet(action, extraParams, opciones) {
 const MAX_PETICIONES_A_LA_VEZ = 4;
 const MAX_DE_FONDO = 1;
 const TIEMPO_MAXIMO_PETICION_MS = 60000;
+// Las operaciones LARGAS (PDF con muchas páginas, informes, cierres) pueden tardar varios minutos: Apps Script las
+// corta a los 6, así que aquí se espera algo más para que llegue antes su propio aviso. Todo lo demás se da por
+// perdido a los 60 s (para no dejar una pantalla colgada).
+const TIEMPO_MAXIMO_LARGO_MS = 390000;
+const ACCIONES_LARGAS = new Set(['resumenPeriodo', 'modelo347', 'estadisticas', 'balance', 'cerrarAnio', 'copiaSeguridad']);
+function esAccionLarga(action) { return /Pdf$/.test(action) || ACCIONES_LARGAS.has(action); }
+function tiempoMaximoDe(action) { return esAccionLarga(action) ? TIEMPO_MAXIMO_LARGO_MS : TIEMPO_MAXIMO_PETICION_MS; }
+let peticionesLargasEnCurso = 0;   // las largas no cuentan para "esperar a que acaben las peticiones" (botón Actualizar)
 const LECTURAS_COMPARTIBLES = new Set(['quienSoy', 'resumenInicio', 'reparto', 'pedidos', 'facturas', 'clientes', 'productos', 'resumenManana']);
 let turnosEnUso = 0;
 let turnosDeFondo = 0;
@@ -314,7 +326,8 @@ function pedirConTurno(action, extraParams, opciones) {
   return promesa;
 }
 
-function fetchConTiempo(url) {
+function fetchConTiempo(url, tiempoMaximo) {
+  const limite = tiempoMaximo || TIEMPO_MAXIMO_PETICION_MS;
   return new Promise((resolver, rechazar) => {
     let terminado = false;
     const control = typeof AbortController === 'function' ? new AbortController() : null;
@@ -322,8 +335,10 @@ function fetchConTiempo(url) {
       if (terminado) return;
       terminado = true;
       if (control) { try { control.abort(); } catch (e) { /* nada */ } }
-      rechazar(new Error('Google tarda demasiado en responder.'));
-    }, TIEMPO_MAXIMO_PETICION_MS);
+      rechazar(new Error(limite > TIEMPO_MAXIMO_PETICION_MS
+        ? 'Google no ha terminado en 6 minutos (el documento es muy grande o Google va muy lento). Prueba otra vez más tarde.'
+        : 'Google tarda demasiado en responder.'));
+    }, limite);
     fetch(url, control ? { signal: control.signal, cache: 'no-store' } : { cache: 'no-store' })
       .then((res) => res.text())
       .then((texto) => { if (terminado) return; terminado = true; clearTimeout(temporizador); resolver(texto); })
@@ -340,7 +355,7 @@ async function apiGetInterno(action, extraParams) {
   for (let i = 0; i < intentos; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, 1200));
     try {
-      const texto = await fetchConTiempo(url);
+      const texto = await fetchConTiempo(url, tiempoMaximoDe(action));
       try {
         const respuesta = JSON.parse(texto);
         if (respuesta && respuesta.tipoError === 'desactualizado') mostrarAvisoServidor();
@@ -678,6 +693,7 @@ const RECARGA_AL_ACTUALIZAR = {
   productos: () => cargarProductosGestion(),
   proveedores: () => cargarProveedores(),
   'gastos-ver': () => buscarGastos(),
+  'pedido-proveedores': () => cargarPedidoProveedores(),
   estadisticas: () => buscarEstadisticas(),
   balance: () => buscarBalance(),
   'factura-347': () => buscarModelo347(),
@@ -691,7 +707,7 @@ async function esperarFinDePeticiones() {
   let tranquilo = 0;
   for (let i = 0; i < 750; i++) {
     await new Promise((r) => setTimeout(r, 60));
-    tranquilo = peticionesEnCurso === 0 ? tranquilo + 60 : 0;
+    tranquilo = (peticionesEnCurso - peticionesLargasEnCurso) === 0 ? tranquilo + 60 : 0;   // un PDF grande en marcha no cuenta
     if (tranquilo >= 300) return true;
   }
   return false;
@@ -752,6 +768,7 @@ const BREADCRUMBS = {
   'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Ver pedidos', tab: 'pedidos-lista' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
   'factura-347': [{ label: 'Facturas', tab: 'factura' }, { label: 'Modelo 347', tab: 'factura-347' }],
   'proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }],
+  'pedido-proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Pedido a proveedores', tab: 'pedido-proveedores' }],
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
@@ -852,6 +869,7 @@ function cargarTabActual(nombre) {
   if (activo === 'pedido-editar') cargarPedidoParaEditar();
   if (activo === 'factura-editar') cargarFacturaParaEditar();
   if (activo === 'proveedores') cargarProveedores();
+  if (activo === 'pedido-proveedores') iniciarPedidoProveedores();
   if (activo === 'gasto-nuevo') cargarFormularioGasto();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
@@ -1381,9 +1399,12 @@ async function conEstadoCarga(boton, textoCarga, tarea) {
   const textoOriginal = boton.textContent;
   boton.disabled = true;
   boton.textContent = textoCarga;
+  // si tarda (un PDF con muchas páginas puede llevar uno o dos minutos), se le dice que es normal
+  const aviso = setTimeout(() => { boton.textContent = textoCarga.replace(/…$/, '') + '… (puede tardar 1-3 min)'; }, 15000);
   try {
     await tarea();
   } finally {
+    clearTimeout(aviso);
     boton.disabled = false;
     boton.textContent = textoOriginal;
   }
@@ -1963,7 +1984,12 @@ function cablearProductos() {
 async function cargarProductosGestion() {
   const cont = document.getElementById('listaProductosGestion');
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
-  const r = await apiGet('todosProductos').catch((err) => ({ ok: false, error: String(err) }));
+  const [r, rp] = await Promise.all([
+    apiGet('todosProductos').catch((err) => ({ ok: false, error: String(err) })),
+    apiGet('proveedores').catch(() => null),
+  ]);
+  const nombresProveedor = {};
+  if (rp && rp.ok) { proveedoresCache = rp.data; rp.data.forEach((p) => { nombresProveedor[String(p.id)] = p.nombre; }); }
   if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
 
   productosGestionCache = r.data;
@@ -1977,7 +2003,7 @@ async function cargarProductosGestion() {
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(p.nombre)}</div>
-          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}% · ${escapeHtml(p.categoria || 'Panadería')}${p.subcategoria ? ' — ' + escapeHtml(p.subcategoria) : ''}${p.unidadesCaja ? ' · ' + escapeHtml(p.unidadesCaja) : ''}${p.coste !== null && p.coste !== undefined ? ' · Coste ' + formatoEuros(p.coste) + ' (margen ' + formatoEuros(p.precio - p.coste) + ')' : ''}</div>
+          <div class="card__meta">${p.codigo ? escapeHtml(p.codigo) + ' · ' : ''}${formatoEuros(p.precio)} · IVA ${(p.iva * 100).toFixed(0)}% · ${escapeHtml(p.categoria || 'Panadería')}${p.subcategoria ? ' — ' + escapeHtml(p.subcategoria) : ''}${p.unidadesCaja ? ' · ' + escapeHtml(p.unidadesCaja) : ''}${p.coste !== null && p.coste !== undefined ? ' · Coste ' + formatoEuros(p.coste) + ' (margen ' + formatoEuros(p.precio - p.coste) + ')' : ''}${rp && rp.ok ? ' · <span' + ((p.proveedorId === '' || p.proveedorId === null || p.proveedorId === undefined) ? ' style="opacity:0.7">sin proveedor' : '>' + (nombresProveedor[String(p.proveedorId)] ? 'Proveedor: ' + escapeHtml(nombresProveedor[String(p.proveedorId)]) : 'proveedor que ya no existe')) + '</span>' : ''}</div>
         </div>
         ${stampHtml(p.activo ? 'Activo' : 'Inactivo')}
       </div>
@@ -1995,7 +2021,32 @@ async function cargarProductosGestion() {
   });
 }
 
+// Rellena el desplegable de proveedores. Mientras no está listo (o si falla la carga), al guardar NO se manda el
+// proveedor: el servidor deja el que ya tenía (así no se borra por error).
+let proveedorSelectListo = false;
+let turnoSelectProveedor = 0;
+async function prepararSelectProveedor(valorActual) {
+  const sel = document.getElementById('prFormProveedor');
+  const turno = ++turnoSelectProveedor;
+  proveedorSelectListo = false;
+  sel.disabled = true;
+  sel.innerHTML = '<option value="">Cargando proveedores…</option>';
+  const r = await apiGet('proveedores').catch(() => null);
+  if (turno !== turnoSelectProveedor) return;   // se abrió otro producto mientras tanto
+  if (!r || !r.ok) { sel.innerHTML = '<option value="">(no se pudieron cargar los proveedores)</option>'; return; }
+  proveedoresCache = r.data;
+  const actual = valorActual === undefined || valorActual === null ? '' : String(valorActual);
+  const opciones = r.data.filter((p) => p.activo || String(p.id) === actual).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+  let html = '<option value="">Sin proveedor</option>' + opciones.map((p) => `<option value="${escapeHtml(String(p.id))}">${escapeHtml(p.nombre)}${p.activo ? '' : ' (dado de baja)'}</option>`).join('');
+  if (actual && !r.data.some((p) => String(p.id) === actual)) html += `<option value="${escapeHtml(actual)}">(proveedor que ya no existe)</option>`;
+  sel.innerHTML = html;
+  sel.value = actual;
+  sel.disabled = false;
+  proveedorSelectListo = true;
+}
+
 function abrirFormularioProducto(producto) {
+  prepararSelectProveedor(producto ? producto.proveedorId : '');
   document.getElementById('productoFormTitulo').textContent = producto ? 'Editar producto' : 'Nuevo producto';
   document.getElementById('prFormId').value = producto ? producto.id : '';
   document.getElementById('prFormNombre').value = producto ? producto.nombre : '';
@@ -2019,7 +2070,7 @@ async function guardarProducto() {
   msg.textContent = 'Guardando…';
   msg.className = 'form-msg';
 
-  const r = await apiGet('guardarProducto', {
+  const datosProducto = {
     id: document.getElementById('prFormId').value,
     nombre: nombre,
     codigo: document.getElementById('prFormCodigo').value.trim(),
@@ -2030,7 +2081,9 @@ async function guardarProducto() {
     unidadesCaja: document.getElementById('prFormUnidadesCaja').value.trim(),
     coste: document.getElementById('prFormCoste').value,
     activo: document.getElementById('prFormActivo').value,
-  }).catch((err) => ({ ok: false, error: String(err) }));
+  };
+  if (proveedorSelectListo) datosProducto.proveedorId = document.getElementById('prFormProveedor').value;
+  const r = await apiGet('guardarProducto', datosProducto).catch((err) => ({ ok: false, error: String(err) }));
 
   if (r.ok) {
     msg.textContent = 'Producto guardado.';
@@ -2536,6 +2589,94 @@ async function buscarDuplicados() {
       buscarDuplicados();
     });
   });
+}
+
+/* ============ PEDIDO A PROVEEDORES ============
+ * Lo que hay que comprar para los pedidos de clientes de un día de entrega, agrupado por el proveedor de cada
+ * producto, con su PDF para mandárselo. Solo el administrador. */
+let descargandoPedidoProveedor = false;
+
+function iniciarPedidoProveedores() {
+  const campo = document.getElementById('ppFecha');
+  if (!campo.value) campo.value = sumarDiasISO(hoyISO(), 1);   // por defecto, mañana: lo que se compra esta noche
+  cargarPedidoProveedores();
+}
+
+async function cargarPedidoProveedores() {
+  const cont = document.getElementById('listaPedidoProveedores');
+  const iso = document.getElementById('ppFecha').value;
+  const botonTodos = document.getElementById('btnPedidoProveedoresTodos');
+  document.getElementById('ppMsg').textContent = '';
+  if (!iso) { cont.innerHTML = '<div class="empty-state">Elige un día.</div>'; return; }
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  botonTodos.disabled = true;
+
+  const r = await apiGet('pedidoProveedores', { fecha: formatoFechaES(iso) }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (document.getElementById('ppFecha').value !== iso) return;   // cambió de día mientras cargaba
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
+
+  const d = r.data;
+  if (!d.hayPedidos) {
+    cont.innerHTML = `<div class="empty-state">No hay pedidos de clientes para el ${escapeHtml(d.fecha)}.</div>`;
+    return;
+  }
+  const linea = (p) => `<div style="font-size:14px; margin-top:4px;"><strong>${escapeHtml(String(p.cantidad))}</strong> × ${escapeHtml(p.producto)}${p.formato ? ' <span class="card__meta">(' + escapeHtml(p.formato) + ')</span>' : ''}${p.fueraDeCatalogo ? ' <em class="card__meta">(fuera de catálogo)</em>' : ''}</div>`;
+
+  let html = d.proveedores.map((p) => `
+    <div class="card">
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.nombre)}${p.activo ? '' : ' <span class="card__meta">(dado de baja)</span>'}</div>
+          <div class="card__meta">${p.telefono ? '<a href="tel:' + escapeHtml(String(p.telefono).replace(/[^\d+]/g, '')) + '">' + escapeHtml(String(p.telefono)) + '</a>' : 'sin teléfono'}${p.nif ? ' · ' + escapeHtml(String(p.nif)) : ''}</div>
+        </div>
+        <div class="card__name">${escapeHtml(String(p.total))}</div>
+      </div>
+      ${p.productos.map(linea).join('')}
+      <div class="card__actions"><button class="chip-btn" data-pp-pdf="${escapeHtml(String(p.idProveedor))}">PDF para ${escapeHtml(p.nombre)}</button></div>
+    </div>`).join('');
+
+  if (d.sinProveedor.productos.length) {
+    html += `
+    <div class="card" style="border-color:var(--warn-red);">
+      <div class="card__name" style="color:var(--warn-red);">Sin proveedor asignado (${escapeHtml(String(d.sinProveedor.total))})</div>
+      <div class="card__meta">Estos productos no entran en ningún PDF. Asígnales proveedor en Productos.</div>
+      ${d.sinProveedor.productos.map(linea).join('')}
+      <div class="card__actions"><button class="chip-btn" data-pp-productos="1">Ir a Productos</button></div>
+    </div>`;
+  }
+  cont.innerHTML = html;
+  botonTodos.disabled = !d.proveedores.length;
+  cont.querySelectorAll('[data-pp-pdf]').forEach((b) => b.addEventListener('click', () => descargarPedidoProveedor(b.dataset.ppPdf, b)));
+  cont.querySelectorAll('[data-pp-productos]').forEach((b) => b.addEventListener('click', () => cambiarTab('productos')));
+}
+
+async function descargarPedidoProveedor(idProveedor, boton) {
+  if (descargandoPedidoProveedor) return;
+  const msg = document.getElementById('ppMsg');
+  descargandoPedidoProveedor = true;
+  if (boton) boton.disabled = true;
+  msg.textContent = 'Generando el PDF…';
+  msg.className = 'form-msg';
+  try {
+    const r = await apiGet('pedidoProveedoresPdf', { fecha: formatoFechaES(document.getElementById('ppFecha').value), idProveedor: idProveedor || '' })
+      .catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) { msg.textContent = r.error || 'No se pudo generar el PDF.'; msg.className = 'form-msg is-error'; return; }
+    await descargarPDF(r.base64, r.nombre);
+    msg.textContent = 'PDF listo.';
+    msg.className = 'form-msg is-ok';
+  } finally {
+    descargandoPedidoProveedor = false;
+    if (boton) boton.disabled = false;
+  }
+}
+
+function cablearPedidoProveedores() {
+  document.getElementById('ppFecha').addEventListener('change', cargarPedidoProveedores);
+  document.querySelectorAll('[data-pp-rapido]').forEach((b) => b.addEventListener('click', () => {
+    document.getElementById('ppFecha').value = sumarDiasISO(hoyISO(), b.dataset.ppRapido === 'manana' ? 1 : 0);
+    cargarPedidoProveedores();
+  }));
+  document.getElementById('btnPedidoProveedoresTodos').addEventListener('click', (e) => descargarPedidoProveedor('', e.currentTarget));
 }
 
 /* ============ TELÉFONOS DE LOS CLIENTES Y ESTADO DEL SERVIDOR ============ */

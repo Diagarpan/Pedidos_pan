@@ -837,6 +837,18 @@
   </div>
 </div>
 
+<!-- MODAL FACTURAS DEL DÍA POR TRAMOS (de 10 en 10) -->
+<div class="modal-backdrop tab--hidden" id="modalFacturasLotes">
+  <div class="modal">
+    <h2 id="facturasLotesTitulo">Facturas del día</h2>
+    <p class="modal-help" id="facturasLotesAyuda"></p>
+    <div id="facturasLotesLista" class="stack" style="max-height:45vh; overflow-y:auto;"></div>
+    <button class="btn-secondary" id="btnFacturasTodasJuntas" style="width:100%; margin-top:10px;"></button>
+    <div class="form-msg" id="facturasLotesMsg"></div>
+    <button class="btn-secondary" id="btnCerrarFacturasLotes" style="width:100%; margin-top:10px;">Cerrar</button>
+  </div>
+</div>
+
 <!-- MODAL INCIDENCIA (por qué no se pudo entregar, o cualquier problema con un pedido) -->
 <div class="modal-backdrop tab--hidden" id="modalIncidencia">
   <div class="modal">

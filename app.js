@@ -1956,21 +1956,9 @@ function cablearHojaRuta() {
       descargarPDF(r.base64, r.nombre);
     });
   });
-  document.getElementById('btnFacturasDia').addEventListener('click', (e) => {
-    conEstadoCarga(e.target, 'Generando…', async () => {
-      const r = await apiGet('facturasDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-      descargarPDF(r.base64, r.nombre);
-      if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
-    });
-  });
-  document.getElementById('btnAlbaranesDia').addEventListener('click', (e) => {
-    conEstadoCarga(e.target, 'Generando…', async () => {
-      const r = await apiGet('albaranesDiaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-      descargarPDF(r.base64, r.nombre);
-    });
-  });
+  document.getElementById('btnFacturasDia').addEventListener('click', (e) => abrirDocsDelDia('facturas', e.currentTarget));
+  cablearTramosDocs();
+  document.getElementById('btnAlbaranesDia').addEventListener('click', (e) => abrirDocsDelDia('albaranes', e.currentTarget));
 }
 
 /* ============ PRODUCTOS (alta/edición) ============ */
@@ -2588,6 +2576,114 @@ async function buscarDuplicados() {
       if (!rr.ok) { alert('No se pudo anular: ' + (rr.error || 'error')); btn.disabled = false; return; }
       buscarDuplicados();
     });
+  });
+}
+
+/* ============ FACTURAS Y ALBARANES DEL DÍA POR TRAMOS (de 10 en 10) ============
+ * Un PDF con todos los documentos de un reparto grande tarda mucho en construirse en Google. Si hay más de 10, se
+ * ofrecen tramos (1-10, 11-20…) que salen en pocos segundos y se imprimen por partes; también "todos a la vez".
+ * Es la misma ventana para las dos cosas: solo cambian los textos y las acciones del servidor. */
+const DOCS_DEL_DIA = {
+  facturas: { lotes: 'facturasDiaLotes', pdf: 'facturasDiaPdf', Plural: 'Facturas', plural: 'facturas', todas: 'Todas', todasMin: 'todas', hechas: 'descargadas', sinDatos: 'No hay pedidos con factura para este día.' },
+  albaranes: { lotes: 'albaranesDiaLotes', pdf: 'albaranesDiaPdf', Plural: 'Albaranes', plural: 'albaranes', todas: 'Todos', todasMin: 'todos', hechas: 'descargados', sinDatos: 'No hay albaranes para este día.' },
+};
+let generandoDocsDia = false;
+const tramosDocsHechos = {};   // tipo|fecha|primera-ultima → ya descargado (se marca con ✓)
+
+// Pide un PDF de los documentos del día (todos, o un tramo) y lo descarga. Devuelve la respuesta del servidor.
+async function generarDocsDiaPdf(tipo, fecha, desde, hasta) {
+  const params = { fecha: fecha };
+  if (desde) { params.desde = String(desde); params.hasta = String(hasta); }
+  const r = await apiGet(DOCS_DEL_DIA[tipo].pdf, params).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) return r;
+  await descargarPDF(r.base64, r.nombre);
+  if (r.omitidas) alert(`Aviso: ${r.omitidas} pedido(s) no tenían factura enlazada y no se incluyeron.`);
+  return r;
+}
+
+async function abrirDocsDelDia(tipo, boton) {
+  if (generandoDocsDia) return;
+  const cfg = DOCS_DEL_DIA[tipo];
+  const fecha = fechaOffsetDDMMYYYY(offsetRepartoSeleccionado);
+  let datos = null;
+  await conEstadoCarga(boton, 'Preparando…', async () => {
+    const r = await apiGet(cfg.lotes, { fecha: fecha }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    // servidor antiguo (aún sin los tramos): se genera todo de una vez, como siempre
+    if ((!r.ok && /Acci[oó]n no reconocida/i.test(String(r.error || ''))) || (r.ok && (!r.data || typeof r.data.total !== 'number'))) { datos = { sinTramos: true }; return; }
+    if (!r.ok) { alert('No se pudo preparar: ' + (r.error || 'error')); return; }
+    if (r.data.total === 0) { alert(cfg.sinDatos + (r.data.sinFactura ? ` (${r.data.sinFactura} pedido(s) sin factura enlazada)` : '')); return; }
+    datos = r.data;
+  });
+  if (!datos) return;
+  if (datos.sinTramos || datos.lotes.length <= 1) {
+    // pocos documentos (o servidor antiguo): de una vez, como siempre
+    generandoDocsDia = true;
+    try {
+      await conEstadoCarga(boton, 'Generando…', async () => {
+        const r = await generarDocsDiaPdf(tipo, fecha, '', '');
+        if (!r.ok) alert('No se pudo generar: ' + (r.error || 'error'));
+      });
+    } finally { generandoDocsDia = false; }
+    return;
+  }
+  pintarTramosDocs(tipo, datos, fecha);
+}
+
+function pintarTramosDocs(tipo, d, fecha) {
+  const cfg = DOCS_DEL_DIA[tipo];
+  const modal = document.getElementById('modalFacturasLotes');
+  modal.dataset.tipo = tipo;
+  document.getElementById('facturasLotesTitulo').textContent = cfg.Plural + ' del ' + fecha;
+  document.getElementById('facturasLotesAyuda').textContent = `${d.total} ${cfg.plural}, ordenad${tipo === 'albaranes' ? 'os' : 'as'} por número. Saca cada tramo por separado (salen en pocos segundos) o ${cfg.todasMin} a la vez.` +
+    (d.sinFactura ? ` ${d.sinFactura} pedido(s) no tienen factura enlazada y no aparecen.` : '');
+  document.getElementById('facturasLotesMsg').textContent = '';
+  const clave = (l) => tipo + '|' + fecha + '|' + l.primera + '-' + l.ultima;
+  document.getElementById('facturasLotesLista').innerHTML = d.lotes.map((l) => `
+    <button class="btn-secondary" data-tramo-desde="${l.desde}" data-tramo-hasta="${l.hasta}" data-tramo-clave="${escapeHtml(clave(l))}" style="width:100%; text-align:left;">
+      ${tramosDocsHechos[clave(l)] ? '✓ ' : ''}${cfg.Plural} ${l.desde}–${l.hasta} <span class="card__meta">(nº ${escapeHtml(String(l.primera))} a ${escapeHtml(String(l.ultima))})</span>
+    </button>`).join('');
+  const todas = document.getElementById('btnFacturasTodasJuntas');
+  todas.textContent = `${cfg.todas} a la vez (${d.total}) — puede tardar varios minutos`;
+  todas.dataset.claves = JSON.stringify(d.lotes.map(clave));
+  todas.dataset.fecha = fecha;
+  document.querySelectorAll('#facturasLotesLista [data-tramo-desde]').forEach((b) => {
+    b.dataset.fecha = fecha;
+    b.addEventListener('click', () => sacarTramoDocs(b, b.dataset.tramoDesde, b.dataset.tramoHasta, [b.dataset.tramoClave]));
+  });
+  modal.classList.remove('tab--hidden');
+}
+
+async function sacarTramoDocs(boton, desde, hasta, claves) {
+  if (generandoDocsDia) return;
+  const modal = document.getElementById('modalFacturasLotes');
+  const tipo = modal.dataset.tipo || 'facturas';
+  const cfg = DOCS_DEL_DIA[tipo];
+  const msg = document.getElementById('facturasLotesMsg');
+  const botones = Array.from(modal.querySelectorAll('button')).filter((b) => b.id !== 'btnCerrarFacturasLotes');
+  generandoDocsDia = true;
+  botones.forEach((b) => { b.disabled = true; });
+  msg.textContent = desde ? `Generando ${tipo === 'albaranes' ? 'los' : 'las'} ${cfg.plural} ${desde}–${hasta}…` : `Generando ${cfg.todasMin} ${tipo === 'albaranes' ? 'los' : 'las'} ${cfg.plural}… puede tardar 1-3 minutos. No cierres la app.`;
+  msg.className = 'form-msg';
+  try {
+    const r = await generarDocsDiaPdf(tipo, boton.dataset.fecha, desde, hasta);
+    if (!r.ok) { msg.textContent = 'No se pudo generar: ' + (r.error || 'error'); msg.className = 'form-msg is-error'; return; }
+    claves.forEach((c) => { tramosDocsHechos[c] = true; });
+    document.querySelectorAll('#facturasLotesLista [data-tramo-clave]').forEach((b) => {
+      if (tramosDocsHechos[b.dataset.tramoClave] && !b.textContent.trim().startsWith('✓')) b.firstChild.textContent = '✓ ' + b.firstChild.textContent.trimStart();
+    });
+    msg.textContent = desde ? `Listo: ${cfg.plural} ${desde}–${hasta} ${cfg.hechas}.` : `Listo: ${cfg.todasMin} ${tipo === 'albaranes' ? 'los' : 'las'} ${cfg.plural} ${cfg.hechas}.`;
+    msg.className = 'form-msg is-ok';
+  } finally {
+    generandoDocsDia = false;
+    botones.forEach((b) => { b.disabled = false; });
+  }
+}
+
+function cablearTramosDocs() {
+  document.getElementById('btnCerrarFacturasLotes').addEventListener('click', () => document.getElementById('modalFacturasLotes').classList.add('tab--hidden'));
+  document.getElementById('btnFacturasTodasJuntas').addEventListener('click', (e) => {
+    const b = e.currentTarget;
+    sacarTramoDocs(b, '', '', JSON.parse(b.dataset.claves || '[]'));
   });
 }
 

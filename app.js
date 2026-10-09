@@ -1647,6 +1647,8 @@ function actualizarTipoDocumento() {
 
 function cablearNuevoPedido() {
   document.getElementById('btnCrearPedido').addEventListener('click', crearPedidoManual);
+  document.getElementById('selectCliente').addEventListener('change', aplicarDocumentoDelCliente);
+  document.getElementById('selectTipoDocumento').addEventListener('change', () => { tipoDocumentoElegidoAMano = true; });
   document.getElementById('selectFechaPedido').addEventListener('change', (e) => {
     fechaPedidoSeleccion = e.target.value;
   });
@@ -1657,7 +1659,19 @@ function cablearNuevoPedido() {
   });
 }
 
+// El documento habitual del cliente (factura o albarán) se propone al elegirlo, salvo que ya hayas elegido tú uno a mano
+let tipoDocumentoElegidoAMano = false;
+function aplicarDocumentoDelCliente() {
+  const selTipo = document.getElementById('selectTipoDocumento');
+  if (tipoDocumentoElegidoAMano || selTipo.value === 'facturaSuelta') return;
+  const c = clientesCache.find((x) => String(x.id) === String(document.getElementById('selectCliente').value));
+  if (!c) return;
+  selTipo.value = c.documento === 'albaran' ? 'albaran' : 'factura';
+  actualizarTipoDocumento();
+}
+
 async function cargarFormularioNuevo(opciones) {
+  if (!(opciones && opciones.conservarTipo)) tipoDocumentoElegidoAMano = false;
   const selectCliente = document.getElementById('selectCliente');
   const selectProducto = document.getElementById('nProductoSelect');
   const selectTipo = document.getElementById('selectTipoDocumento');
@@ -1814,7 +1828,7 @@ function filtrarListaClientes() {
     <div class="client-row" data-id="${c.id}">
       <div>
         <div class="card__name">${escapeHtml(c.nombre)}</div>
-        <div class="client-row__ruta">${escapeHtml(c.ruta || '')}</div>
+        <div class="client-row__ruta">${escapeHtml(c.ruta || '')}${c.documento === 'albaran' ? ' <span class="card__meta">· Albarán</span>' : ''}</div>
       </div>
       <span>›</span>
     </div>
@@ -1839,6 +1853,7 @@ async function abrirDetalleCliente(id) {
   if (clienteSeleccionado.direccion) info.push('📍 ' + clienteSeleccionado.direccion);
   if (clienteSeleccionado.ruta) info.push('Ruta ' + clienteSeleccionado.ruta);
   if (clienteSeleccionado.descuento > 0) info.push(`Descuento: ${(clienteSeleccionado.descuento * 100).toFixed(0)}%`);
+  if (clienteSeleccionado.documento === 'albaran') info.push('🧾 Va con albarán (sin factura)');
   document.getElementById('detalleClienteInfo').innerHTML = info.map((l) => `<div>${escapeHtml(l)}</div>`).join('');
 
   cargarPreciosEspeciales(id);
@@ -2103,6 +2118,7 @@ function abrirFormularioCliente(cliente) {
   document.getElementById('clFormFormaPago').value = cliente ? cliente.formaPago || '' : '';
   document.getElementById('clFormDescuento').value = cliente && cliente.descuento ? Math.round(cliente.descuento * 100) : '';
   document.getElementById('clFormRecargo').value = cliente && cliente.recargoEquivalencia ? 'true' : 'false';
+  document.getElementById('clFormDocumento').value = cliente && cliente.documento === 'albaran' ? 'albaran' : 'factura';
   document.getElementById('clFormActivo').value = 'true';
   document.getElementById('clienteFormMsg').textContent = '';
   cambiarTab('cliente-form');
@@ -2128,6 +2144,7 @@ async function guardarCliente() {
     formaPago: document.getElementById('clFormFormaPago').value.trim(),
     descuento: String((Number(document.getElementById('clFormDescuento').value) || 0) / 100),
     recargoEquivalencia: document.getElementById('clFormRecargo').value,
+    documento: document.getElementById('clFormDocumento').value,
     activo: document.getElementById('clFormActivo').value,
   };
   const creando = !datos.id;
@@ -2716,7 +2733,7 @@ async function cargarPedidoProveedores() {
     cont.innerHTML = `<div class="empty-state">No hay pedidos de clientes para el ${escapeHtml(d.fecha)}.</div>`;
     return;
   }
-  const linea = (p) => `<div style="font-size:14px; margin-top:4px;"><strong>${escapeHtml(String(p.cantidad))}</strong> × ${escapeHtml(p.producto)}${p.formato ? ' <span class="card__meta">(' + escapeHtml(p.formato) + ')</span>' : ''}${p.fueraDeCatalogo ? ' <em class="card__meta">(fuera de catálogo)</em>' : ''}</div>`;
+  const linea = (p) => `<div style="font-size:14px; margin-top:4px;"><strong>${escapeHtml(String(p.cantidad))}</strong> × ${escapeHtml(p.producto)}${p.formato ? ' <span class="card__meta">(' + escapeHtml(p.formato) + ')</span>' : ''}${p.deLineasLibres ? ' <span class="card__meta">(incluye ' + escapeHtml(String(p.deLineasLibres)) + ' con otro precio)</span>' : ''}${p.fueraDeCatalogo ? ' <em class="card__meta">(fuera de catálogo)</em>' : ''}</div>`;
 
   let html = d.proveedores.map((p) => `
     <div class="card">

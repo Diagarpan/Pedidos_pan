@@ -69,6 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
   cargarClientesAdmin();
 
   document.getElementById('btnContinuarAdmin').addEventListener('click', continuarConCliente);
+  // El documento habitual del cliente (factura o albarán) se propone al elegirlo, salvo que ya hayas elegido tú uno a mano
+  let tipoElegidoAMano = false;
+  document.getElementById('selectTipoAdmin').addEventListener('change', () => { tipoElegidoAMano = true; });
+  document.getElementById('selectClienteAdmin').addEventListener('change', () => {
+    if (tipoElegidoAMano) return;
+    const c = clientesCache.find((x) => String(x.id) === String(document.getElementById('selectClienteAdmin').value));
+    if (c) document.getElementById('selectTipoAdmin').value = c.documento === 'albaran' ? 'albaran' : 'factura';
+  });
   document.getElementById('btnCambiarCliente').addEventListener('click', () => {
     carrito = {};
     idPedidoEnEdicion = null;

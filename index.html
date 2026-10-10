@@ -360,14 +360,26 @@
       <div class="home-title" id="clienteFormTitulo">Nuevo cliente</div>
     </div>
     <input type="hidden" id="clFormId">
-    <label class="field-label" for="clFormNombre">Nombre</label>
-    <input type="text" id="clFormNombre" class="text-input">
-    <label class="field-label" for="clFormTelefono">Teléfono</label>
-    <input type="text" id="clFormTelefono" class="text-input">
+    <label class="field-label" for="clFormNombre">Establecimiento (nombre del negocio)</label>
+    <input type="text" id="clFormNombre" class="text-input" placeholder="Si factura a nombre del negocio">
+    <label class="field-label" for="clFormNombrePila">Nombre</label>
+    <input type="text" id="clFormNombrePila" class="text-input" placeholder="Si factura a su propio nombre">
+    <label class="field-label" for="clFormApellidos">Apellidos</label>
+    <input type="text" id="clFormApellidos" class="text-input">
+    <div class="card__meta" style="margin:-8px 0 14px;">Rellena el establecimiento, o el nombre y apellidos, o los dos. La <strong>factura</strong> sale a nombre de la persona si hay nombre o apellidos; si no, del establecimiento. En el reparto y las listas se ve el establecimiento (si no lo hay, el nombre y apellidos).</div>
+    <label class="field-label" for="clFormNif">NIF/CIF</label>
+    <input type="text" id="clFormNif" class="text-input">
     <label class="field-label" for="clFormDireccion">Dirección</label>
     <input type="text" id="clFormDireccion" class="text-input">
-    <label class="field-label" for="clFormNif">NIF</label>
-    <input type="text" id="clFormNif" class="text-input">
+    <label class="field-label" for="clFormCodigoPostal">Código postal</label>
+    <input type="text" id="clFormCodigoPostal" class="text-input" inputmode="numeric">
+    <label class="field-label" for="clFormPoblacion">Población</label>
+    <input type="text" id="clFormPoblacion" class="text-input">
+    <label class="field-label" for="clFormTelefono">Teléfono 1</label>
+    <input type="text" id="clFormTelefono" class="text-input">
+    <label class="field-label" for="clFormTelefono2">Teléfono 2 (opcional)</label>
+    <input type="text" id="clFormTelefono2" class="text-input" placeholder="Otra persona que hace los pedidos">
+    <div class="card__meta" style="margin:-8px 0 14px;">Con cualquiera de los dos teléfonos se entra en la app de clientes y sale el mismo cliente.</div>
     <label class="field-label" for="clFormRuta">Ruta</label>
     <input type="text" id="clFormRuta" class="text-input" placeholder="1">
     <label class="field-label" for="clFormFormaPago">Forma de pago</label>

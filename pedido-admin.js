@@ -115,7 +115,7 @@ async function cargarClientesAdmin() {
   if (!r || !r.ok) { select.innerHTML = '<option value="">No se pudo cargar</option>'; return; }
   clientesCache = r.data;
   select.innerHTML = '<option value="">Elige un cliente…</option>' +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+    clientesCache.map((c) => `<option value="${c.id}" data-buscar="${escapeHtml([c.establecimiento, c.nombrePila, c.apellidos, c.telefono, c.telefono2, c.nif, c.poblacion].filter(Boolean).join(' '))}">${escapeHtml(c.nombre)}</option>`).join('');
 }
 
 async function continuarConCliente() {

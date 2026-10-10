@@ -1181,7 +1181,7 @@ function rellenarClientesFiltro(select, textoTodos) {
   if (select.options.length - 1 === clientesCache.length) return;
   const actual = select.value;
   select.innerHTML = `<option value="">${textoTodos}</option>` +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+    clientesCache.map(opcionCliente).join('');
   select.value = actual;
 }
 
@@ -1680,7 +1680,7 @@ async function cargarFormularioNuevo(opciones) {
   await Promise.all([cargarClientesCache(), cargarProductosCache()]);
 
   selectCliente.innerHTML = '<option value="">Selecciona un cliente…</option>' +
-    clientesCache.map((c) => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
+    clientesCache.map(opcionCliente).join('');
   selectProducto.innerHTML = '<option value="">Elige un producto…</option>' +
     productosCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${formatoEuros(p.precio)}</option>`).join('');
 
@@ -1822,7 +1822,7 @@ async function cargarClientes() {
 function filtrarListaClientes() {
   const cont = document.getElementById('listaClientes');
   const filtro = BuscadorClientes.normalizar(document.getElementById('buscarCliente').value || '');
-  const filtrados = clientesCache.filter((c) => coincideBusqueda(c.nombre, filtro));
+  const filtrados = clientesCache.filter((c) => coincideBusqueda(c.nombre + ' ' + textoBusquedaCliente(c), filtro));
 
   cont.innerHTML = filtrados.map((c) => `
     <div class="client-row" data-id="${c.id}">
@@ -1849,8 +1849,13 @@ async function abrirDetalleCliente(id) {
   window.scrollTo({ top: 0, behavior: 'instant' });
 
   const info = [];
-  if (clienteSeleccionado.telefono) info.push('📞 ' + clienteSeleccionado.telefono);
-  if (clienteSeleccionado.direccion) info.push('📍 ' + clienteSeleccionado.direccion);
+  const telefonos = [clienteSeleccionado.telefono, clienteSeleccionado.telefono2].filter(Boolean);
+  if (telefonos.length) info.push('📞 ' + telefonos.join(' · '));
+  const direccion = [clienteSeleccionado.direccion, [clienteSeleccionado.codigoPostal, clienteSeleccionado.poblacion].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  if (direccion) info.push('📍 ' + direccion);
+  if (clienteSeleccionado.nif) info.push('NIF/CIF: ' + clienteSeleccionado.nif);
+  const nombreFactura = nombreFacturaCliente(clienteSeleccionado);
+  if (nombreFactura && nombreFactura !== clienteSeleccionado.nombre) info.push('🧾 La factura sale a nombre de ' + nombreFactura);
   if (clienteSeleccionado.ruta) info.push('Ruta ' + clienteSeleccionado.ruta);
   if (clienteSeleccionado.descuento > 0) info.push(`Descuento: ${(clienteSeleccionado.descuento * 100).toFixed(0)}%`);
   if (clienteSeleccionado.documento === 'albaran') info.push('🧾 Va con albarán (sin factura)');
@@ -1868,6 +1873,20 @@ function stampHtml(estado) {
 }
 
 // ¿El texto contiene todas las palabras buscadas (sin tildes ni mayúsculas, en cualquier orden)?
+// A quién se dirige la factura: la persona (nombre y apellidos) si los tiene; si no, el establecimiento
+function nombreFacturaCliente(c) {
+  const persona = [c.nombrePila, c.apellidos].filter(Boolean).join(' ').trim();
+  return persona || c.establecimiento || c.nombre || '';
+}
+
+// Texto extra por el que se puede buscar a un cliente sin enseñarlo: nombre, apellidos, teléfonos, NIF y población
+function textoBusquedaCliente(c) {
+  return [c.establecimiento, c.nombrePila, c.apellidos, c.telefono, c.telefono2, c.nif, c.poblacion].filter(Boolean).join(' ');
+}
+function opcionCliente(c) {
+  return `<option value="${c.id}" data-buscar="${escapeHtml(textoBusquedaCliente(c))}">${escapeHtml(c.nombre)}</option>`;
+}
+
 function coincideBusqueda(texto, consultaNormalizada) {
   const t = BuscadorClientes.normalizar(texto);
   return consultaNormalizada.split(/\s+/).filter(Boolean).every((palabra) => t.includes(palabra));
@@ -2110,7 +2129,7 @@ function abrirFormularioCliente(cliente) {
   solicitudCliente = null;   // formulario nuevo: intento nuevo
   document.getElementById('clienteFormTitulo').textContent = cliente ? 'Editar cliente' : 'Nuevo cliente';
   document.getElementById('clFormId').value = cliente ? cliente.id : '';
-  document.getElementById('clFormNombre').value = cliente ? cliente.nombre || '' : '';
+  document.getElementById('clFormNombre').value = cliente ? (cliente.establecimiento !== undefined ? cliente.establecimiento : cliente.nombre) || '' : '';
   document.getElementById('clFormTelefono').value = cliente ? cliente.telefono || '' : '';
   document.getElementById('clFormDireccion').value = cliente ? cliente.direccion || '' : '';
   document.getElementById('clFormNif').value = cliente ? cliente.nif || '' : '';
@@ -2119,6 +2138,11 @@ function abrirFormularioCliente(cliente) {
   document.getElementById('clFormDescuento').value = cliente && cliente.descuento ? Math.round(cliente.descuento * 100) : '';
   document.getElementById('clFormRecargo').value = cliente && cliente.recargoEquivalencia ? 'true' : 'false';
   document.getElementById('clFormDocumento').value = cliente && cliente.documento === 'albaran' ? 'albaran' : 'factura';
+  document.getElementById('clFormTelefono2').value = (cliente && cliente.telefono2) || '';
+  document.getElementById('clFormNombrePila').value = (cliente && cliente.nombrePila) || '';
+  document.getElementById('clFormApellidos').value = (cliente && cliente.apellidos) || '';
+  document.getElementById('clFormCodigoPostal').value = (cliente && cliente.codigoPostal) || '';
+  document.getElementById('clFormPoblacion').value = (cliente && cliente.poblacion) || '';
   document.getElementById('clFormActivo').value = 'true';
   document.getElementById('clienteFormMsg').textContent = '';
   cambiarTab('cliente-form');
@@ -2131,14 +2155,23 @@ async function guardarCliente() {
   if (guardandoCliente) return;
   const msg = document.getElementById('clienteFormMsg');
   const boton = document.getElementById('btnGuardarCliente');
-  const nombre = document.getElementById('clFormNombre').value.trim();
-  if (!nombre) { msg.textContent = 'Pon un nombre.'; msg.className = 'form-msg is-error'; return; }
+  const establecimiento = document.getElementById('clFormNombre').value.trim();
+  const nombrePila = document.getElementById('clFormNombrePila').value.trim();
+  const apellidos = document.getElementById('clFormApellidos').value.trim();
+  if (!establecimiento && !nombrePila && !apellidos) { msg.textContent = 'Pon el nombre del establecimiento, o el nombre y apellidos.'; msg.className = 'form-msg is-error'; return; }
 
   const datos = {
     id: document.getElementById('clFormId').value,
-    nombre: nombre,
+    // "nombre" es el nombre con el que se ve al cliente: lo entiende también un servidor que aún no conozca los tres datos
+    nombre: establecimiento || [nombrePila, apellidos].filter(Boolean).join(' '),
+    establecimiento: establecimiento,
+    nombrePila: nombrePila,
+    apellidos: apellidos,
     telefono: document.getElementById('clFormTelefono').value.trim(),
+    telefono2: document.getElementById('clFormTelefono2').value.trim(),
     direccion: document.getElementById('clFormDireccion').value.trim(),
+    codigoPostal: document.getElementById('clFormCodigoPostal').value.trim(),
+    poblacion: document.getElementById('clFormPoblacion').value.trim(),
     nif: document.getElementById('clFormNif').value.trim(),
     ruta: document.getElementById('clFormRuta').value.trim(),
     formaPago: document.getElementById('clFormFormaPago').value.trim(),
@@ -2170,6 +2203,13 @@ async function guardarCliente() {
         const seguir = confirm(`Ya existe un cliente igual (${r.motivo}): ${c.nombre} (nº ${c.id}${c.nif ? ', NIF ' + c.nif : ''}${c.telefono ? ', tel. ' + c.telefono : ''}).\n\n¿Crear otro de todas formas?`);
         if (!seguir) { msg.textContent = 'No se ha creado: ya existía.'; msg.className = 'form-msg'; solicitudCliente = null; return; }
         datos.confirmarDuplicado = '1';
+        continue;
+      }
+      if (r && r.telefonoRepetido) {
+        // el teléfono ya lo tiene otro cliente: en la app de clientes entraría siempre ese
+        const seguir = confirm(`${r.error}\n\n¿Guardar igualmente?`);
+        if (!seguir) { msg.textContent = 'No se ha guardado: ese teléfono ya es de otro cliente.'; msg.className = 'form-msg'; return; }
+        datos.confirmarTelefonoRepetido = 'true';
         continue;
       }
       break;

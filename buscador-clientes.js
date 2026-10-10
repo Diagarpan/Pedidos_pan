@@ -101,7 +101,7 @@
       const palabras = normalizar(input.value).split(/\s+/).filter(Boolean);
       const todas = Array.from(select.options).filter((o) => o.value);
       let coincidencias = palabras.length
-        ? todas.filter((o) => { const n = normalizar(o.textContent); return palabras.every((p) => n.includes(p)); })
+        ? todas.filter((o) => { const n = normalizar(o.textContent + ' ' + (o.dataset.buscar || '')); return palabras.every((p) => n.includes(p)); })
         : todas;
 
       // Primero los que EMPIEZAN por lo escrito, luego el resto

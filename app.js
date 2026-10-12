@@ -8,6 +8,7 @@ let productosCache = [];
 let clientesCache = [];
 let itemsNuevo = []; // { tipo:'catalogo'|'libre', productoId?, nombre, precio, iva (fracción), cantidad, uid }
 let itemsEditarPedido = [];
+let editarPedidoEsAlbaran = false; // el pedido que se está editando es un albarán (no lleva IVA)
 let itemsEditarFactura = [];
 let idPedidoEnEdicion = null;
 let idFacturaEnEdicion = null;
@@ -1643,6 +1644,7 @@ function actualizarTipoDocumento() {
   aviso.style.display = t.aviso ? 'block' : 'none';
   document.getElementById('bloqueFechaPedido').style.display = tipo === 'facturaSuelta' ? 'none' : '';
   document.getElementById('btnCrearPedido').textContent = t.boton;
+  recalcularTotal('nuevo');   // un albarán no lleva IVA: el total cambia al cambiar el tipo
 }
 
 function cablearNuevoPedido() {
@@ -2970,10 +2972,18 @@ function quitarItem(tipo, uid) {
   pintarItems(tipo);
 }
 
+// Un albarán es un documento de entrega y NO lleva IVA: su total es la base. Nuevo pedido: según el tipo elegido; editar pedido: según el pedido.
+function pedidoSinIva(tipo) {
+  if (tipo === 'nuevo') return document.getElementById('selectTipoDocumento').value === 'albaran';
+  if (tipo === 'editarPedido') return editarPedidoEsAlbaran;
+  return false;
+}
+
 function recalcularTotal(tipo) {
   const cfg = CONFIG_ITEMS[tipo];
   let total = 0;
-  cfg.obtener().forEach((it) => { total += it.precio * it.cantidad * (1 + it.iva); }); // iva ya es fracción en los dos tipos
+  const sinIva = pedidoSinIva(tipo);
+  cfg.obtener().forEach((it) => { total += it.precio * it.cantidad * (sinIva ? 1 : 1 + it.iva); }); // iva ya es fracción en los dos tipos
   document.getElementById(cfg.totalId).textContent = formatoEuros(total);
 }
 
@@ -3011,6 +3021,7 @@ async function cargarPedidoParaEditar() {
   const selFecha = document.getElementById('epFechaEntrega');
   selFecha.value = 'mantener';
   selFecha.options[0].textContent = `Mantener la fecha actual (${r.data.fechaEntrega})`;
+  editarPedidoEsAlbaran = r.data.documento === 'Albarán';
   itemsEditarPedido = prepararItemsParaEditar(r.data.items);
   pintarItems('editarPedido');
   document.getElementById('editarPedidoMsg').textContent = '';

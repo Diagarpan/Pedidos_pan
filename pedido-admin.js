@@ -236,9 +236,12 @@ function itemsCarrito() {
     .filter((it) => it.producto);
 }
 
+// Un albarán es un documento de entrega y NO lleva IVA: su total es la base
+function factorIva(it) { return tipoSeleccionado === 'albaran' ? 1 : 1 + it.producto.iva; }
+
 function recalcularCarrito() {
   let total = 0;
-  itemsCarrito().forEach((it) => { total += it.producto.precio * it.cantidad * (1 + it.producto.iva); });
+  itemsCarrito().forEach((it) => { total += it.producto.precio * it.cantidad * factorIva(it); });
   document.getElementById('carritoTotal').textContent = formatoEuros(total);
   const repasoTotal = document.getElementById('repasoTotal');
   if (repasoTotal) repasoTotal.textContent = formatoEuros(total);
@@ -254,7 +257,7 @@ function pintarRepaso() {
   } else {
     cont.innerHTML = items.map((it) => `
       <div class="client-row">
-        <span>${it.cantidad}x ${escapeHtml(it.producto.nombre)} — ${formatoEuros(it.producto.precio * it.cantidad * (1 + it.producto.iva))}</span>
+        <span>${it.cantidad}x ${escapeHtml(it.producto.nombre)} — ${formatoEuros(it.producto.precio * it.cantidad * factorIva(it))}</span>
         <button class="chip-btn" data-quitar-repaso="${it.producto.id}" style="border-color:var(--warn-red); color:var(--warn-red);">Quitar</button>
       </div>
     `).join('');

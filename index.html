@@ -418,6 +418,8 @@
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
       <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
+      <button class="home-btn home-btn--factura" data-tab="panel">Panel de resultados</button>
+      <button class="home-btn home-btn--factura" data-tab="gestor">Zona del gestor</button>
       <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
   </section>
@@ -433,7 +435,12 @@
       <button class="chip-btn" data-pp-rapido="manana">Mañana</button>
       <input type="date" id="ppFecha" class="text-input" style="max-width:190px;" aria-label="Día de entrega">
     </div>
-    <button class="btn-secondary" id="btnPedidoProveedoresTodos" style="width:100%; margin-bottom:12px;">PDF de todos los proveedores</button>
+    <label style="display:flex; gap:8px; align-items:flex-start; margin:0 0 10px; font-size:14px;">
+      <input type="checkbox" id="ppAnadirGastoPdf" style="margin-top:3px;">
+      <span>Al descargar el PDF, añadir también a gastos <strong>(estimado)</strong></span>
+    </label>
+    <button class="btn-secondary" id="btnPedidoProveedoresTodos" style="width:100%; margin-bottom:8px;">PDF de todos los proveedores</button>
+    <button class="btn-secondary" id="btnPedidoProveedoresGastos" style="width:100%; margin-bottom:12px;">Añadir todos a gastos (estimado)</button>
     <div id="listaPedidoProveedores" class="stack">
       <div class="empty-state">Cargando…</div>
     </div>
@@ -486,21 +493,86 @@
     <select id="gastoFormProveedor" class="select-input">
       <option value="">Sin proveedor / puntual</option>
     </select>
+    <label class="field-label" for="gastoFormNumFactura">Nº de factura (opcional)</label>
+    <input type="text" id="gastoFormNumFactura" class="text-input" placeholder="El que pone la factura del proveedor">
     <label class="field-label" for="gastoFormConcepto">Concepto</label>
     <input type="text" id="gastoFormConcepto" class="text-input" placeholder="Ej: Harina, gasoil, mantenimiento furgoneta…">
-    <label class="field-label" for="gastoFormCategoria">Categoría (opcional)</label>
-    <input type="text" id="gastoFormCategoria" class="text-input" placeholder="Ej: Materia prima, Combustible, Alquiler…">
+    <label class="field-label" for="gastoFormCategoria">Categoría</label>
+    <input type="text" id="gastoFormCategoria" class="text-input" list="listaCategoriasGasto" autocomplete="off" placeholder="Elige una o escribe otra">
+    <datalist id="listaCategoriasGasto"></datalist>
     <label class="field-label" for="gastoFormBase">Base imponible (€)</label>
     <input type="number" id="gastoFormBase" class="text-input" step="0.01" min="0" placeholder="0.00">
     <label class="field-label" for="gastoFormIva">IVA (€, importe — no %)</label>
     <input type="number" id="gastoFormIva" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <label class="field-label" for="gastoFormRetencion">Retención IRPF (€, solo si la factura la lleva)</label>
+    <input type="number" id="gastoFormRetencion" class="text-input" step="0.01" min="0" placeholder="0.00">
     <div class="new-order-total">
-      <span>Total</span>
+      <span>Total a pagar</span>
       <span id="gastoFormTotal">0,00 €</span>
     </div>
-    <button class="btn-primary" id="btnGuardarGasto">Guardar gasto</button>
+    <label style="display:flex; gap:8px; align-items:center; margin:12px 0 4px; font-size:15px;">
+      <input type="checkbox" id="gastoFormPagado" checked>
+      <span>Ya está pagada</span>
+    </label>
+    <div id="gastoFormFechaPagoBloque">
+      <label class="field-label" for="gastoFormFechaPago">Fecha de pago</label>
+      <input type="date" id="gastoFormFechaPago" class="text-input">
+    </div>
+    <div class="field-label">Factura (foto o PDF)</div>
+    <label class="btn-secondary" id="gastoFormArchivoBoton" for="gastoFormArchivo" style="display:block; text-align:center; cursor:pointer;">📷 Fotografiar o subir la factura</label>
+    <input type="file" id="gastoFormArchivo" accept="image/*,application/pdf" style="display:none;">
+    <div class="card__meta" id="gastoFormArchivoEstado" style="margin:6px 0;">Sin factura adjunta.</div>
+    <button type="button" class="link-btn" id="gastoFormArchivoQuitar" style="display:none;">Quitar la factura adjunta</button>
+    <button class="btn-primary" id="btnGuardarGasto" style="margin-top:12px;">Guardar gasto</button>
     <button class="btn-secondary" id="btnEliminarGasto" style="display:none; margin-top:8px; border-color:var(--warn-red); color:var(--warn-red);">Eliminar este gasto</button>
     <div class="form-msg" id="gastoFormMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-gasto-factura">
+    <button class="link-btn" data-volver="gastos-ver">← Gastos</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Incorporar factura de proveedor</div>
+      <div class="home-sub">Pon aquí la factura real (por ejemplo, la de la fábrica). Sustituye a los gastos estimados que cubre y es la que va al gestor.</div>
+    </div>
+    <label class="field-label" for="facProveedor">Proveedor</label>
+    <select id="facProveedor" class="select-input"><option value="">Elige el proveedor…</option></select>
+    <label class="field-label" for="facNumero">Nº de factura</label>
+    <input type="text" id="facNumero" class="text-input" placeholder="El que pone la factura">
+    <label class="field-label" for="facCategoria">Categoría</label>
+    <input type="text" id="facCategoria" class="text-input" list="listaCategoriasGasto" autocomplete="off" placeholder="Mercancía">
+    <label class="field-label" for="facFecha">Fecha de la factura</label>
+    <input type="date" id="facFecha" class="text-input">
+    <label class="field-label" for="facBase">Base imponible (€)</label>
+    <input type="number" id="facBase" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <label class="field-label" for="facIva">IVA (€, importe — no %)</label>
+    <input type="number" id="facIva" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <label class="field-label" for="facRetencion">Retención IRPF (€, solo si la factura la lleva)</label>
+    <input type="number" id="facRetencion" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <div class="new-order-total">
+      <span>Total de la factura</span>
+      <span id="facTotal">0,00 €</span>
+    </div>
+    <div class="card__meta" id="facAPagar" style="margin:4px 0;"></div>
+    <label style="display:flex; gap:8px; align-items:center; margin:12px 0 4px; font-size:15px;">
+      <input type="checkbox" id="facPagada">
+      <span>Ya está pagada</span>
+    </label>
+    <div id="facFechaPagoBloque" style="display:none;">
+      <label class="field-label" for="facFechaPago">Fecha de pago</label>
+      <input type="date" id="facFechaPago" class="text-input">
+    </div>
+    <div class="field-label">Factura (foto o PDF)</div>
+    <label class="btn-secondary" id="facArchivoBoton" for="facArchivo" style="display:block; text-align:center; cursor:pointer;">📷 Fotografiar o subir la factura</label>
+    <input type="file" id="facArchivo" accept="image/*,application/pdf" style="display:none;">
+    <div class="card__meta" id="facArchivoEstado" style="margin:6px 0;">Sin factura adjunta.</div>
+    <button type="button" class="link-btn" id="facArchivoQuitar" style="display:none;">Quitar la factura adjunta</button>
+
+    <div class="field-label" style="margin-top:14px;">Gastos estimados que cubre esta factura</div>
+    <div class="card__meta" style="margin-bottom:6px;">Marca los días que incluye (una factura puede cubrir varios).</div>
+    <div id="facEstimados" class="stack"><div class="empty-state">Elige el proveedor para ver sus gastos estimados pendientes.</div></div>
+    <div class="card__meta" id="facComparacion" style="margin:8px 0;"></div>
+    <button class="btn-primary" id="btnGuardarFactura">Incorporar factura</button>
+    <div class="form-msg" id="facMsg"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-gastos-ver">
@@ -515,12 +587,54 @@
       <button class="chip-btn" id="btnGastosEsteMes">Este mes</button>
       <button class="btn-secondary" id="btnDescargarLibroGastos">Libro de gastos (PDF)</button>
     </div>
+    <button class="btn-primary" id="btnIncorporarFactura" style="width:100%; margin-top:10px;">Incorporar factura de proveedor</button>
+    <label style="display:flex; gap:8px; align-items:center; margin:10px 0 4px; font-size:14px;">
+      <input type="checkbox" id="gastosSoloPendientes">
+      <span>Solo pendientes de pago</span>
+    </label>
     <div id="listaGastos" class="stack">
       <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
     </div>
     <div class="period-total" id="gastosTotal"></div>
   </section>
 
+
+  <section class="tab tab--hidden" id="tab-panel">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Panel de resultados</div>
+      <div class="home-sub">Ventas, gastos, lo pendiente de cobrar y de pagar, y el resultado provisional del mes</div>
+    </div>
+    <div class="date-range">
+      <button class="chip-btn" id="btnPanelAnterior" aria-label="Mes anterior">←</button>
+      <input type="month" id="panelMes" class="text-input">
+      <button class="chip-btn" id="btnPanelSiguiente" aria-label="Mes siguiente">→</button>
+    </div>
+    <div id="panelContenido" class="stack"><div class="empty-state">Cargando…</div></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-gestor">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Zona del gestor</div>
+      <div class="home-sub">Todo lo del mes para tu gestor: facturas emitidas y recibidas, IVA, retenciones y justificantes</div>
+    </div>
+    <input type="month" id="gestorMes" class="text-input">
+    <div class="field-label" style="margin-top:14px;">Para abrir en Excel (CSV)</div>
+    <button class="btn-secondary" id="btnGestorEmitidas" style="width:100%; margin-bottom:6px;">Facturas emitidas (ventas)</button>
+    <button class="btn-secondary" id="btnGestorRecibidas" style="width:100%; margin-bottom:6px;">Facturas recibidas (compras y gastos)</button>
+    <button class="btn-secondary" id="btnGestorIva" style="width:100%; margin-bottom:6px;">Resumen de IVA y retenciones</button>
+    <div class="field-label" style="margin-top:14px;">Libros en PDF</div>
+    <button class="btn-secondary" id="btnGestorLibroEmitidas" style="width:100%; margin-bottom:6px;">Libro de facturas emitidas</button>
+    <button class="btn-secondary" id="btnGestorLibroGastos" style="width:100%; margin-bottom:6px;">Libro de gastos</button>
+    <div class="field-label" style="margin-top:14px;">Carpeta del mes en Google Drive</div>
+    <div class="card__meta" style="margin-bottom:6px;">Reúne los CSV, una copia de cada factura de proveedor (foto o PDF) y los PDF de tus facturas emitidas.</div>
+    <button class="btn-primary" id="btnGestorCarpeta" style="width:100%; margin-bottom:6px;">Preparar la carpeta del mes</button>
+    <button class="btn-secondary" id="btnGestorPdfs" style="width:100%; margin-bottom:6px;">Generar los PDF de las facturas emitidas</button>
+    <button class="btn-secondary" id="btnGestorCompartir" style="width:100%; margin-bottom:6px;">Compartir la carpeta con el gestor</button>
+    <div class="form-msg" id="gestorMsg"></div>
+    <div id="gestorResultado" class="stack"></div>
+  </section>
 
   <section class="tab tab--hidden" id="tab-balance">
     <button class="link-btn" data-volver="compras">← Compras</button>
@@ -696,6 +810,8 @@
     <label class="field-label" for="empEmail">Email</label>
     <input type="text" id="empEmail" class="text-input">
 
+    <label class="field-label" for="empEmailGestor">Email del gestor (para compartirle la documentación del mes)</label>
+    <input type="text" id="empEmailGestor" class="text-input" inputmode="email" placeholder="gestor@asesoria.es">
     <label class="field-label" for="empLogoFileId">ID del logo en Google Drive (opcional)</label>
     <input type="text" id="empLogoFileId" class="text-input" placeholder="1AbCdEfGhIjK...">
 

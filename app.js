@@ -246,7 +246,7 @@ const TIEMPO_MAXIMO_PETICION_MS = 60000;
 // corta a los 6, así que aquí se espera algo más para que llegue antes su propio aviso. Todo lo demás se da por
 // perdido a los 60 s (para no dejar una pantalla colgada).
 const TIEMPO_MAXIMO_LARGO_MS = 390000;
-const ACCIONES_LARGAS = new Set(['resumenPeriodo', 'modelo347', 'estadisticas', 'balance', 'cerrarAnio', 'copiaSeguridad']);
+const ACCIONES_LARGAS = new Set(['resumenPeriodo', 'modelo347', 'estadisticas', 'balance', 'cerrarAnio', 'copiaSeguridad', 'gestorCarpeta', 'gestorPdfsEmitidas', 'gestorCsv', 'panelMes']);
 function esAccionLarga(action) { return /Pdf$/.test(action) || ACCIONES_LARGAS.has(action); }
 function tiempoMaximoDe(action) { return esAccionLarga(action) ? TIEMPO_MAXIMO_LARGO_MS : TIEMPO_MAXIMO_PETICION_MS; }
 let peticionesLargasEnCurso = 0;   // las largas no cuentan para "esperar a que acaben las peticiones" (botón Actualizar)
@@ -345,6 +345,37 @@ function fetchConTiempo(url, tiempoMaximo) {
       .then((texto) => { if (terminado) return; terminado = true; clearTimeout(temporizador); resolver(texto); })
       .catch((err) => { if (terminado) return; terminado = true; clearTimeout(temporizador); rechazar(err); });
   });
+}
+
+// Envío por POST: para subir la foto o el PDF de una factura (no cabe en la dirección de una petición GET). El cuerpo va como texto plano
+// para que el navegador no tenga que pedir permiso previo a Google.
+function fetchPostConTiempo(url, cuerpo, tiempoMaximo) {
+  const limite = tiempoMaximo || 180000;
+  return new Promise((resolver, rechazar) => {
+    let terminado = false;
+    const control = typeof AbortController === 'function' ? new AbortController() : null;
+    const temporizador = setTimeout(() => {
+      if (terminado) return;
+      terminado = true;
+      if (control) { try { control.abort(); } catch (e) { /* nada */ } }
+      rechazar(new Error('La subida tarda demasiado. Comprueba la conexión e inténtalo de nuevo.'));
+    }, limite);
+    fetch(url, Object.assign({ method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: cuerpo, cache: 'no-store' }, control ? { signal: control.signal } : {}))
+      .then((res) => res.text())
+      .then((texto) => { if (terminado) return; terminado = true; clearTimeout(temporizador); resolver(texto); })
+      .catch((err) => { if (terminado) return; terminado = true; clearTimeout(temporizador); rechazar(err); });
+  });
+}
+
+async function apiPost(action, cuerpo) {
+  const texto = await fetchPostConTiempo(WEB_APP_URL, JSON.stringify(Object.assign({ action, key: API_KEY }, cuerpo || {})), 180000);
+  try {
+    return JSON.parse(texto);
+  } catch (e) {
+    const fallo = new Error(MENSAJE_RESPUESTA_ILEGIBLE);
+    fallo.toString = () => MENSAJE_RESPUESTA_ILEGIBLE;
+    throw fallo;
+  }
 }
 
 async function apiGetInterno(action, extraParams) {
@@ -701,7 +732,7 @@ const RECARGA_AL_ACTUALIZAR = {
   empresa: () => { comprobarServidor(); cargarEstadoCopias(); },   // sin tocar los campos que se estén editando
 };
 // Formularios: NO se recargan (se perdería lo que se está escribiendo)
-const PANTALLAS_DE_FORMULARIO = ['nuevo', 'pedido-editar', 'factura-editar', 'gasto-nuevo', 'proveedor-form', 'cerrar-anio'];
+const PANTALLAS_DE_FORMULARIO = ['nuevo', 'pedido-editar', 'factura-editar', 'gasto-nuevo', 'gasto-factura', 'proveedor-form', 'cerrar-anio'];
 
 // Espera a que acaben las peticiones (que haya silencio 0,3 s seguidos), con un máximo de ~45 s
 async function esperarFinDePeticiones() {
@@ -773,6 +804,9 @@ const BREADCRUMBS = {
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
+  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }, { label: 'Incorporar factura', tab: 'gasto-factura' }],
+  'panel': [{ label: 'Compras', tab: 'compras' }, { label: 'Panel de resultados', tab: 'panel' }],
+  'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
   'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen por periodo e IVA', tab: 'factura-periodo' }],
@@ -872,6 +906,9 @@ function cargarTabActual(nombre) {
   if (activo === 'proveedores') cargarProveedores();
   if (activo === 'pedido-proveedores') iniciarPedidoProveedores();
   if (activo === 'gasto-nuevo') cargarFormularioGasto();
+  if (activo === 'gasto-factura') cargarFormularioFactura();
+  if (activo === 'panel') cargarPanel();
+  if (activo === 'gestor') iniciarGestor();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -1593,6 +1630,7 @@ async function cargarEmpresa() {
   document.getElementById('empDireccion').value = r.data.direccion || '';
   document.getElementById('empTelefono').value = r.data.telefono || '';
   document.getElementById('empEmail').value = r.data.email || '';
+  document.getElementById('empEmailGestor').value = r.data.emailGestor || '';
   document.getElementById('empLogoFileId').value = r.data.logoFileId || '';
   document.getElementById('empNumeroInicialFactura').value = r.data.numeroInicialFactura || '';
   document.getElementById('empSerie').value = r.data.serie || '';
@@ -1613,6 +1651,7 @@ async function guardarEmpresa() {
     direccion: document.getElementById('empDireccion').value.trim(),
     telefono: document.getElementById('empTelefono').value.trim(),
     email: document.getElementById('empEmail').value.trim(),
+    emailGestor: document.getElementById('empEmailGestor').value.trim(),
     logoFileId: document.getElementById('empLogoFileId').value.trim(),
     numeroInicialFactura: document.getElementById('empNumeroInicialFactura').value.trim(),
     serie: document.getElementById('empSerie').value.trim(),
@@ -2757,14 +2796,16 @@ function iniciarPedidoProveedores() {
   cargarPedidoProveedores();
 }
 
-async function cargarPedidoProveedores() {
+async function cargarPedidoProveedores(opciones) {
   const cont = document.getElementById('listaPedidoProveedores');
   const iso = document.getElementById('ppFecha').value;
   const botonTodos = document.getElementById('btnPedidoProveedoresTodos');
-  document.getElementById('ppMsg').textContent = '';
+  const botonGastos = document.getElementById('btnPedidoProveedoresGastos');
+  if (!(opciones && opciones.conservarMensaje)) document.getElementById('ppMsg').textContent = '';
   if (!iso) { cont.innerHTML = '<div class="empty-state">Elige un día.</div>'; return; }
   cont.innerHTML = '<div class="empty-state">Cargando…</div>';
   botonTodos.disabled = true;
+  botonGastos.disabled = true;
 
   const r = await apiGet('pedidoProveedores', { fecha: formatoFechaES(iso) }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
   if (document.getElementById('ppFecha').value !== iso) return;   // cambió de día mientras cargaba
@@ -2787,7 +2828,8 @@ async function cargarPedidoProveedores() {
         <div class="card__name">${escapeHtml(String(p.total))}</div>
       </div>
       ${p.productos.map(linea).join('')}
-      <div class="card__actions"><button class="chip-btn" data-pp-pdf="${escapeHtml(String(p.idProveedor))}">PDF para ${escapeHtml(p.nombre)}</button></div>
+      <div style="margin-top:8px;">${bloqueGastoProveedor(p)}</div>
+      <div class="card__actions"><button class="chip-btn" data-pp-pdf="${escapeHtml(String(p.idProveedor))}">PDF para ${escapeHtml(p.nombre)}</button>${botonGastoProveedor(p)}</div>
     </div>`).join('');
 
   if (d.sinProveedor.productos.length) {
@@ -2801,8 +2843,64 @@ async function cargarPedidoProveedores() {
   }
   cont.innerHTML = html;
   botonTodos.disabled = !d.proveedores.length;
+  botonGastos.disabled = !d.proveedores.some(puedeAnadirseAGastos);
+  cont.querySelectorAll('[data-pp-gasto]').forEach((b) => b.addEventListener('click', () => anadirGastoEstimado(b.dataset.ppGasto, b)));
   cont.querySelectorAll('[data-pp-pdf]').forEach((b) => b.addEventListener('click', () => descargarPedidoProveedor(b.dataset.ppPdf, b)));
   cont.querySelectorAll('[data-pp-productos]').forEach((b) => b.addEventListener('click', () => cambiarTab('productos')));
+}
+
+// ¿Se puede añadir este proveedor a gastos? Hace falta que tenga costes puestos y que no esté ya cubierto por una factura
+function puedeAnadirseAGastos(p) {
+  return !!(p.estimado && p.estimado.conCoste > 0) && !(p.gasto && p.gasto.estado === 'Cubierto');
+}
+
+// Lo que se gastará en este proveedor (cantidad × coste de cada producto, más su IVA) y si ya está en gastos
+function bloqueGastoProveedor(p) {
+  const e = p.estimado || {};
+  let html;
+  if (!e.conCoste) html = '<div class="card__meta" style="color:var(--warn-red);">No se puede estimar el gasto: ningún producto de este proveedor tiene el coste puesto.</div>';
+  else {
+    html = `<div class="card__meta">Gasto estimado: <strong>${formatoEuros(e.total)}</strong> (base ${formatoEuros(e.base)} + IVA ${formatoEuros(e.iva)})</div>`;
+    if (e.sinCoste && e.sinCoste.length) html += `<div class="card__meta" style="color:var(--warn-red);">Sin coste, no suman: ${escapeHtml(e.sinCoste.join(', '))}</div>`;
+  }
+  const g = p.gasto;
+  if (g && g.estado === 'Estimado') html += `<div class="card__meta">✓ En gastos como estimado (${formatoEuros(g.total)})</div>`;
+  else if (g && g.estado === 'Cubierto') html += `<div class="card__meta">✓ Cubierto por la factura${g.numFactura ? ' nº ' + escapeHtml(g.numFactura) : ''}</div>`;
+  return html;
+}
+
+function botonGastoProveedor(p) {
+  if (!puedeAnadirseAGastos(p)) return '';
+  const hay = p.gasto && p.gasto.estado === 'Estimado';
+  return `<button class="chip-btn" data-pp-gasto="${escapeHtml(String(p.idProveedor))}">${hay ? 'Actualizar gasto estimado' : 'Añadir a gastos (estimado)'}</button>`;
+}
+
+// Lo que se cuenta tras añadir a gastos: por cada proveedor, lo hecho o por qué no se pudo
+function resumenGastoAnadido(r) {
+  return (r.resultados || []).map((x) => x.ok
+    ? `${x.nombre}: gasto estimado ${x.accion === 'creado' ? 'añadido' : 'actualizado'} (${formatoEuros(x.total)})${x.sinCoste && x.sinCoste.length ? ', sin contar ' + x.sinCoste.join(', ') + ' (sin coste)' : ''}.`
+    : `${x.nombre}: ${x.error}`).join(' ');
+}
+
+let anadiendoGasto = false;
+async function anadirGastoEstimado(idProveedor, boton) {
+  if (anadiendoGasto) return;
+  const msg = document.getElementById('ppMsg');
+  anadiendoGasto = true;
+  if (boton) boton.disabled = true;
+  msg.textContent = 'Añadiendo a gastos…';
+  msg.className = 'form-msg';
+  try {
+    const r = await apiGet('gastoPedidoProveedores', { fecha: formatoFechaES(document.getElementById('ppFecha').value), idProveedor: idProveedor || 'todos' })
+      .catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) { msg.textContent = r.error || 'No se pudo añadir a gastos.'; msg.className = 'form-msg is-error'; return; }
+    msg.textContent = resumenGastoAnadido(r);
+    msg.className = r.conProblema ? 'form-msg is-error' : 'form-msg is-ok';
+    cargarPedidoProveedores({ conservarMensaje: true });   // para que se vea ya el estado de cada proveedor
+  } finally {
+    anadiendoGasto = false;
+    if (boton) boton.disabled = false;
+  }
 }
 
 async function descargarPedidoProveedor(idProveedor, boton) {
@@ -2819,6 +2917,13 @@ async function descargarPedidoProveedor(idProveedor, boton) {
     await descargarPDF(r.base64, r.nombre);
     msg.textContent = 'PDF listo.';
     msg.className = 'form-msg is-ok';
+    if (document.getElementById('ppAnadirGastoPdf').checked) {
+      const g = await apiGet('gastoPedidoProveedores', { fecha: formatoFechaES(document.getElementById('ppFecha').value), idProveedor: idProveedor || 'todos' })
+        .catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      msg.textContent = 'PDF listo. ' + (g.ok ? resumenGastoAnadido(g) : (g.error || 'No se pudo añadir a gastos.'));
+      msg.className = !g.ok || g.conProblema ? 'form-msg is-error' : 'form-msg is-ok';
+      if (g.ok) cargarPedidoProveedores({ conservarMensaje: true });
+    }
   } finally {
     descargandoPedidoProveedor = false;
     if (boton) boton.disabled = false;
@@ -2832,6 +2937,10 @@ function cablearPedidoProveedores() {
     cargarPedidoProveedores();
   }));
   document.getElementById('btnPedidoProveedoresTodos').addEventListener('click', (e) => descargarPedidoProveedor('', e.currentTarget));
+  document.getElementById('btnPedidoProveedoresGastos').addEventListener('click', (e) => anadirGastoEstimado('', e.currentTarget));
+  const casilla = document.getElementById('ppAnadirGastoPdf');
+  try { casilla.checked = localStorage.getItem('ppAnadirGastoPdf') === '1'; } catch (e) { /* sin almacenamiento */ }
+  casilla.addEventListener('change', () => { try { localStorage.setItem('ppAnadirGastoPdf', casilla.checked ? '1' : '0'); } catch (e) { /* sin almacenamiento */ } });
 }
 
 /* ============ TELÉFONOS DE LOS CLIENTES Y ESTADO DEL SERVIDOR ============ */
@@ -3285,6 +3394,164 @@ async function guardarProveedor() {
   }
 }
 
+/* ============ JUSTIFICANTES: FOTO O PDF DE LA FACTURA ============
+ * El formulario de gasto y el de "incorporar factura" comparten esto. Se elige una foto (o un PDF), la app reduce la foto (un móvil hace
+ * fotos de 5-10 MB; a 1800 px y JPEG se lee igual y sube en segundos), se sube a Google Drive y el gasto guarda su enlace. */
+const MAX_LADO_FOTO = 1800;
+const CALIDAD_FOTO = 0.8;
+const MAX_BYTES_PDF = 10 * 1024 * 1024;
+const justificantes = {};   // por formulario: { id, url, nombre, cambiado, subiendo, texto, error }
+
+function estadoJustificante(pref) {
+  if (!justificantes[pref]) justificantes[pref] = { id: '', url: '', nombre: '', cambiado: false, subiendo: false, texto: '', error: '' };
+  return justificantes[pref];
+}
+
+function leerComoBase64(archivo) {
+  return new Promise((resolver, rechazar) => {
+    const lector = new FileReader();
+    lector.onload = () => resolver(String(lector.result).split(',')[1] || '');
+    lector.onerror = () => rechazar(new Error('No se ha podido leer el archivo.'));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+async function cargarImagenParaReducir(archivo) {
+  if (typeof createImageBitmap === 'function') {
+    try { return await createImageBitmap(archivo, { imageOrientation: 'from-image' }); } catch (e) { /* sigue con la otra vía */ }
+  }
+  return await new Promise((resolver, rechazar) => {
+    const url = URL.createObjectURL(archivo);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolver(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); rechazar(new Error('No se ha podido abrir la foto.')); };
+    img.src = url;
+  });
+}
+
+async function prepararArchivoJustificante(archivo) {
+  const esPdf = archivo.type === 'application/pdf' || /\.pdf$/i.test(archivo.name || '');
+  if (esPdf) {
+    if (archivo.size > MAX_BYTES_PDF) throw new Error('El PDF es demasiado grande (máximo 10 MB).');
+    return { mime: 'application/pdf', base64: await leerComoBase64(archivo) };
+  }
+  if (!/^image\//.test(archivo.type || '')) throw new Error('Elige una foto o un PDF.');
+  const imagen = await cargarImagenParaReducir(archivo);
+  const escala = Math.min(1, MAX_LADO_FOTO / Math.max(imagen.width, imagen.height));
+  const lienzo = document.createElement('canvas');
+  lienzo.width = Math.max(1, Math.round(imagen.width * escala));
+  lienzo.height = Math.max(1, Math.round(imagen.height * escala));
+  const ctx = lienzo.getContext('2d');
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+  ctx.drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
+  return { mime: 'image/jpeg', base64: lienzo.toDataURL('image/jpeg', CALIDAD_FOTO).split(',')[1] };
+}
+
+function pintarJustificante(pref) {
+  const est = estadoJustificante(pref);
+  const estado = document.getElementById(pref + 'ArchivoEstado');
+  const quitar = document.getElementById(pref + 'ArchivoQuitar');
+  const boton = document.getElementById(pref + 'ArchivoBoton');
+  estado.textContent = '';
+  estado.style.color = '';
+  quitar.style.display = 'none';
+  boton.textContent = est.url ? '📷 Cambiar la factura' : '📷 Fotografiar o subir la factura';
+  if (est.subiendo) { estado.textContent = est.texto || 'Subiendo la factura…'; return; }
+  if (est.error) { estado.textContent = est.error; estado.style.color = 'var(--warn-red)'; }
+  if (est.url) {
+    if (est.error) estado.appendChild(document.createElement('br'));
+    estado.appendChild(document.createTextNode('✓ Factura adjunta: '));
+    if (/^https:\/\//.test(est.url)) {
+      const enlace = document.createElement('a');
+      enlace.href = est.url; enlace.target = '_blank'; enlace.rel = 'noopener'; enlace.textContent = 'ver';
+      estado.appendChild(enlace);
+    }
+    if (est.nombre) estado.appendChild(document.createTextNode(' (' + est.nombre + ')'));
+    quitar.style.display = 'inline-block';
+  } else if (!est.error) {
+    estado.textContent = 'Sin factura adjunta.';
+  }
+}
+
+function reiniciarJustificante(pref, urlExistente) {
+  justificantes[pref] = { id: '', url: urlExistente || '', nombre: '', cambiado: false, subiendo: false, texto: '', error: '' };
+  pintarJustificante(pref);
+}
+
+async function elegirArchivoJustificante(pref, archivo, contexto) {
+  const est = estadoJustificante(pref);
+  if (est.subiendo || !archivo) return;
+  est.subiendo = true;
+  est.error = '';
+  est.texto = 'Preparando la factura…';
+  pintarJustificante(pref);
+  try {
+    const f = await prepararArchivoJustificante(archivo);
+    est.texto = 'Subiendo la factura…';
+    pintarJustificante(pref);
+    const r = await apiPost('subirJustificante', { mime: f.mime, base64: f.base64, fecha: contexto.fecha, proveedor: contexto.proveedor, numFactura: contexto.numFactura });
+    if (!r.ok) throw new Error(r.error || 'No se pudo subir.');
+    est.id = r.id; est.url = r.url; est.nombre = r.nombre; est.cambiado = true;
+  } catch (err) {
+    est.error = 'No se ha podido subir: ' + ((err && err.message) ? err.message : textoDeFallo(err));
+  } finally {
+    est.subiendo = false;
+    pintarJustificante(pref);
+  }
+}
+
+// contextoFn() → { fecha (dd/MM/yyyy), proveedor, numFactura }: para dar nombre al archivo en Drive
+function iniciarJustificante(pref, contextoFn) {
+  const entrada = document.getElementById(pref + 'Archivo');
+  entrada.addEventListener('change', async () => {
+    const archivo = entrada.files && entrada.files[0];
+    entrada.value = '';   // para poder elegir otra vez el mismo archivo
+    if (archivo) await elegirArchivoJustificante(pref, archivo, contextoFn());
+  });
+  document.getElementById(pref + 'ArchivoQuitar').addEventListener('click', () => {
+    const est = estadoJustificante(pref);
+    est.id = ''; est.url = ''; est.nombre = ''; est.error = ''; est.cambiado = true;
+    pintarJustificante(pref);
+  });
+}
+
+// Lo que hay que mandar al servidor del justificante: solo si se ha subido, cambiado o quitado en este formulario
+function datosJustificante(pref) {
+  const est = estadoJustificante(pref);
+  return est.cambiado ? { justificanteId: est.id, justificanteUrl: est.url } : {};
+}
+
+// Categorías de gasto para elegir (las habituales y las ya usadas)
+let categoriasGastoCache = [];
+async function cargarCategoriasGasto() {
+  if (!categoriasGastoCache.length) {
+    const r = await apiGet('categoriasGasto').catch(() => null);
+    if (r && r.ok && Array.isArray(r.data)) categoriasGastoCache = r.data;
+  }
+  document.getElementById('listaCategoriasGasto').innerHTML = categoriasGastoCache.map((c) => `<option value="${escapeHtml(c)}"></option>`).join('');
+}
+
+// Descarga de un texto (los CSV para Excel): en el móvil ofrece compartir/guardar; si no, la descarga normal
+async function descargarTexto(nombreArchivo, texto, tipo) {
+  const blob = new Blob([texto], { type: tipo || 'text/plain;charset=utf-8' });
+  try {
+    const archivo = new File([blob], nombreArchivo, { type: tipo || 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: nombreArchivo });
+      return;
+    }
+  } catch (e) { /* cancelado o no soportado: descarga normal */ }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 /* ============ COMPRAS: GASTOS ============ */
 async function cargarFormularioGasto() {
   const select = document.getElementById('gastoFormProveedor');
@@ -3298,13 +3565,20 @@ async function cargarFormularioGasto() {
   document.getElementById('gastoFormTitulo').textContent = 'Nuevo gasto';
   document.getElementById('gastoFormId').value = '';
   document.getElementById('gastoFormFecha').valueAsDate = new Date();
+  document.getElementById('gastoFormNumFactura').value = '';
   document.getElementById('gastoFormConcepto').value = '';
   document.getElementById('gastoFormCategoria').value = '';
   document.getElementById('gastoFormBase').value = '';
   document.getElementById('gastoFormIva').value = '';
+  document.getElementById('gastoFormRetencion').value = '';
+  document.getElementById('gastoFormPagado').checked = true;   // un gasto que se apunta a mano suele estar ya pagado
+  document.getElementById('gastoFormFechaPago').valueAsDate = new Date();
+  alternarFechaPagoGasto();
+  reiniciarJustificante('gastoForm');
   document.getElementById('gastoFormTotal').textContent = '0,00 €';
   document.getElementById('btnEliminarGasto').style.display = 'none';
   document.getElementById('gastoFormMsg').textContent = '';
+  cargarCategoriasGasto();
 }
 
 async function abrirGastoParaEditar(g) {
@@ -3317,10 +3591,16 @@ async function abrirGastoParaEditar(g) {
   document.getElementById('gastoFormId').value = g.id;
   document.getElementById('gastoFormFecha').value = g.fecha.split('/').reverse().join('-');
   document.getElementById('gastoFormProveedor').value = g.proveedorId || '';
+  document.getElementById('gastoFormNumFactura').value = g.numFactura || '';
   document.getElementById('gastoFormConcepto').value = g.concepto || '';
   document.getElementById('gastoFormCategoria').value = g.categoria || '';
   document.getElementById('gastoFormBase').value = g.base;
   document.getElementById('gastoFormIva').value = g.iva;
+  document.getElementById('gastoFormRetencion').value = g.retencion || '';
+  document.getElementById('gastoFormPagado').checked = g.pagado !== false;
+  document.getElementById('gastoFormFechaPago').value = g.fechaPago ? g.fechaPago.split('/').reverse().join('-') : new Date().toISOString().slice(0, 10);
+  alternarFechaPagoGasto();
+  reiniciarJustificante('gastoForm', g.justificanteUrl);   // el que ya tiene se conserva si no se toca
   recalcularTotalGasto();
   document.getElementById('btnEliminarGasto').style.display = 'block';
   document.getElementById('gastoFormMsg').textContent = '';
@@ -3329,7 +3609,22 @@ async function abrirGastoParaEditar(g) {
 function recalcularTotalGasto() {
   const base = Number(document.getElementById('gastoFormBase').value) || 0;
   const iva = Number(document.getElementById('gastoFormIva').value) || 0;
-  document.getElementById('gastoFormTotal').textContent = formatoEuros(base + iva);
+  const retencion = Number(document.getElementById('gastoFormRetencion').value) || 0;
+  document.getElementById('gastoFormTotal').textContent = formatoEuros(base + iva - retencion);
+}
+
+function alternarFechaPagoGasto() {
+  document.getElementById('gastoFormFechaPagoBloque').style.display = document.getElementById('gastoFormPagado').checked ? 'block' : 'none';
+}
+
+function contextoJustificanteGasto() {
+  const proveedorId = document.getElementById('gastoFormProveedor').value;
+  const fecha = document.getElementById('gastoFormFecha').value;
+  return {
+    fecha: fecha ? formatoFechaES(fecha) : '',
+    proveedor: proveedorId ? (proveedoresCache.find((p) => String(p.id) === proveedorId) || {}).nombre || '' : '',
+    numFactura: document.getElementById('gastoFormNumFactura').value.trim(),
+  };
 }
 
 async function guardarGasto() {
@@ -3337,6 +3632,12 @@ async function guardarGasto() {
   const id = document.getElementById('gastoFormId').value;
   const fecha = document.getElementById('gastoFormFecha').value;
   if (!fecha) { msg.textContent = 'Elige una fecha.'; msg.className = 'form-msg is-error'; return; }
+  if (estadoJustificante('gastoForm').subiendo) { msg.textContent = 'Espera a que termine de subirse la factura.'; msg.className = 'form-msg is-error'; return; }
+  const pagado = document.getElementById('gastoFormPagado').checked;
+  const retencion = Number(document.getElementById('gastoFormRetencion').value) || 0;
+  const total = (Number(document.getElementById('gastoFormBase').value) || 0) + (Number(document.getElementById('gastoFormIva').value) || 0);
+  if (retencion > total) { msg.textContent = 'La retención no puede ser mayor que el total de la factura.'; msg.className = 'form-msg is-error'; return; }
+  if (pagado && !document.getElementById('gastoFormFechaPago').value) { msg.textContent = 'Pon la fecha de pago (o desmarca "Ya está pagada").'; msg.className = 'form-msg is-error'; return; }
 
   const proveedorId = document.getElementById('gastoFormProveedor').value;
   const proveedorNombre = proveedorId ? proveedoresCache.find((p) => String(p.id) === proveedorId)?.nombre || '' : '';
@@ -3345,10 +3646,15 @@ async function guardarGasto() {
     fecha: formatoFechaES(fecha),
     proveedorId,
     proveedorNombre,
+    numFactura: document.getElementById('gastoFormNumFactura').value.trim(),
     concepto: document.getElementById('gastoFormConcepto').value.trim(),
     categoria: document.getElementById('gastoFormCategoria').value.trim(),
     base: document.getElementById('gastoFormBase').value || 0,
     iva: document.getElementById('gastoFormIva').value || 0,
+    retencion: String(retencion),
+    pagado: pagado ? 'true' : 'false',
+    fechaPago: pagado ? formatoFechaES(document.getElementById('gastoFormFechaPago').value) : '',
+    ...datosJustificante('gastoForm'),
   };
 
   msg.textContent = 'Guardando…';
@@ -3384,34 +3690,447 @@ async function buscarGastos() {
   const r = await apiGet('gastosPeriodo', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: String(err) }));
   if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
 
-  if (!r.data.gastos.length) {
+  ultimosGastos = r.data;
+  pintarGastos();
+}
+
+// Se pinta desde lo último recibido (así, marcar "solo pendientes de pago" no vuelve a pedir nada)
+let ultimosGastos = null;
+function pintarGastos() {
+  const cont = document.getElementById('listaGastos');
+  const d = ultimosGastos;
+  if (!d) return;
+  const soloPendientes = document.getElementById('gastosSoloPendientes').checked;
+  const lista = d.gastos.filter((g) => !soloPendientes || g.pagado === false);
+  const pend = d.pendientePago || { n: 0, total: 0 };
+  const est = d.estimado || { n: 0, total: 0 };
+
+  if (!d.gastos.length) {
     cont.innerHTML = '<div class="empty-state">Sin gastos en ese periodo.</div>';
     document.getElementById('gastosTotal').textContent = '';
     return;
   }
-
-  cont.innerHTML = r.data.gastos.map((g) => `
-    <div class="card">
+  cont.innerHTML = lista.length ? lista.map((g) => {
+    const confirmado = g.estado !== 'Estimado';
+    const etiquetaPago = !confirmado ? '' : g.pagado === false
+      ? '<span style="color:var(--warn-red); font-weight:600;">⏳ Pendiente de pago</span>'
+      : (g.fechaPago ? `✓ Pagada el ${escapeHtml(g.fechaPago)}` : '');
+    return `
+    <div class="card"${!confirmado ? ' style="border-style:dashed;"' : ''}>
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(g.concepto || 'Gasto')}</div>
-          <div class="card__meta">${escapeHtml(g.fecha)}${g.proveedor ? ' · ' + escapeHtml(g.proveedor) : ''}${g.categoria ? ' · ' + escapeHtml(g.categoria) : ''}</div>
+          <div class="card__meta">${escapeHtml(g.fecha)}${g.proveedor ? ' · ' + escapeHtml(g.proveedor) : ''}${g.categoria ? ' · ' + escapeHtml(g.categoria) : ''}${g.numFactura ? ' · Factura nº ' + escapeHtml(g.numFactura) : ''}</div>
+          ${!confirmado ? '<div class="card__meta">Estimado: pendiente de la factura del proveedor (no cuenta para el gestor)</div>' : ''}
+          ${g.retencion > 0 ? `<div class="card__meta">Retención IRPF: -${formatoEuros(g.retencion)}</div>` : ''}
+          ${etiquetaPago ? `<div class="card__meta">${etiquetaPago}</div>` : ''}
+          ${confirmado ? (g.justificanteUrl && /^https:\/\//.test(g.justificanteUrl) ? `<div class="card__meta">📎 <a href="${escapeHtml(g.justificanteUrl)}" target="_blank" rel="noopener">Ver la factura adjunta</a></div>` : '<div class="card__meta">Sin factura adjunta</div>') : ''}
         </div>
         <div class="card__total">${formatoEuros(g.total)}</div>
       </div>
       <div class="card__actions">
+        ${!confirmado ? `<button class="chip-btn" data-incorporar-gasto="${g.id}">Incorporar factura</button>` : ''}
+        ${confirmado ? `<button class="chip-btn" data-pagar-gasto="${g.id}" data-pagado="${g.pagado === false ? 'true' : 'false'}">${g.pagado === false ? 'Marcar como pagada' : 'Marcar como pendiente'}</button>` : ''}
         <button class="chip-btn" data-editar-gasto="${g.id}">Editar</button>
       </div>
-    </div>
-  `).join('');
-  document.getElementById('gastosTotal').textContent = `Base: ${formatoEuros(r.data.totalBase)}  ·  IVA: ${formatoEuros(r.data.totalIva)}  ·  Total: ${formatoEuros(r.data.totalGeneral)}`;
+    </div>`;
+  }).join('') : '<div class="empty-state">No hay gastos pendientes de pago en este periodo.</div>';
 
+  document.getElementById('gastosTotal').innerHTML = escapeHtml(`Base: ${formatoEuros(d.totalBase)}  ·  IVA: ${formatoEuros(d.totalIva)}` + (d.totalRetencion > 0 ? `  ·  Retención: -${formatoEuros(d.totalRetencion)}` : '') + `  ·  Total: ${formatoEuros(d.totalGeneral)}`) +
+    (pend.n ? `<div class="card__meta" style="margin-top:4px; color:var(--warn-red);">Pendiente de pago: ${pend.n} · ${escapeHtml(formatoEuros(pend.total))}</div>` : '') +
+    (est.n ? `<div class="card__meta" style="margin-top:4px;">Además, ${est.n} gasto${est.n === 1 ? '' : 's'} estimado${est.n === 1 ? '' : 's'} pendiente${est.n === 1 ? '' : 's'} de factura: ${escapeHtml(formatoEuros(est.total))} (no cuenta${est.n === 1 ? '' : 'n'} para el gestor)</div>` : '');
+
+  cont.querySelectorAll('[data-incorporar-gasto]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const g = d.gastos.find((x) => String(x.id) === btn.dataset.incorporarGasto);
+      if (!g) return;
+      facturaPreseleccion = { proveedorId: g.proveedorId, cubre: [g.id] };
+      cambiarTab('gasto-factura');
+    });
+  });
   cont.querySelectorAll('[data-editar-gasto]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const g = r.data.gastos.find((x) => String(x.id) === btn.dataset.editarGasto);
+      const g = d.gastos.find((x) => String(x.id) === btn.dataset.editarGasto);
       if (g) abrirGastoParaEditar(g);
     });
   });
+  cont.querySelectorAll('[data-pagar-gasto]').forEach((btn) => {
+    btn.addEventListener('click', () => marcarGastoPagado(btn.dataset.pagarGasto, btn.dataset.pagado === 'true', btn));
+  });
+}
+
+// Marca una factura de proveedor como pagada (con la fecha de hoy) o de nuevo como pendiente
+let marcandoPago = false;
+async function marcarGastoPagado(id, pagado, boton, alTerminar) {
+  if (marcandoPago) return;
+  marcandoPago = true;
+  if (boton) boton.disabled = true;
+  try {
+    const r = await apiGet('marcarGastoPagado', { id, pagado: pagado ? 'true' : 'false', fechaPago: pagado ? formatoFechaES(new Date().toISOString().slice(0, 10)) : '' })
+      .catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    if (!r.ok) { alert('No se pudo cambiar el pago: ' + (r.error || 'inténtalo de nuevo')); return; }
+    if (alTerminar) alTerminar(); else buscarGastos();
+  } finally {
+    marcandoPago = false;
+    if (boton) boton.disabled = false;
+  }
+}
+
+/* ============ PANEL DE RESULTADOS ============ */
+function mesActualISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function desplazarMesISO(valor, delta) {
+  const [a, m] = valor.split('-').map(Number);
+  const d = new Date(a, m - 1 + delta, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+let panelPeticion = 0;
+async function cargarPanel() {
+  const entrada = document.getElementById('panelMes');
+  if (!entrada.value) entrada.value = mesActualISO();
+  const cont = document.getElementById('panelContenido');
+  const [anio, mes] = entrada.value.split('-');
+  const numero = ++panelPeticion;
+  cont.innerHTML = '<div class="empty-state">Calculando…</div>';
+  const r = await apiGet('panelMes', { anio, mes: String(Number(mes)) }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (numero !== panelPeticion) return;   // se pidió otro mes mientras tanto
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo calcular: ${escapeHtml(r.error || '')}</div>`; return; }
+  pintarPanel(r);
+}
+
+function pintarPanel(d) {
+  const cont = document.getElementById('panelContenido');
+  const e = (n) => escapeHtml(formatoEuros(n));
+  const res = d.resultado;
+  const color = res.provisional < 0 ? 'var(--warn-red)' : 'var(--ok-green, #2E7D4F)';
+  const maxCat = Math.max(1, ...d.gastos.porCategoria.map((c) => c.base));
+  const margen = d.ventas.margenPct !== null && d.ventas.margenPct !== undefined ? ` (${(d.ventas.margenPct * 100).toFixed(1)}%)` : '';
+
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card__top"><div class="card__name">Resultado provisional</div><div class="card__total" style="color:${color};">${e(res.provisional)}</div></div>
+      <div class="card__meta">Ventas ${e(res.ventas)} − gastos ${e(res.gastos)}${res.estimado > 0 ? ` − gastos estimados de pedidos a proveedores sin factura ${e(res.estimado)}` : ''}</div>
+      <div class="card__meta">Sin IVA. Es provisional: faltan las facturas de proveedor que aún no han llegado.</div>
+    </div>
+    <div class="card">
+      <div class="card__name">Ventas del mes</div>
+      <div class="card__products">${e(d.ventas.base)} sin IVA · ${d.ventas.pedidos} pedidos</div>
+      <div class="card__meta">Facturado: ${e(d.ventas.facturadoBase)} + IVA ${e(d.ventas.facturadoIva)} = ${e(d.ventas.facturadoTotal)} (${d.ventas.facturas} facturas)</div>
+      <div class="card__meta">Margen bruto (ventas menos coste de fábrica de lo vendido): ${e(d.ventas.margenBruto)}${margen}</div>
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Gastos por categoría</div><div class="card__total">${e(d.gastos.base)}</div></div>
+      ${d.gastos.porCategoria.length ? d.gastos.porCategoria.map((c) => `
+        <div style="margin-top:8px;">
+          <div style="display:flex; justify-content:space-between; font-size:14px;"><span>${escapeHtml(c.categoria)} <span class="card__meta">(${c.n})</span></span><strong>${e(c.base)}</strong></div>
+          <div style="background:#E9E2D6; border-radius:4px; height:6px; margin-top:3px;"><div style="width:${Math.round(c.base / maxCat * 100)}%; background:#C0762B; height:6px; border-radius:4px;"></div></div>
+        </div>`).join('') : '<div class="card__meta">Sin gastos este mes.</div>'}
+      <div class="card__meta" style="margin-top:8px;">Sin IVA${d.gastos.retencion > 0 ? ` · retenciones: ${e(d.gastos.retencion)}` : ''}${d.gastos.estimado.n ? ` · más ${e(d.gastos.estimado.base)} estimados (${d.gastos.estimado.n}) pendientes de factura` : ''}</div>
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Pendiente de cobro</div><div class="card__total">${e(d.cobros.total)}</div></div>
+      <div class="card__meta">${d.cobros.facturas.n} factura${d.cobros.facturas.n === 1 ? '' : 's'} (${e(d.cobros.facturas.total)}) · ${d.cobros.albaranes.n} albarán${d.cobros.albaranes.n === 1 ? '' : 'es'} (${e(d.cobros.albaranes.total)})</div>
+      ${d.cobros.clientes.map((c) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(c.cliente)} · ${e(c.total)}${c.desde ? ' · desde ' + escapeHtml(c.desde) : ''}</div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card__top"><div class="card__name">Pagos pendientes a proveedores</div><div class="card__total">${e(d.pagos.total)}</div></div>
+      ${d.pagos.lista.length ? d.pagos.lista.map((p) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+          <div class="card__meta">${escapeHtml(p.proveedor || 'Sin proveedor')}${p.numFactura ? ' · nº ' + escapeHtml(p.numFactura) : ''} · ${escapeHtml(p.fecha)} · <strong>${e(p.total)}</strong></div>
+          <button class="chip-btn" data-panel-pagar="${p.id}">Pagada</button>
+        </div>`).join('') : '<div class="card__meta">No debes nada a ningún proveedor.</div>'}
+    </div>
+    <div class="card">
+      <div class="card__name">IVA del mes</div>
+      <div class="card__meta">Repercutido (ventas): ${e(d.iva.repercutido)} · Soportado (compras): ${e(d.iva.soportado)}</div>
+      <div class="card__meta">${d.iva.aLiquidar >= 0 ? 'A ingresar' : 'A compensar'}: <strong>${e(Math.abs(d.iva.aLiquidar))}</strong></div>
+    </div>`;
+  cont.querySelectorAll('[data-panel-pagar]').forEach((btn) => {
+    btn.addEventListener('click', () => marcarGastoPagado(btn.dataset.panelPagar, true, btn, cargarPanel));
+  });
+}
+
+/* ============ ZONA DEL GESTOR ============ */
+function mesDelGestor() {
+  const v = document.getElementById('gestorMes').value;
+  if (!v) return null;
+  const [anio, mes] = v.split('-');
+  return { anio, mes: String(Number(mes)), etiqueta: v };
+}
+
+function limitesDelMes(anio, mes) {
+  const ultimo = new Date(Number(anio), Number(mes), 0).getDate();
+  const p = (n) => String(n).padStart(2, '0');
+  return { ini: `01/${p(mes)}/${anio}`, fin: `${p(ultimo)}/${p(mes)}/${anio}` };
+}
+
+function mensajeGestor(texto, tipo) {
+  const msg = document.getElementById('gestorMsg');
+  msg.textContent = texto;
+  msg.className = 'form-msg' + (tipo ? ' is-' + tipo : '');
+}
+
+function iniciarGestor() {
+  const entrada = document.getElementById('gestorMes');
+  if (!entrada.value) entrada.value = mesActualISO();
+  mensajeGestor('', '');
+  document.getElementById('gestorResultado').innerHTML = '';
+}
+
+async function descargarCsvGestor(tipo) {
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  mensajeGestor('Preparando…', '');
+  const r = await apiGet('gestorCsv', { anio: m.anio, mes: m.mes, tipo }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mensajeGestor('No se pudo preparar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
+  await descargarTexto(r.nombre, r.csv, 'text/csv;charset=utf-8');
+  mensajeGestor(`${r.nombre}: ${r.filas} fila${r.filas === 1 ? '' : 's'}. Se abre con Excel.`, 'ok');
+}
+
+async function descargarLibroGestor(accion) {
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  const l = limitesDelMes(m.anio, m.mes);
+  mensajeGestor('Generando el PDF…', '');
+  const r = await apiGet(accion, { fechaIni: l.ini, fechaFin: l.fin }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  if (!r.ok) { mensajeGestor('No se pudo generar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
+  await descargarPDF(r.base64, r.nombre);
+  mensajeGestor('PDF listo.', 'ok');
+}
+
+function pintarResultadoCarpeta(r) {
+  const cont = document.getElementById('gestorResultado');
+  const j = r.justificantes;
+  const ficha = (x) => escapeHtml((x.proveedor || 'sin proveedor') + (x.numFactura ? ' nº ' + x.numFactura : '') + ' (' + x.fecha + ')');
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card__name">Carpeta de ${escapeHtml(r.mes)} preparada</div>
+      ${/^https:\/\//.test(r.url) ? `<div class="card__meta"><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Abrir la carpeta en Google Drive</a></div>` : ''}
+      <div class="card__meta" style="margin-top:6px;">${r.ficheros.map((f) => escapeHtml(f.nombre) + ' · ' + f.filas + ' fila' + (f.filas === 1 ? '' : 's')).join('<br>')}</div>
+      <div class="card__meta" style="margin-top:6px;">Facturas de proveedor: ${j.copiados} copiadas${j.yaEstaban ? ', ' + j.yaEstaban + ' ya estaban' : ''} · PDF de facturas emitidas: ${r.pdfsEmitidas}</div>
+      ${j.sinJustificante.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">Sin factura adjunta (${j.sinJustificante.length}): ${j.sinJustificante.map(ficha).join('; ')}</div>` : ''}
+      ${j.perdidos.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">La factura adjunta ya no está en Drive (${j.perdidos.length}): ${j.perdidos.map(ficha).join('; ')}</div>` : ''}
+    </div>`;
+}
+
+async function prepararCarpetaGestor() {
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  mensajeGestor('Preparando la carpeta en Drive… (puede tardar un poco)', '');
+  const r = await apiGet('gestorCarpeta', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mensajeGestor('No se pudo preparar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
+  pintarResultadoCarpeta(r);
+  const avisos = r.justificantes.sinJustificante.length + r.justificantes.perdidos.length;
+  mensajeGestor(avisos ? `Carpeta lista, pero hay ${avisos} factura${avisos === 1 ? '' : 's'} de proveedor sin la factura adjunta.` : 'Carpeta lista.', avisos ? 'error' : 'ok');
+}
+
+let generandoPdfsGestor = false;
+async function generarPdfsEmitidasGestor(boton) {
+  if (generandoPdfsGestor) return;
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  generandoPdfsGestor = true;
+  boton.disabled = true;
+  try {
+    for (let vuelta = 0; vuelta < 300; vuelta++) {
+      const r = await apiGet('gestorPdfsEmitidas', { anio: m.anio, mes: m.mes, lote: '8' }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!r.ok) { mensajeGestor('No se pudo seguir: ' + (r.error || 'inténtalo de nuevo (lo ya hecho se conserva)'), 'error'); return; }
+      if (r.errores && r.errores.length) { mensajeGestor(`No se pudo generar la factura nº ${r.errores[0].id}: ${r.errores[0].error}`, 'error'); return; }
+      if (r.total === 0) { mensajeGestor('No hay facturas emitidas en ese mes.', ''); return; }
+      mensajeGestor(`Generando los PDF de las facturas emitidas… ${r.total - r.restantes} de ${r.total}`, '');
+      if (r.restantes === 0) { mensajeGestor(`Listos los PDF de las ${r.total} facturas emitidas. Están en la carpeta del mes.`, 'ok'); return; }
+      if (r.hechas === 0) { mensajeGestor('No se ha podido avanzar. Inténtalo de nuevo.', 'error'); return; }
+    }
+  } finally {
+    generandoPdfsGestor = false;
+    boton.disabled = false;
+  }
+}
+
+async function compartirCarpetaGestor() {
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  if (!confirm(`¿Compartir la carpeta de ${m.etiqueta} con tu gestor (solo lectura) y avisarle por correo?`)) return;
+  mensajeGestor('Compartiendo…', '');
+  const r = await apiGet('gestorCompartir', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mensajeGestor(r.error || 'No se pudo compartir.', 'error'); return; }
+  mensajeGestor(`Carpeta compartida con ${r.email}. Le ha llegado un correo con el enlace.`, 'ok');
+}
+
+function cablearPanelYGestor() {
+  const panelMes = document.getElementById('panelMes');
+  panelMes.addEventListener('change', cargarPanel);
+  document.getElementById('btnPanelAnterior').addEventListener('click', () => { panelMes.value = desplazarMesISO(panelMes.value || mesActualISO(), -1); cargarPanel(); });
+  document.getElementById('btnPanelSiguiente').addEventListener('click', () => { panelMes.value = desplazarMesISO(panelMes.value || mesActualISO(), 1); cargarPanel(); });
+  document.getElementById('btnGestorEmitidas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('emitidas')));
+  document.getElementById('btnGestorRecibidas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('recibidas')));
+  document.getElementById('btnGestorIva').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('iva')));
+  document.getElementById('btnGestorLibroEmitidas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Generando…', () => descargarLibroGestor('libroFacturasPdf')));
+  document.getElementById('btnGestorLibroGastos').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Generando…', () => descargarLibroGestor('libroGastosPdf')));
+  document.getElementById('btnGestorCarpeta').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', prepararCarpetaGestor));
+  document.getElementById('btnGestorPdfs').addEventListener('click', (e) => generarPdfsEmitidasGestor(e.currentTarget));
+  document.getElementById('btnGestorCompartir').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Compartiendo…', compartirCarpetaGestor));
+}
+
+/* ============ INCORPORAR LA FACTURA DE UN PROVEEDOR ============ */
+let facturaPreseleccion = null;   // al abrir desde un gasto estimado: { proveedorId, cubre: [ids] }
+let facturaEstimados = [];        // los gastos estimados pendientes del proveedor elegido
+let solicitudFactura = null;      // código del intento: si se repite el envío, el servidor no duplica la factura
+let guardandoFactura = false;
+
+async function cargarFormularioFactura() {
+  const pre = facturaPreseleccion;
+  facturaPreseleccion = null;
+  if (!proveedoresCache.length) {
+    const r = await apiGet('proveedores').catch(() => null);
+    if (r && r.ok) proveedoresCache = r.data;
+  }
+  const sel = document.getElementById('facProveedor');
+  sel.innerHTML = '<option value="">Elige el proveedor…</option>' +
+    proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+  document.getElementById('facNumero').value = '';
+  document.getElementById('facFecha').valueAsDate = new Date();
+  document.getElementById('facBase').value = '';
+  document.getElementById('facIva').value = '';
+  document.getElementById('facRetencion').value = '';
+  document.getElementById('facCategoria').value = 'Mercancía';
+  document.getElementById('facPagada').checked = false;   // una factura de proveedor suele quedar pendiente hasta que se paga
+  document.getElementById('facFechaPago').valueAsDate = new Date();
+  alternarFechaPagoFactura();
+  reiniciarJustificante('fac');
+  cargarCategoriasGasto();
+  document.getElementById('facMsg').textContent = '';
+  document.getElementById('btnGuardarFactura').disabled = false;
+  solicitudFactura = null;
+  guardandoFactura = false;
+  if (pre && pre.proveedorId !== '' && pre.proveedorId !== undefined && pre.proveedorId !== null) sel.value = String(pre.proveedorId);
+  await cargarEstimadosDeProveedor(pre ? pre.cubre : null);
+}
+
+async function cargarEstimadosDeProveedor(seleccion) {
+  const cont = document.getElementById('facEstimados');
+  const idProv = document.getElementById('facProveedor').value;
+  if (!idProv) {
+    facturaEstimados = [];
+    cont.innerHTML = '<div class="empty-state">Elige el proveedor para ver sus gastos estimados pendientes.</div>';
+    recalcularFactura();
+    return;
+  }
+  cont.innerHTML = '<div class="empty-state">Cargando…</div>';
+  const r = await apiGet('gastosEstimados', { idProveedor: idProv }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (document.getElementById('facProveedor').value !== idProv) return;   // cambió de proveedor mientras cargaba
+  if (!r.ok) {
+    facturaEstimados = [];
+    cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`;
+    recalcularFactura();
+    return;
+  }
+  facturaEstimados = r.data;
+  if (!facturaEstimados.length) {
+    cont.innerHTML = '<div class="empty-state">Este proveedor no tiene gastos estimados pendientes: la factura se incorporará como un gasto normal.</div>';
+    recalcularFactura();
+    return;
+  }
+  const marcado = (g) => seleccion ? seleccion.map(String).includes(String(g.id)) : true;
+  cont.innerHTML = facturaEstimados.map((g) => `
+    <label class="card" style="display:flex; gap:10px; align-items:center; cursor:pointer;">
+      <input type="checkbox" data-fac-cubre="${g.id}"${marcado(g) ? ' checked' : ''}>
+      <span style="flex:1;">${escapeHtml(g.pedidoFecha || g.fecha)}<span class="card__meta"> · pedido a ${escapeHtml(g.proveedor)}</span></span>
+      <strong>${formatoEuros(g.total)}</strong>
+    </label>`).join('');
+  cont.querySelectorAll('[data-fac-cubre]').forEach((c) => c.addEventListener('change', recalcularFactura));
+  recalcularFactura();
+}
+
+function idsCubiertosPorLaFactura() {
+  return Array.from(document.querySelectorAll('#facEstimados [data-fac-cubre]')).filter((c) => c.checked).map((c) => c.dataset.facCubre);
+}
+
+// Total de la factura y comparación con lo estimado de los días que cubre
+function alternarFechaPagoFactura() {
+  document.getElementById('facFechaPagoBloque').style.display = document.getElementById('facPagada').checked ? 'block' : 'none';
+}
+
+function contextoJustificanteFactura() {
+  const proveedorId = document.getElementById('facProveedor').value;
+  const fecha = document.getElementById('facFecha').value;
+  return {
+    fecha: fecha ? formatoFechaES(fecha) : '',
+    proveedor: proveedorId ? (proveedoresCache.find((p) => String(p.id) === proveedorId) || {}).nombre || '' : '',
+    numFactura: document.getElementById('facNumero').value.trim(),
+  };
+}
+
+function recalcularFactura() {
+  const total = (Number(document.getElementById('facBase').value) || 0) + (Number(document.getElementById('facIva').value) || 0);
+  document.getElementById('facTotal').textContent = formatoEuros(total);
+  const retencion = Number(document.getElementById('facRetencion').value) || 0;
+  document.getElementById('facAPagar').textContent = retencion > 0 ? `Total a pagar, descontada la retención de ${formatoEuros(retencion)}: ${formatoEuros(total - retencion)}` : '';
+  const marcados = idsCubiertosPorLaFactura();
+  const el = document.getElementById('facComparacion');
+  if (!marcados.length) { el.textContent = ''; return; }
+  const estimado = facturaEstimados.filter((g) => marcados.includes(String(g.id))).reduce((s, g) => s + g.total, 0);
+  const dif = total - estimado;
+  el.textContent = `Estimado de lo que cubre: ${formatoEuros(estimado)}  ·  Factura: ${formatoEuros(total)}` + (total > 0 ? `  ·  Diferencia: ${dif > 0 ? '+' : ''}${formatoEuros(dif)}` : '');
+}
+
+async function guardarFacturaProveedor() {
+  if (guardandoFactura) return;
+  const msg = document.getElementById('facMsg');
+  const fallo = (texto) => { msg.textContent = texto; msg.className = 'form-msg is-error'; };
+  const proveedorId = document.getElementById('facProveedor').value;
+  const numFactura = document.getElementById('facNumero').value.trim();
+  const fecha = document.getElementById('facFecha').value;
+  const base = Number(document.getElementById('facBase').value) || 0;
+  if (!proveedorId) { fallo('Elige el proveedor.'); return; }
+  if (!numFactura) { fallo('Pon el número de la factura.'); return; }
+  if (!fecha) { fallo('Elige la fecha de la factura.'); return; }
+  if (!(base > 0)) { fallo('Pon la base imponible de la factura.'); return; }
+
+  if (estadoJustificante('fac').subiendo) { fallo('Espera a que termine de subirse la factura.'); return; }
+  const pagada = document.getElementById('facPagada').checked;
+  const retencion = Number(document.getElementById('facRetencion').value) || 0;
+  const iva = Number(document.getElementById('facIva').value) || 0;
+  if (retencion > base + iva) { fallo('La retención no puede ser mayor que el total de la factura.'); return; }
+  if (pagada && !document.getElementById('facFechaPago').value) { fallo('Pon la fecha de pago (o desmarca "Ya está pagada").'); return; }
+
+  const proveedor = proveedoresCache.find((p) => String(p.id) === proveedorId);
+  const datos = {
+    fecha: formatoFechaES(fecha), proveedorId, proveedorNombre: proveedor ? proveedor.nombre : '', numFactura,
+    base: String(base), iva: String(iva), cubre: idsCubiertosPorLaFactura().join(','),
+    categoria: document.getElementById('facCategoria').value.trim(), retencion: String(retencion),
+    pagado: pagada ? 'true' : 'false', fechaPago: pagada ? formatoFechaES(document.getElementById('facFechaPago').value) : '',
+    ...datosJustificante('fac'),
+  };
+  const huella = JSON.stringify(datos);
+  if (!solicitudFactura || solicitudFactura.huella !== huella) solicitudFactura = { id: idUnico(), huella: huella };
+  datos.idSolicitud = solicitudFactura.id;
+
+  const boton = document.getElementById('btnGuardarFactura');
+  guardandoFactura = true;
+  boton.disabled = true;
+  msg.textContent = 'Incorporando la factura…';
+  msg.className = 'form-msg';
+  try {
+    let r = await apiGet('incorporarFactura', datos).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    if (!r.ok && r.facturaRepetida) {
+      if (!confirm(`${r.error}\n\n¿Incorporarla igualmente?`)) { msg.textContent = 'No se ha incorporado.'; msg.className = 'form-msg'; return; }
+      r = await apiGet('incorporarFactura', { ...datos, confirmarDuplicado: '1' }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    }
+    if (!r.ok) { fallo(r.error || 'No se pudo incorporar la factura.'); return; }
+    msg.textContent = r.cubiertos
+      ? `Factura incorporada. Cubre ${r.cubiertos} gasto${r.cubiertos === 1 ? '' : 's'} estimado${r.cubiertos === 1 ? '' : 's'} (${formatoEuros(r.estimado)}); la factura es de ${formatoEuros(r.total)} (${r.diferencia > 0 ? '+' : ''}${formatoEuros(r.diferencia)}).`
+      : 'Factura incorporada como gasto.';
+    msg.className = 'form-msg is-ok';
+    setTimeout(() => cambiarTab('gastos-ver'), 1500);
+  } finally {
+    guardandoFactura = false;
+    boton.disabled = false;
+  }
 }
 
 async function descargarLibroGastos() {
@@ -3424,13 +4143,18 @@ async function descargarLibroGastos() {
 }
 
 function cablearCompras() {
+  cablearPanelYGestor();
   document.getElementById('btnNuevoProveedor').addEventListener('click', () => abrirFormularioProveedor(null));
   document.getElementById('btnGuardarProveedor').addEventListener('click', guardarProveedor);
   document.getElementById('btnGuardarGasto').addEventListener('click', guardarGasto);
   document.getElementById('btnEliminarGasto').addEventListener('click', eliminarGasto);
   document.getElementById('gastoFormBase').addEventListener('input', recalcularTotalGasto);
   document.getElementById('gastoFormIva').addEventListener('input', recalcularTotalGasto);
+  document.getElementById('gastoFormRetencion').addEventListener('input', recalcularTotalGasto);
+  document.getElementById('gastoFormPagado').addEventListener('change', alternarFechaPagoGasto);
+  iniciarJustificante('gastoForm', contextoJustificanteGasto);
   document.getElementById('btnBuscarGastos').addEventListener('click', buscarGastos);
+  document.getElementById('gastosSoloPendientes').addEventListener('change', pintarGastos);
   document.getElementById('btnGastosEsteMes').addEventListener('click', () => {
     const hoy = new Date();
     document.getElementById('gastosFechaIni').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -3438,6 +4162,14 @@ function cablearCompras() {
     buscarGastos();
   });
   document.getElementById('btnDescargarLibroGastos').addEventListener('click', (e) => conEstadoCarga(e.target, 'Generando…', descargarLibroGastos));
+  document.getElementById('btnIncorporarFactura').addEventListener('click', () => { facturaPreseleccion = null; cambiarTab('gasto-factura'); });
+  document.getElementById('facProveedor').addEventListener('change', () => cargarEstimadosDeProveedor(null));
+  document.getElementById('facBase').addEventListener('input', recalcularFactura);
+  document.getElementById('facIva').addEventListener('input', recalcularFactura);
+  document.getElementById('facRetencion').addEventListener('input', recalcularFactura);
+  document.getElementById('facPagada').addEventListener('change', alternarFechaPagoFactura);
+  iniciarJustificante('fac', contextoJustificanteFactura);
+  document.getElementById('btnGuardarFactura').addEventListener('click', guardarFacturaProveedor);
 }
 
 /* ============ CERRAR AÑO (ARCHIVAR) ============ */
@@ -3494,6 +4226,7 @@ async function buscarBalance() {
       <div class="card__products">Ventas ${formatoEuros(d.ventasTotal)} · Coste de fábrica ${formatoEuros(d.costeTotal)} · ${d.pedidos} pedidos</div>
       ${d.ventasSinCoste > 0 ? `<div class="card__meta" style="color:var(--warn-red); margin-top:6px;">Hay ${formatoEuros(d.ventasSinCoste)} de ventas de productos sin coste puesto: no entran en el margen. Ponles el coste en Productos.</div>` : ''}
       <div class="card__meta" style="margin-top:6px;">Gastos registrados en Compras (referencia): ${formatoEuros(d.gastosBase)}</div>
+      ${d.gastosEstimadosBase > 0 ? `<div class="card__meta">Gastos estimados de pedidos a proveedores, pendientes de factura: ${formatoEuros(d.gastosEstimadosBase)}</div>` : ''}
     </div>`;
 
   lista.innerHTML = d.productos.length ? d.productos.map((p) => `

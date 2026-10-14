@@ -806,6 +806,9 @@ const BREADCRUMBS = {
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
   'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }, { label: 'Incorporar factura', tab: 'gasto-factura' }],
   'panel': [{ label: 'Compras', tab: 'compras' }, { label: 'Panel de resultados', tab: 'panel' }],
+  'facturas-dia': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de hoy', tab: 'facturas-dia' }],
+  'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de la semana', tab: 'facturas-semana' }],
+  'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Cuadrar con el resumen', tab: 'cuadrar' }],
   'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
@@ -908,6 +911,9 @@ function cargarTabActual(nombre) {
   if (activo === 'gasto-nuevo') cargarFormularioGasto();
   if (activo === 'gasto-factura') cargarFormularioFactura();
   if (activo === 'panel') cargarPanel();
+  if (activo === 'facturas-dia') iniciarFacturasDia();
+  if (activo === 'facturas-semana') cargarFacturasSemana();
+  if (activo === 'cuadrar') iniciarCuadrar();
   if (activo === 'gestor') iniciarGestor();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
@@ -3838,6 +3844,11 @@ function pintarPanel(d) {
     </div>
     <div class="card">
       <div class="card__top"><div class="card__name">Pagos pendientes a proveedores</div><div class="card__total">${e(d.pagos.total)}</div></div>
+      ${(d.pagos.porProveedor || []).map((p) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
+          <div class="card__meta"><strong>${escapeHtml(p.proveedor)}</strong> · ${p.n} factura${p.n === 1 ? '' : 's'} · ${e(p.total)}</div>
+          <button class="chip-btn" data-pagar-proveedor="${escapeHtml(String(p.idProveedor))}" data-nombre="${escapeHtml(p.proveedor)}" data-n="${p.n}" data-total="${p.total}">Todas pagadas</button>
+        </div>`).join('')}
       ${d.pagos.lista.length ? d.pagos.lista.map((p) => `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
           <div class="card__meta">${escapeHtml(p.proveedor || 'Sin proveedor')}${p.numFactura ? ' · nº ' + escapeHtml(p.numFactura) : ''} · ${escapeHtml(p.fecha)} · <strong>${e(p.total)}</strong></div>
@@ -3852,6 +3863,511 @@ function pintarPanel(d) {
   cont.querySelectorAll('[data-panel-pagar]').forEach((btn) => {
     btn.addEventListener('click', () => marcarGastoPagado(btn.dataset.panelPagar, true, btn, cargarPanel));
   });
+  cont.querySelectorAll('[data-pagar-proveedor]').forEach((btn) => {
+    btn.addEventListener('click', () => marcarTodasPagadasProveedor(btn));
+  });
+}
+
+// "Todas pagadas" de un proveedor: marca de golpe todas sus facturas pendientes (con la fecha de hoy)
+let marcandoProveedor = false;
+async function marcarTodasPagadasProveedor(btn) {
+  if (marcandoProveedor) return;
+  if (!confirm(`¿Marcar como pagadas las ${btn.dataset.n} facturas pendientes de ${btn.dataset.nombre} (${formatoEuros(Number(btn.dataset.total))})?`)) return;
+  marcandoProveedor = true;
+  btn.disabled = true;
+  try {
+    const r = await apiGet('marcarPagadosProveedor', { idProveedor: btn.dataset.pagarProveedor, fechaPago: formatoFechaES(new Date().toISOString().slice(0, 10)) })
+      .catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    if (!r.ok) { alert('No se pudieron marcar: ' + (r.error || 'inténtalo de nuevo')); return; }
+    cargarPanel();
+  } finally {
+    marcandoProveedor = false;
+    btn.disabled = false;
+  }
+}
+
+/* ============ FACTURAS DE HOY ============
+ * Cada proveedor del pedido de un día, con su importe estimado: ✓ si ya está su factura apuntada, o "falta" con un botón para apuntarla.
+ * Debajo, las facturas por recibir de días anteriores. La factura que te dan por la mañana es la del pedido de la noche anterior. */
+function ayerISO() { const d = new Date(); d.setDate(d.getDate() - 1); return aISO(d); }
+
+let fdPeticion = 0;
+function iniciarFacturasDia() {
+  const f = document.getElementById('fdFecha');
+  if (!f.value) f.value = hoyISO();
+  cargarFacturasDia();
+}
+
+async function cargarFacturasDia() {
+  const iso = document.getElementById('fdFecha').value;
+  const lista = document.getElementById('fdLista');
+  const anteriores = document.getElementById('fdAnteriores');
+  const resumen = document.getElementById('fdResumen');
+  document.getElementById('fdMsg').textContent = '';
+  if (!iso) { lista.innerHTML = '<div class="empty-state">Elige el día.</div>'; return; }
+  const n = ++fdPeticion;
+  lista.innerHTML = '<div class="empty-state">Cargando…</div>';
+  anteriores.innerHTML = '';
+  resumen.textContent = '';
+  const [rp, rg] = await Promise.all([
+    apiGet('pedidoProveedores', { fecha: formatoFechaES(iso) }).catch((err) => ({ ok: false, error: textoDeFallo(err) })),
+    apiGet('gastosEstimados', {}).catch(() => ({ ok: false })),
+  ]);
+  if (n !== fdPeticion) return;   // se cambió de día mientras cargaba
+  if (!rp.ok) { lista.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(rp.error || '')}</div>`; return; }
+
+  const provs = rp.data.hayPedidos ? rp.data.proveedores : [];
+  const tiene = (p) => !!(p.gasto && p.gasto.estado === 'Cubierto');
+  const apuntadas = provs.filter(tiene).length;
+  resumen.textContent = provs.length
+    ? `${provs.length} proveedor${provs.length === 1 ? '' : 'es'} · ${apuntadas} con factura apuntada` + (provs.length - apuntadas ? ` · te falta${provs.length - apuntadas === 1 ? '' : 'n'} ${provs.length - apuntadas}` : ' · ¡todas!')
+    : '';
+  lista.innerHTML = provs.length ? provs.map((p) => {
+    const e = p.estimado || {};
+    const estimable = e.conCoste > 0;
+    return `
+    <div class="card"${tiene(p) ? '' : ' style="border-style:dashed;"'}>
+      <div class="card__top">
+        <div>
+          <div class="card__name">${escapeHtml(p.nombre)}</div>
+          ${tiene(p)
+            ? `<div class="card__meta">✓ Factura apuntada${p.gasto.numFactura ? ' · nº ' + escapeHtml(p.gasto.numFactura) : ''}</div>`
+            : `<div class="card__meta" style="color:var(--warn-red);">Falta apuntar la factura</div>`}
+        </div>
+        <div class="card__total">${estimable ? escapeHtml(formatoEuros(e.total)) : '—'}</div>
+      </div>
+      ${tiene(p) ? '' : `<div class="card__meta">${estimable ? 'Estimado según tu pedido (con IVA)' : 'Sin coste puesto en sus productos: no hay estimado'}</div>
+      <div class="card__actions"><button class="chip-btn" data-fd-apuntar="${escapeHtml(String(p.idProveedor))}">Apuntar factura</button></div>`}
+    </div>`;
+  }).join('') : '<div class="empty-state">No hay pedidos a proveedores para ese día.</div>';
+  lista.querySelectorAll('[data-fd-apuntar]').forEach((btn) => {
+    btn.addEventListener('click', () => apuntarFacturaDelDia(provs.find((p) => String(p.idProveedor) === btn.dataset.fdApuntar), iso, btn));
+  });
+
+  // facturas por recibir de días anteriores
+  const previas = rg.ok ? rg.data.filter((g) => g.pedidoFecha && g.pedidoFecha.split('/').reverse().join('-') < iso) : [];
+  anteriores.innerHTML = !rg.ok ? '' : previas.length ? previas.map((g) => `
+    <div class="card" style="border-style:dashed;">
+      <div class="card__top"><div><div class="card__name">${escapeHtml(g.proveedor)}</div><div class="card__meta">Pedido del ${escapeHtml(g.pedidoFecha)}</div></div><div class="card__total">${escapeHtml(formatoEuros(g.total))}</div></div>
+      <div class="card__actions"><button class="chip-btn" data-fd-previa="${g.id}">Apuntar factura</button></div>
+    </div>`).join('') : '<div class="empty-state">No te falta ninguna factura de días anteriores ✓</div>';
+  anteriores.querySelectorAll('[data-fd-previa]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const g = previas.find((x) => String(x.id) === btn.dataset.fdPrevia);
+      if (!g) return;
+      facturaPreseleccion = { proveedorId: g.proveedorId, cubre: [g.id], fecha: g.pedidoFecha.split('/').reverse().join('-'), volver: 'facturas-dia' };
+      cambiarTab('gasto-factura');
+    });
+  });
+}
+
+// Si el gasto estimado de ese proveedor aún no estaba creado, se crea antes (así la factura lo cubre y el día queda como hecho)
+let apuntandoFacturaDia = false;
+async function apuntarFacturaDelDia(p, iso, btn) {
+  if (!p || apuntandoFacturaDia) return;
+  apuntandoFacturaDia = true;
+  btn.disabled = true;
+  try {
+    let cubre = p.gasto && p.gasto.estado === 'Estimado' ? [p.gasto.id] : [];
+    if (!p.gasto && p.estimado && p.estimado.conCoste > 0) {
+      const r = await apiGet('gastoPedidoProveedores', { fecha: formatoFechaES(iso), idProveedor: String(p.idProveedor) }).catch(() => ({ ok: false }));
+      const x = r.ok && r.resultados && r.resultados[0];
+      if (x && x.ok) cubre = [x.id];
+    }
+    facturaPreseleccion = { proveedorId: p.idProveedor, cubre: cubre, fecha: iso, volver: 'facturas-dia' };
+    cambiarTab('gasto-factura');
+  } finally {
+    apuntandoFacturaDia = false;
+    btn.disabled = false;
+  }
+}
+
+/* ============ FACTURAS DE LA SEMANA ============
+ * Todas las facturas por recibir (los gastos estimados sin factura) en una sola pantalla, una fila por factura: número, base, IVA, fecha y la
+ * foto o el PDF. El archivo se sube y se guarda en el momento (no se pierde aunque no se teclee el resto) y "Guardar" apunta todas las
+ * filas rellenadas, una tras otra. */
+let semanaFilas = [];
+const semanaBorrador = {};   // por gasto: lo escrito y el archivo; se conserva mientras la app esté abierta
+let guardandoSemana = false;
+let semanaPeticion = 0;
+let semanaEntrada = { archivos: [], carpetaUrl: '' };   // las facturas digitales que esperan en la carpeta de entrada de Drive
+let subiendoVarias = false;
+
+function borradorSemana(g) {
+  if (!semanaBorrador[g.id]) semanaBorrador[g.id] = { num: '', base: '', iva: '', fecha: (g.pedidoFecha || g.fecha || '').split('/').reverse().join('-'), url: g.justificanteUrl || '', nombre: '', subiendo: false, error: '', estado: '', repetida: false };
+  const b = semanaBorrador[g.id];
+  if (!b.url && g.justificanteUrl) b.url = g.justificanteUrl;   // el archivo ya subido en otra ocasión
+  return b;
+}
+
+const filaSemanaRellena = (b) => String(b.num || '').trim() !== '' && (Number(b.base) || 0) > 0;
+
+function infoFilaSemana(g, b) {
+  const partes = [];
+  const total = (Number(b.base) || 0) + (Number(b.iva) || 0);
+  if ((Number(b.base) || 0) > 0) {
+    const dif = total - g.total;
+    const raro = g.total > 0 && Math.abs(dif) / g.total > 0.2;
+    partes.push(`Factura ${formatoEuros(total)} · estimado ${formatoEuros(g.total)} · ${dif > 0 ? '+' : ''}${formatoEuros(dif)}${raro ? ' ⚠ muy distinta del estimado' : ''}`);
+  }
+  return partes.join(' ');
+}
+
+function textoEstadoFilaSemana(b) {
+  if (b.estado === 'guardando') return 'Guardando…';
+  if (b.estado === 'ok') return '✓ Guardada';
+  if (b.error) return b.error;
+  return '';
+}
+
+function pintarFilaSemana(g) {
+  const fila = document.querySelector(`[data-fs-fila="${g.id}"]`);
+  if (!fila) return;
+  const b = borradorSemana(g);
+  fila.querySelector('[data-fs-info]').textContent = infoFilaSemana(g, b);
+  const est = fila.querySelector('[data-fs-estado]');
+  est.textContent = textoEstadoFilaSemana(b);
+  est.style.color = b.error && b.estado !== 'ok' ? 'var(--warn-red)' : '';
+  const arch = fila.querySelector('[data-fs-archivo-estado]');
+  arch.textContent = '';
+  arch.style.color = '';
+  const boton = fila.querySelector('[data-fs-archivo-boton]');
+  boton.textContent = b.url ? '📎 Cambiar' : '📎 Adjuntar la factura';
+  if (b.subiendo) arch.textContent = 'Subiendo…';
+  else if (b.errorArchivo) { arch.textContent = b.errorArchivo; arch.style.color = 'var(--warn-red)'; }
+  else if (b.url) {
+    arch.appendChild(document.createTextNode('✓ Adjunta: '));
+    if (/^https:\/\//.test(b.url)) { const a = document.createElement('a'); a.href = b.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'ver'; arch.appendChild(a); }
+  }
+  fila.querySelector('[data-fs-igualmente]').style.display = b.repetida ? 'inline-block' : 'none';
+}
+
+function actualizarContadorSemana() {
+  const rellenas = semanaFilas.filter((g) => filaSemanaRellena(borradorSemana(g)));
+  const total = rellenas.reduce((s, g) => s + (Number(semanaBorrador[g.id].base) || 0) + (Number(semanaBorrador[g.id].iva) || 0), 0);
+  document.getElementById('btnFsGuardar').textContent = rellenas.length ? `Guardar ${rellenas.length} factura${rellenas.length === 1 ? '' : 's'} rellenada${rellenas.length === 1 ? '' : 's'} (${formatoEuros(total)})` : 'Guardar las facturas rellenadas';
+}
+
+async function cargarFacturasSemana() {
+  const lista = document.getElementById('fsLista');
+  const resumen = document.getElementById('fsResumen');
+  document.getElementById('fsMsg').textContent = '';
+  if (!document.getElementById('fsFechaPago').value) document.getElementById('fsFechaPago').value = hoyISO();
+  const n = ++semanaPeticion;
+  const hayFilas = !!document.querySelector('[data-fs-fila]');
+  if (!hayFilas) lista.innerHTML = '<div class="empty-state">Cargando…</div>';   // con filas a la vista se dejan hasta tener la lista nueva
+  const [r, rl] = await Promise.all([
+    apiGet('gastosEstimados', {}).catch((err) => ({ ok: false, error: textoDeFallo(err) })),
+    apiGet('listarEntrada', {}).catch(() => ({ ok: false })),
+  ]);
+  if (n !== semanaPeticion) return;
+  if (rl && rl.ok) semanaEntrada = { archivos: Array.isArray(rl.archivos) ? rl.archivos : [], carpetaUrl: rl.carpetaUrl || '' };
+  pintarEntradaSemana();
+  if (!r.ok) {
+    if (hayFilas) return;   // no se pudo refrescar: se conservan las filas (y lo escrito) que ya había
+    lista.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`;
+    return;
+  }
+  semanaFilas = r.data.slice().sort((a, b) => ((a.pedidoFecha || '').split('/').reverse().join('') + a.proveedor).localeCompare((b.pedidoFecha || '').split('/').reverse().join('') + b.proveedor));
+  if (!semanaFilas.length) {
+    lista.innerHTML = '<div class="empty-state">No te falta ninguna factura por recibir ✓</div>';
+    resumen.textContent = '';
+    actualizarContadorSemana();
+    return;
+  }
+  const totalEst = semanaFilas.reduce((s, g) => s + g.total, 0);
+  resumen.textContent = `${semanaFilas.length} factura${semanaFilas.length === 1 ? '' : 's'} por recibir · ${formatoEuros(totalEst)} estimados`;
+  let dia = '';
+  lista.innerHTML = semanaFilas.map((g) => {
+    const b = borradorSemana(g);
+    const cab = g.pedidoFecha !== dia ? `<div class="field-label" style="margin-top:10px;">Pedido del ${escapeHtml(g.pedidoFecha || g.fecha)}</div>` : '';
+    dia = g.pedidoFecha;
+    return `${cab}
+    <div class="card" data-fs-fila="${g.id}">
+      <div class="card__top"><div><div class="card__name">${escapeHtml(g.proveedor)}</div><div class="card__meta">Estimado: ${escapeHtml(formatoEuros(g.total))}</div></div><div class="card__meta" data-fs-estado></div></div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+        <input type="text" class="text-input" data-fs-num placeholder="Nº factura" style="flex:2; min-width:110px;" value="${escapeHtml(b.num)}">
+        <input type="number" class="text-input" data-fs-base placeholder="Base" step="0.01" min="0" style="flex:1; min-width:80px;" value="${escapeHtml(String(b.base))}">
+        <input type="number" class="text-input" data-fs-iva placeholder="IVA" step="0.01" min="0" style="flex:1; min-width:70px;" value="${escapeHtml(String(b.iva))}">
+      </div>
+      <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:6px;">
+        <input type="date" class="text-input" data-fs-fecha style="max-width:150px;" aria-label="Fecha de la factura" value="${escapeHtml(b.fecha)}">
+        <label class="btn-secondary" data-fs-archivo-boton for="fsArchivo-${g.id}" style="cursor:pointer; padding:8px 12px;">📎 Adjuntar la factura</label>
+        <input type="file" id="fsArchivo-${g.id}" data-fs-archivo accept="image/*,application/pdf" style="display:none;">
+        ${opcionesEntradaSemana()}
+        <button type="button" class="chip-btn" data-fs-igualmente style="display:none;">Guardar igualmente</button>
+      </div>
+      <div class="card__meta" data-fs-archivo-estado style="margin-top:4px;"></div>
+      <div class="card__meta" data-fs-info style="margin-top:2px;"></div>
+    </div>`;
+  }).join('');
+  semanaFilas.forEach((g) => {
+    const fila = document.querySelector(`[data-fs-fila="${g.id}"]`);
+    const b = borradorSemana(g);
+    const lee = () => { b.num = fila.querySelector('[data-fs-num]').value; b.base = fila.querySelector('[data-fs-base]').value; b.iva = fila.querySelector('[data-fs-iva]').value; b.fecha = fila.querySelector('[data-fs-fecha]').value; b.repetida = false; b.error = b.estado === 'ok' ? b.error : ''; pintarFilaSemana(g); actualizarContadorSemana(); };
+    ['[data-fs-num]', '[data-fs-base]', '[data-fs-iva]', '[data-fs-fecha]'].forEach((s) => fila.querySelector(s).addEventListener('input', lee));
+    const selEntrada = fila.querySelector('[data-fs-entrada]');
+    if (selEntrada) selEntrada.addEventListener('change', () => { const v = selEntrada.value; selEntrada.value = ''; if (v) adjuntarEntradaFilaSemana(g, v); });
+    fila.querySelector('[data-fs-archivo]').addEventListener('change', (e) => {
+      const archivo = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (archivo) subirArchivoFilaSemana(g, archivo);
+    });
+    fila.querySelector('[data-fs-igualmente]').addEventListener('click', async () => {
+      if (guardandoSemana) return;
+      guardandoSemana = true;
+      try {
+        const res = await guardarFilaSemana(g, true);
+        if (res === 'ok') {
+          delete semanaBorrador[g.id];
+          await cargarFacturasSemana();
+          const m = document.getElementById('fsMsg');
+          m.textContent = '1 factura guardada.'; m.className = 'form-msg is-ok';
+        }
+      } finally { guardandoSemana = false; }
+    });
+    pintarFilaSemana(g);
+  });
+  actualizarContadorSemana();
+}
+
+function pintarEntradaSemana() {
+  const info = document.getElementById('fsEntradaInfo');
+  info.textContent = '';
+  const n = semanaEntrada.archivos.length;
+  if (n) info.appendChild(document.createTextNode(`${n} factura${n === 1 ? '' : 's'} subida${n === 1 ? '' : 's'} esperando asignarse a su fila. `));
+  if (/^https:\/\//.test(semanaEntrada.carpetaUrl)) {
+    const a = document.createElement('a');
+    a.href = semanaEntrada.carpetaUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Abrir la carpeta de entrada en Drive';
+    info.appendChild(a);
+  }
+}
+
+// Desplegable de cada fila con las facturas digitales de la carpeta de entrada (solo si hay alguna)
+function opcionesEntradaSemana() {
+  if (!semanaEntrada.archivos.length) return '';
+  return `<select class="select-input" data-fs-entrada aria-label="Elegir una factura de la carpeta de entrada" style="max-width:100%;"><option value="">📂 Elegir de la carpeta de entrada…</option>${semanaEntrada.archivos.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.nombre)}</option>`).join('')}</select>`;
+}
+
+// Pega a la fila una factura digital que ya está en la carpeta de entrada. Al guardar la factura, ese archivo se mueve solo a su carpeta y se renombra.
+async function adjuntarEntradaFilaSemana(g, idArchivo) {
+  const a = semanaEntrada.archivos.find((x) => x.id === idArchivo);
+  const b = borradorSemana(g);
+  if (!a || b.subiendo) return;
+  b.subiendo = true; b.errorArchivo = '';
+  pintarFilaSemana(g);
+  try {
+    const r = await apiGet('adjuntarJustificante', { id: g.id, justificanteId: a.id, justificanteUrl: a.url }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    if (!r.ok) throw new Error(r.error || 'No se pudo adjuntar.');
+    b.url = a.url;
+  } catch (err) {
+    b.errorArchivo = 'No se ha podido adjuntar: ' + ((err && err.message) ? err.message : textoDeFallo(err));
+  } finally {
+    b.subiendo = false;
+    pintarFilaSemana(g);
+  }
+}
+
+// Sube varias facturas digitales de una vez a la carpeta de entrada (con su nombre), para elegir después la de cada fila
+async function subirVariasASemana(archivos) {
+  if (subiendoVarias || !archivos.length) return;
+  subiendoVarias = true;
+  const msg = document.getElementById('fsMsg');
+  const fallos = [];
+  try {
+    for (let i = 0; i < archivos.length; i++) {
+      msg.textContent = `Subiendo ${i + 1} de ${archivos.length}…`;
+      msg.className = 'form-msg';
+      try {
+        const f = await prepararArchivoJustificante(archivos[i]);
+        const r = await apiPost('subirJustificante', { destino: 'entrada', nombre: archivos[i].name, mime: f.mime, base64: f.base64 });
+        if (!r.ok) throw new Error(r.error || 'No se pudo subir.');
+      } catch (err) {
+        fallos.push(`${archivos[i].name}: ${(err && err.message) ? err.message : textoDeFallo(err)}`);
+      }
+    }
+  } finally {
+    subiendoVarias = false;
+  }
+  const subidas = archivos.length - fallos.length;
+  const texto = (subidas ? `${subidas} factura${subidas === 1 ? '' : 's'} subida${subidas === 1 ? '' : 's'}. Elige en cada fila la que le corresponde.` : '') + (fallos.length ? ` No se han podido subir: ${fallos.join('; ')}` : '');
+  const clase = 'form-msg ' + (fallos.length ? 'is-error' : 'is-ok');
+  await cargarFacturasSemana();   // trae la carpeta de entrada con lo nuevo; lo escrito en las filas se conserva
+  msg.textContent = texto; msg.className = clase;
+}
+
+// Sube la factura de una fila a Drive y la pega al gasto estimado de ese día (queda guardada aunque no se escriba nada más)
+async function subirArchivoFilaSemana(g, archivo) {
+  const b = borradorSemana(g);
+  if (b.subiendo) return;
+  b.subiendo = true; b.errorArchivo = '';
+  pintarFilaSemana(g);
+  try {
+    const f = await prepararArchivoJustificante(archivo);
+    const r = await apiPost('subirJustificante', { mime: f.mime, base64: f.base64, fecha: (g.pedidoFecha || g.fecha), proveedor: g.proveedor, numFactura: String(b.num || '').trim() });
+    if (!r.ok) throw new Error(r.error || 'No se pudo subir.');
+    const a = await apiGet('adjuntarJustificante', { id: g.id, justificanteId: r.id, justificanteUrl: r.url }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+    if (!a.ok) throw new Error('Se ha subido, pero no se ha podido guardar en el gasto: ' + (a.error || ''));
+    b.url = r.url;
+  } catch (err) {
+    b.errorArchivo = 'No se ha podido adjuntar: ' + ((err && err.message) ? err.message : textoDeFallo(err));
+  } finally {
+    b.subiendo = false;
+    pintarFilaSemana(g);
+  }
+}
+
+// Apunta la factura de UNA fila. Devuelve 'ok', 'repetida', 'error' o 'red' (se cortó la conexión)
+async function guardarFilaSemana(g, igualmente) {
+  const b = borradorSemana(g);
+  const pagadas = document.getElementById('fsPagadas').checked;
+  const proveedor = proveedoresCache.find((p) => String(p.id) === String(g.proveedorId));
+  const datos = {
+    fecha: formatoFechaES(b.fecha), proveedorId: g.proveedorId, proveedorNombre: proveedor ? proveedor.nombre : g.proveedor, numFactura: String(b.num).trim(),
+    base: String(Number(b.base) || 0), iva: String(Number(b.iva) || 0), cubre: String(g.id), categoria: 'Mercancía',
+    pagado: pagadas ? 'true' : 'false', fechaPago: pagadas ? formatoFechaES(document.getElementById('fsFechaPago').value) : '',
+  };
+  const huella = JSON.stringify(datos);
+  if (!b.solicitud || b.solicitud.huella !== huella) b.solicitud = { id: idUnico(), huella };
+  datos.idSolicitud = b.solicitud.id;
+  if (igualmente) datos.confirmarDuplicado = '1';
+  b.estado = 'guardando'; b.error = ''; b.repetida = false;
+  pintarFilaSemana(g);
+  const r = await apiGet('incorporarFactura', datos).catch((err) => ({ ok: false, red: true, error: errorDeRed(err) }));
+  if (r.ok) { b.estado = 'ok'; pintarFilaSemana(g); return 'ok'; }
+  b.estado = '';
+  if (r.facturaRepetida) { b.error = r.error; b.repetida = true; pintarFilaSemana(g); return 'repetida'; }
+  b.error = r.error || 'No se pudo guardar.';
+  pintarFilaSemana(g);
+  return r.red ? 'red' : 'error';
+}
+
+async function guardarFacturasSemana() {
+  if (guardandoSemana) return;
+  const msg = document.getElementById('fsMsg');
+  const rellenas = semanaFilas.filter((g) => filaSemanaRellena(borradorSemana(g)) && borradorSemana(g).estado !== 'ok');
+  if (!rellenas.length) { msg.textContent = 'Rellena al menos una factura (el número y la base).'; msg.className = 'form-msg is-error'; return; }
+  if (semanaFilas.some((g) => borradorSemana(g).subiendo)) { msg.textContent = 'Espera a que terminen de subirse las facturas adjuntas.'; msg.className = 'form-msg is-error'; return; }
+  if (document.getElementById('fsPagadas').checked && !document.getElementById('fsFechaPago').value) { msg.textContent = 'Pon la fecha de pago (o desmarca "ya están pagadas").'; msg.className = 'form-msg is-error'; return; }
+  const sinFecha = rellenas.find((g) => !borradorSemana(g).fecha);
+  if (sinFecha) { msg.textContent = `Falta la fecha de la factura de ${sinFecha.proveedor}.`; msg.className = 'form-msg is-error'; return; }
+  guardandoSemana = true;
+  const boton = document.getElementById('btnFsGuardar');
+  boton.disabled = true;
+  if (!proveedoresCache.length) { const p = await apiGet('proveedores').catch(() => null); if (p && p.ok) proveedoresCache = p.data; }
+  let hechas = 0, fallidas = 0, cortado = false;
+  try {
+    for (let i = 0; i < rellenas.length; i++) {
+      msg.textContent = `Guardando… ${i + 1} de ${rellenas.length}`;
+      msg.className = 'form-msg';
+      const res = await guardarFilaSemana(rellenas[i], false);
+      if (res === 'ok') hechas++; else fallidas++;
+      if (res === 'red') { cortado = true; break; }
+    }
+  } finally {
+    guardandoSemana = false;
+    boton.disabled = false;
+  }
+  msg.textContent = `${hechas} factura${hechas === 1 ? '' : 's'} guardada${hechas === 1 ? '' : 's'}.` + (cortado ? ' Se ha cortado la conexión: las que faltan siguen aquí, pulsa Guardar otra vez.' : fallidas ? ` ${fallidas} con problema: revísalas abajo.` : '');
+  msg.className = 'form-msg ' + (fallidas ? 'is-error' : 'is-ok');
+  // las guardadas desaparecen de la lista; las que han dado problema se quedan con lo escrito
+  rellenas.filter((g) => semanaBorrador[g.id].estado === 'ok').forEach((g) => { delete semanaBorrador[g.id]; });
+  const guardado = msg.textContent, clase = msg.className;
+  await cargarFacturasSemana();
+  msg.textContent = guardado; msg.className = clase;
+}
+
+/* ============ CUADRAR CON EL RESUMEN DEL PROVEEDOR ============ */
+let cuadrando = false;
+async function iniciarCuadrar() {
+  if (!proveedoresCache.length) {
+    const r = await apiGet('proveedores').catch(() => null);
+    if (r && r.ok) proveedoresCache = r.data;
+  }
+  const sel = document.getElementById('cdProveedor');
+  const elegido = sel.value;
+  sel.innerHTML = '<option value="">Elige el proveedor…</option>' + proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
+  sel.value = elegido;   // al volver de apuntar una factura se conserva lo que había
+}
+
+function iso(f) { return f.split('/').reverse().join('-'); }
+
+function pintarCuadre(r, proveedorId) {
+  const cont = document.getElementById('cdResultado');
+  const e = (n) => escapeHtml(formatoEuros(n));
+  const dif = (n) => (n > 0 ? '+' : '') + formatoEuros(n);
+  const bloque = (titulo, color, filas, vacio) => filas.length ? `<div class="card"><div class="card__name"${color ? ` style="color:${color};"` : ''}>${titulo} (${filas.length})</div>${filas.join('')}</div>` : (vacio || '');
+  cont.innerHTML = `
+    <div class="card">
+      <div class="card__name" style="color:${r.cuadra ? 'var(--ok-green, #2E7D4F)' : 'var(--warn-red)'};">${r.cuadra ? '✓ Todo cuadra' : 'No cuadra'}</div>
+      <div class="card__meta">Del ${escapeHtml(r.desde)} al ${escapeHtml(r.hasta)} · ${r.lineas} factura${r.lineas === 1 ? '' : 's'} en el resumen</div>
+      <div class="card__meta">Resumen del proveedor: ${e(r.totalResumen)} · Lo que tienes apuntado: ${e(r.totalApp)} · Diferencia: ${escapeHtml(dif(r.diferencia))}</div>
+    </div>
+    ${bloque('⚠ Importe distinto', 'var(--warn-red)', r.importeDistinto.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · el proveedor dice ${e(x.resumen)} y tienes ${e(x.app)} (${escapeHtml(dif(x.diferencia))})</div>`))}
+    ${bloque('✗ Están en el resumen y NO las tienes apuntadas', 'var(--warn-red)', r.faltanEnApp.map((x, i) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;"><div class="card__meta"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}</div><button class="chip-btn" data-cd-apuntar="${i}">Apuntarla</button></div>`))}
+    ${bloque('? Las tienes apuntadas pero NO salen en el resumen', 'var(--warn-red)', r.sobranEnApp.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura || 'sin número')}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
+    ${bloque('Repetidas en el resumen', '', r.repetidasEnResumen.map((x) => `<div class="card__meta" style="margin-top:6px;">${escapeHtml(x.numFactura)} · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
+    ${r.ignoradas.length ? `<div class="card"><div class="card__name">Líneas que no he entendido (${r.ignoradas.length})</div>${r.ignoradas.map((x) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(x)}</div>`).join('')}</div>` : ''}
+    ${r.coinciden.length ? `<div class="card"><div class="card__name">✓ Coinciden (${r.coinciden.length})</div><div class="card__meta" style="margin-top:6px;">${r.coinciden.map((x) => escapeHtml(x.numFactura)).join(' · ')}</div></div>` : ''}`;
+  cont.querySelectorAll('[data-cd-apuntar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const x = r.faltanEnApp[Number(btn.dataset.cdApuntar)];
+      facturaPreseleccion = { proveedorId, cubre: [], fecha: iso(x.fecha), numFactura: x.numFactura, volver: 'cuadrar' };
+      cambiarTab('gasto-factura');
+    });
+  });
+}
+
+async function comprobarResumen() {
+  if (cuadrando) return;
+  const msg = document.getElementById('cdMsg');
+  const proveedorId = document.getElementById('cdProveedor').value;
+  const texto = document.getElementById('cdTexto').value;
+  if (!proveedorId) { msg.textContent = 'Elige el proveedor.'; msg.className = 'form-msg is-error'; return; }
+  if (!texto.trim()) { msg.textContent = 'Pega el listado del proveedor.'; msg.className = 'form-msg is-error'; return; }
+  cuadrando = true;
+  const boton = document.getElementById('btnCuadrar');
+  boton.disabled = true;
+  msg.textContent = 'Comprobando…';
+  msg.className = 'form-msg';
+  document.getElementById('cdResultado').innerHTML = '';
+  try {
+    const r = await apiPost('cuadrarResumen', { idProveedor: proveedorId, texto }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) {
+      msg.textContent = r.error || 'No se pudo comprobar.';
+      msg.className = 'form-msg is-error';
+      if (r.ignoradas && r.ignoradas.length) document.getElementById('cdResultado').innerHTML = `<div class="card"><div class="card__name">Líneas que no he entendido</div>${r.ignoradas.map((x) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(x)}</div>`).join('')}</div>`;
+      return;
+    }
+    msg.textContent = '';
+    pintarCuadre(r, proveedorId);
+  } finally {
+    cuadrando = false;
+    boton.disabled = false;
+  }
+}
+
+function cablearCuadrar() {
+  document.getElementById('btnFsGuardar').addEventListener('click', guardarFacturasSemana);
+  const varias = document.getElementById('fsArchivos');
+  varias.addEventListener('change', () => { const lista = varias.files ? Array.from(varias.files) : []; varias.value = ''; subirVariasASemana(lista); });
+  document.getElementById('btnFsVariosDias').addEventListener('click', () => { facturaPreseleccion = { volver: 'facturas-semana' }; cambiarTab('gasto-factura'); });
+  document.getElementById('fsPagadas').addEventListener('change', () => { document.getElementById('fsFechaPagoBloque').style.display = document.getElementById('fsPagadas').checked ? 'block' : 'none'; });
+  document.getElementById('btnCuadrar').addEventListener('click', comprobarResumen);
+  document.getElementById('cdArchivo').addEventListener('change', (e) => {
+    const archivo = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!archivo) return;
+    const lector = new FileReader();
+    lector.onload = () => { document.getElementById('cdTexto').value = String(lector.result || ''); };
+    lector.onerror = () => { const m = document.getElementById('cdMsg'); m.textContent = 'No se ha podido leer el archivo.'; m.className = 'form-msg is-error'; };
+    lector.readAsText(archivo);
+  });
+  document.getElementById('fdFecha').addEventListener('change', cargarFacturasDia);
+  document.querySelectorAll('[data-fd-rapido]').forEach((b) => b.addEventListener('click', () => {
+    document.getElementById('fdFecha').value = b.dataset.fdRapido === 'ayer' ? ayerISO() : hoyISO();
+    cargarFacturasDia();
+  }));
 }
 
 /* ============ ZONA DEL GESTOR ============ */
@@ -3977,7 +4493,8 @@ function cablearPanelYGestor() {
 }
 
 /* ============ INCORPORAR LA FACTURA DE UN PROVEEDOR ============ */
-let facturaPreseleccion = null;   // al abrir desde un gasto estimado: { proveedorId, cubre: [ids] }
+let facturaPreseleccion = null;   // al abrir desde un gasto estimado, de las facturas del día o del cuadre: { proveedorId, cubre: [ids], fecha (aaaa-mm-dd), numFactura, volver }
+let facturaDestino = 'gastos-ver'; // adónde se vuelve al guardar
 let facturaEstimados = [];        // los gastos estimados pendientes del proveedor elegido
 let solicitudFactura = null;      // código del intento: si se repite el envío, el servidor no duplica la factura
 let guardandoFactura = false;
@@ -3992,8 +4509,12 @@ async function cargarFormularioFactura() {
   const sel = document.getElementById('facProveedor');
   sel.innerHTML = '<option value="">Elige el proveedor…</option>' +
     proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
-  document.getElementById('facNumero').value = '';
-  document.getElementById('facFecha').valueAsDate = new Date();
+  document.getElementById('facNumero').value = (pre && pre.numFactura) || '';
+  if (pre && pre.fecha) document.getElementById('facFecha').value = pre.fecha; else document.getElementById('facFecha').valueAsDate = new Date();
+  facturaDestino = (pre && pre.volver) || 'gastos-ver';
+  const atras = document.querySelector('#tab-gasto-factura [data-volver]');
+  atras.dataset.volver = facturaDestino;
+  atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas de hoy' : facturaDestino === 'facturas-semana' ? '← Facturas de la semana' : facturaDestino === 'cuadrar' ? '← Cuadrar con el resumen' : '← Gastos';
   document.getElementById('facBase').value = '';
   document.getElementById('facIva').value = '';
   document.getElementById('facRetencion').value = '';
@@ -4126,7 +4647,7 @@ async function guardarFacturaProveedor() {
       ? `Factura incorporada. Cubre ${r.cubiertos} gasto${r.cubiertos === 1 ? '' : 's'} estimado${r.cubiertos === 1 ? '' : 's'} (${formatoEuros(r.estimado)}); la factura es de ${formatoEuros(r.total)} (${r.diferencia > 0 ? '+' : ''}${formatoEuros(r.diferencia)}).`
       : 'Factura incorporada como gasto.';
     msg.className = 'form-msg is-ok';
-    setTimeout(() => cambiarTab('gastos-ver'), 1500);
+    setTimeout(() => cambiarTab(facturaDestino), 1500);
   } finally {
     guardandoFactura = false;
     boton.disabled = false;
@@ -4144,6 +4665,7 @@ async function descargarLibroGastos() {
 
 function cablearCompras() {
   cablearPanelYGestor();
+  cablearCuadrar();
   document.getElementById('btnNuevoProveedor').addEventListener('click', () => abrirFormularioProveedor(null));
   document.getElementById('btnGuardarProveedor').addEventListener('click', guardarProveedor);
   document.getElementById('btnGuardarGasto').addEventListener('click', guardarGasto);

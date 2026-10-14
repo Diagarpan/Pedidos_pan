@@ -415,10 +415,13 @@
     <div class="home-grid">
       <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span>Proveedores</button>
       <button class="home-btn home-btn--factura" data-tab="pedido-proveedores"><span class="home-btn__icon" data-icon="compras"></span>Pedido a proveedores</button>
+      <button class="home-btn home-btn--factura" data-tab="facturas-dia"><span class="home-btn__icon" data-icon="compras"></span>Facturas de hoy</button>
+      <button class="home-btn home-btn--factura" data-tab="facturas-semana"><span class="home-btn__icon" data-icon="compras"></span>Facturas de la semana</button>
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
       <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
       <button class="home-btn home-btn--factura" data-tab="panel">Panel de resultados</button>
+      <button class="home-btn home-btn--factura" data-tab="cuadrar">Cuadrar con el resumen del proveedor</button>
       <button class="home-btn home-btn--factura" data-tab="gestor">Zona del gestor</button>
       <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
     </div>
@@ -598,6 +601,65 @@
     <div class="period-total" id="gastosTotal"></div>
   </section>
 
+
+  <section class="tab tab--hidden" id="tab-facturas-dia">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Facturas de hoy</div>
+      <div class="home-sub">Las facturas de cada proveedor: las que ya has apuntado y las que te faltan</div>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <button class="chip-btn" data-fd-rapido="hoy">Hoy</button>
+      <button class="chip-btn" data-fd-rapido="ayer">Ayer</button>
+      <input type="date" id="fdFecha" class="text-input" style="max-width:190px;" aria-label="Día de las facturas">
+    </div>
+    <div class="card__meta" id="fdResumen" style="margin-bottom:8px;"></div>
+    <div id="fdLista" class="stack"><div class="empty-state">Cargando…</div></div>
+    <div class="field-label" style="margin-top:16px;">Facturas por recibir de días anteriores</div>
+    <div id="fdAnteriores" class="stack"></div>
+    <div class="form-msg" id="fdMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-facturas-semana">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Facturas de la semana</div>
+      <div class="home-sub">Todas las facturas por recibir en una sola pantalla: escribe el número y los importes de cada una (y adjunta el PDF o la foto) y guárdalas todas de una vez</div>
+    </div>
+    <div class="card__meta" id="fsResumen" style="margin-bottom:8px;"></div>
+    <label class="btn-secondary" for="fsArchivos" style="display:block; text-align:center; cursor:pointer; margin:0 0 4px;">📄 Subir varias facturas (PDF o foto) a Drive de una vez</label>
+    <input type="file" id="fsArchivos" multiple accept="image/*,application/pdf" style="display:none;">
+    <div class="card__meta" id="fsEntradaInfo" style="margin:0 0 10px;"></div>
+    <label style="display:flex; gap:8px; align-items:center; margin:0 0 4px; font-size:15px;">
+      <input type="checkbox" id="fsPagadas">
+      <span>Estas facturas ya están pagadas</span>
+    </label>
+    <div id="fsFechaPagoBloque" style="display:none;">
+      <label class="field-label" for="fsFechaPago">Fecha de pago</label>
+      <input type="date" id="fsFechaPago" class="text-input" style="max-width:190px;">
+    </div>
+    <div id="fsLista" class="stack" style="margin-top:10px;"><div class="empty-state">Cargando…</div></div>
+    <button class="btn-primary" id="btnFsGuardar" style="width:100%; margin-top:12px;">Guardar las facturas rellenadas</button>
+    <button class="btn-secondary" id="btnFsVariosDias" style="width:100%; margin-top:8px;">Mi proveedor me manda UNA factura para varios días →</button>
+    <div class="form-msg" id="fsMsg"></div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-cuadrar">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Cuadrar con el resumen del proveedor</div>
+      <div class="home-sub">Pega el listado que te manda el proveedor (una línea por factura: número, fecha e importe) y mira si coincide con lo que tienes apuntado. No apunta nada.</div>
+    </div>
+    <label class="field-label" for="cdProveedor">Proveedor</label>
+    <select id="cdProveedor" class="select-input"><option value="">Elige el proveedor…</option></select>
+    <label class="field-label" for="cdTexto">Listado del proveedor</label>
+    <textarea id="cdTexto" class="text-input" rows="9" style="font-family:monospace; font-size:13px;" placeholder="FS-101;01/10/2026;104,00&#10;FS-102;02/10/2026;52,00"></textarea>
+    <label class="btn-secondary" for="cdArchivo" style="display:block; text-align:center; cursor:pointer; margin:6px 0;">📄 Cargar desde un archivo (CSV o texto)</label>
+    <input type="file" id="cdArchivo" accept=".csv,.txt,text/csv,text/plain" style="display:none;">
+    <button class="btn-primary" id="btnCuadrar" style="width:100%;">Comprobar</button>
+    <div class="form-msg" id="cdMsg"></div>
+    <div id="cdResultado" class="stack"></div>
+  </section>
 
   <section class="tab tab--hidden" id="tab-panel">
     <button class="link-btn" data-volver="compras">← Compras</button>

@@ -1454,17 +1454,18 @@ async function conEstadoCarga(boton, textoCarga, tarea) {
   }
 }
 
-async function descargarPDF(base64, nombreArchivo) {
+async function descargarPDF(base64, nombreArchivo, tipoMime) {
+  const mime = tipoMime || 'application/pdf';
   const byteChars = atob(base64);
   const byteNumbers = new Array(byteChars.length);
   for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
   const byteArray = new Uint8Array(byteNumbers);
-  const blob = new Blob([byteArray], { type: 'application/pdf' });
+  const blob = new Blob([byteArray], { type: mime });
 
   // En móvil, si el navegador lo soporta, ofrece compartir directamente
   // (WhatsApp, Mail, etc.) usando el panel nativo de compartir.
   try {
-    const archivo = new File([blob], nombreArchivo, { type: 'application/pdf' });
+    const archivo = new File([blob], nombreArchivo, { type: mime });
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
       await navigator.share({ files: [archivo], title: nombreArchivo });
       return;
@@ -3570,7 +3571,7 @@ async function cargarFormularioGasto() {
 
   document.getElementById('gastoFormTitulo').textContent = 'Nuevo gasto';
   document.getElementById('gastoFormId').value = '';
-  document.getElementById('gastoFormFecha').valueAsDate = new Date();
+  document.getElementById('gastoFormFecha').value = hoyISO();
   document.getElementById('gastoFormNumFactura').value = '';
   document.getElementById('gastoFormConcepto').value = '';
   document.getElementById('gastoFormCategoria').value = '';
@@ -3578,7 +3579,7 @@ async function cargarFormularioGasto() {
   document.getElementById('gastoFormIva').value = '';
   document.getElementById('gastoFormRetencion').value = '';
   document.getElementById('gastoFormPagado').checked = true;   // un gasto que se apunta a mano suele estar ya pagado
-  document.getElementById('gastoFormFechaPago').valueAsDate = new Date();
+  document.getElementById('gastoFormFechaPago').value = hoyISO();
   alternarFechaPagoGasto();
   reiniciarJustificante('gastoForm');
   document.getElementById('gastoFormTotal').textContent = '0,00 €';
@@ -3604,7 +3605,7 @@ async function abrirGastoParaEditar(g) {
   document.getElementById('gastoFormIva').value = g.iva;
   document.getElementById('gastoFormRetencion').value = g.retencion || '';
   document.getElementById('gastoFormPagado').checked = g.pagado !== false;
-  document.getElementById('gastoFormFechaPago').value = g.fechaPago ? g.fechaPago.split('/').reverse().join('-') : new Date().toISOString().slice(0, 10);
+  document.getElementById('gastoFormFechaPago').value = g.fechaPago ? g.fechaPago.split('/').reverse().join('-') : hoyISO();
   alternarFechaPagoGasto();
   reiniciarJustificante('gastoForm', g.justificanteUrl);   // el que ya tiene se conserva si no se toca
   recalcularTotalGasto();
@@ -3729,6 +3730,7 @@ function pintarGastos() {
           <div class="card__meta">${escapeHtml(g.fecha)}${g.proveedor ? ' · ' + escapeHtml(g.proveedor) : ''}${g.categoria ? ' · ' + escapeHtml(g.categoria) : ''}${g.numFactura ? ' · Factura nº ' + escapeHtml(g.numFactura) : ''}</div>
           ${!confirmado ? '<div class="card__meta">Estimado: pendiente de la factura del proveedor (no cuenta para el gestor)</div>' : ''}
           ${g.retencion > 0 ? `<div class="card__meta">Retención IRPF: -${formatoEuros(g.retencion)}</div>` : ''}
+          ${g.desglose && g.desglose.length ? `<div class="card__meta">IVA por tipos: ${g.desglose.map((l) => `${escapeHtml(String(l.tipo).replace('.', ','))} % → base ${escapeHtml(formatoEuros(l.base))}, cuota ${escapeHtml(formatoEuros(l.cuota))}`).join(' · ')}</div>` : ''}
           ${etiquetaPago ? `<div class="card__meta">${etiquetaPago}</div>` : ''}
           ${confirmado ? (g.justificanteUrl && /^https:\/\//.test(g.justificanteUrl) ? `<div class="card__meta">📎 <a href="${escapeHtml(g.justificanteUrl)}" target="_blank" rel="noopener">Ver la factura adjunta</a></div>` : '<div class="card__meta">Sin factura adjunta</div>') : ''}
         </div>
@@ -3772,7 +3774,7 @@ async function marcarGastoPagado(id, pagado, boton, alTerminar) {
   marcandoPago = true;
   if (boton) boton.disabled = true;
   try {
-    const r = await apiGet('marcarGastoPagado', { id, pagado: pagado ? 'true' : 'false', fechaPago: pagado ? formatoFechaES(new Date().toISOString().slice(0, 10)) : '' })
+    const r = await apiGet('marcarGastoPagado', { id, pagado: pagado ? 'true' : 'false', fechaPago: pagado ? formatoFechaES(hoyISO()) : '' })
       .catch((err) => ({ ok: false, error: errorDeRed(err) }));
     if (!r.ok) { alert('No se pudo cambiar el pago: ' + (r.error || 'inténtalo de nuevo')); return; }
     if (alTerminar) alTerminar(); else buscarGastos();
@@ -3841,9 +3843,11 @@ function pintarPanel(d) {
       <div class="card__top"><div class="card__name">Pendiente de cobro</div><div class="card__total">${e(d.cobros.total)}</div></div>
       <div class="card__meta">${d.cobros.facturas.n} factura${d.cobros.facturas.n === 1 ? '' : 's'} (${e(d.cobros.facturas.total)}) · ${d.cobros.albaranes.n} albarán${d.cobros.albaranes.n === 1 ? '' : 'es'} (${e(d.cobros.albaranes.total)})</div>
       ${d.cobros.clientes.map((c) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(c.cliente)} · ${e(c.total)}${c.desde ? ' · desde ' + escapeHtml(c.desde) : ''}</div>`).join('')}
+      ${d.cobros.anteriores && d.cobros.anteriores.n ? `<div class="card__meta" style="margin-top:6px;">Incluye ${d.cobros.anteriores.n} documento${d.cobros.anteriores.n === 1 ? '' : 's'} de años anteriores (ya archivados): ${e(d.cobros.anteriores.total)}. Para cobrarlos, búscalos en Facturas o en Pedidos con fechas de ese año.</div>` : ''}
     </div>
     <div class="card">
       <div class="card__top"><div class="card__name">Pagos pendientes a proveedores</div><div class="card__total">${e(d.pagos.total)}</div></div>
+      ${d.pagos.anteriores && d.pagos.anteriores.n ? `<div class="card__meta">Incluye ${d.pagos.anteriores.n} factura${d.pagos.anteriores.n === 1 ? '' : 's'} de años anteriores (ya archivados): ${e(d.pagos.anteriores.total)}</div>` : ''}
       ${(d.pagos.porProveedor || []).map((p) => `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
           <div class="card__meta"><strong>${escapeHtml(p.proveedor)}</strong> · ${p.n} factura${p.n === 1 ? '' : 's'} · ${e(p.total)}</div>
@@ -3851,7 +3855,7 @@ function pintarPanel(d) {
         </div>`).join('')}
       ${d.pagos.lista.length ? d.pagos.lista.map((p) => `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
-          <div class="card__meta">${escapeHtml(p.proveedor || 'Sin proveedor')}${p.numFactura ? ' · nº ' + escapeHtml(p.numFactura) : ''} · ${escapeHtml(p.fecha)} · <strong>${e(p.total)}</strong></div>
+          <div class="card__meta">${escapeHtml(p.proveedor || 'Sin proveedor')}${p.numFactura ? ' · nº ' + escapeHtml(p.numFactura) : ''} · ${escapeHtml(p.fecha)}${p.anterior ? ' (año anterior)' : ''} · <strong>${e(p.total)}</strong></div>
           <button class="chip-btn" data-panel-pagar="${p.id}">Pagada</button>
         </div>`).join('') : '<div class="card__meta">No debes nada a ningún proveedor.</div>'}
     </div>
@@ -3876,7 +3880,7 @@ async function marcarTodasPagadasProveedor(btn) {
   marcandoProveedor = true;
   btn.disabled = true;
   try {
-    const r = await apiGet('marcarPagadosProveedor', { idProveedor: btn.dataset.pagarProveedor, fechaPago: formatoFechaES(new Date().toISOString().slice(0, 10)) })
+    const r = await apiGet('marcarPagadosProveedor', { idProveedor: btn.dataset.pagarProveedor, fechaPago: formatoFechaES(hoyISO()) })
       .catch((err) => ({ ok: false, error: errorDeRed(err) }));
     if (!r.ok) { alert('No se pudieron marcar: ' + (r.error || 'inténtalo de nuevo')); return; }
     cargarPanel();
@@ -4008,7 +4012,7 @@ function infoFilaSemana(g, b) {
   if ((Number(b.base) || 0) > 0) {
     const dif = total - g.total;
     const raro = g.total > 0 && Math.abs(dif) / g.total > 0.2;
-    partes.push(`Factura ${formatoEuros(total)} · estimado ${formatoEuros(g.total)} · ${dif > 0 ? '+' : ''}${formatoEuros(dif)}${raro ? ' ⚠ muy distinta del estimado' : ''}`);
+    partes.push(`Factura ${formatoEuros(total)} · estimado ${formatoEuros(g.total)} · ${dif > 0 ? '+' : ''}${formatoEuros(dif)}${raro ? ' ⚠ muy distinta del estimado' : ''}${!b.ivaManual && (Number(b.iva) || 0) > 0 ? ' · IVA calculado según tu pedido: compruébalo con la factura' : ''}`);
   }
   return partes.join(' ');
 }
@@ -4095,6 +4099,7 @@ async function cargarFacturasSemana() {
         <label class="btn-secondary" data-fs-archivo-boton for="fsArchivo-${g.id}" style="cursor:pointer; padding:8px 12px;">📎 Adjuntar la factura</label>
         <input type="file" id="fsArchivo-${g.id}" data-fs-archivo accept="image/*,application/pdf" style="display:none;">
         ${opcionesEntradaSemana()}
+        <button type="button" class="chip-btn" data-fs-desglosar>Desglosar IVA</button>
         <button type="button" class="chip-btn" data-fs-igualmente style="display:none;">Guardar igualmente</button>
       </div>
       <div class="card__meta" data-fs-archivo-estado style="margin-top:4px;"></div>
@@ -4105,7 +4110,21 @@ async function cargarFacturasSemana() {
     const fila = document.querySelector(`[data-fs-fila="${g.id}"]`);
     const b = borradorSemana(g);
     const lee = () => { b.num = fila.querySelector('[data-fs-num]').value; b.base = fila.querySelector('[data-fs-base]').value; b.iva = fila.querySelector('[data-fs-iva]').value; b.fecha = fila.querySelector('[data-fs-fecha]').value; b.repetida = false; b.error = b.estado === 'ok' ? b.error : ''; pintarFilaSemana(g); actualizarContadorSemana(); };
-    ['[data-fs-num]', '[data-fs-base]', '[data-fs-iva]', '[data-fs-fecha]'].forEach((s) => fila.querySelector(s).addEventListener('input', lee));
+    ['[data-fs-num]', '[data-fs-fecha]'].forEach((s) => fila.querySelector(s).addEventListener('input', lee));
+    // IVA automático: con la base escrita, el IVA sale de la proporción de IVA de lo que pediste (se ve como "calculado" y se puede cambiar)
+    fila.querySelector('[data-fs-base]').addEventListener('input', () => {
+      if (!b.ivaManual) {
+        const base = Number(fila.querySelector('[data-fs-base]').value);
+        fila.querySelector('[data-fs-iva]').value = base > 0 && g.base > 0 ? String(Math.round(base * g.iva / g.base * 100) / 100) : '';
+      }
+      lee();
+    });
+    fila.querySelector('[data-fs-iva]').addEventListener('input', () => { b.ivaManual = fila.querySelector('[data-fs-iva]').value !== ''; lee(); });
+    // una factura con varios tipos de IVA se apunta en el formulario completo (con su desglose); al guardarla se vuelve aquí
+    fila.querySelector('[data-fs-desglosar]').addEventListener('click', () => {
+      facturaPreseleccion = { proveedorId: g.proveedorId, cubre: [g.id], fecha: b.fecha, numFactura: b.num, volver: 'facturas-semana', desglosar: true };
+      cambiarTab('gasto-factura');
+    });
     const selEntrada = fila.querySelector('[data-fs-entrada]');
     if (selEntrada) selEntrada.addEventListener('change', () => { const v = selEntrada.value; selEntrada.value = ''; if (v) adjuntarEntradaFilaSemana(g, v); });
     fila.querySelector('[data-fs-archivo]').addEventListener('change', (e) => {
@@ -4407,6 +4426,16 @@ async function descargarCsvGestor(tipo) {
   mensajeGestor(`${r.nombre}: ${r.filas} fila${r.filas === 1 ? '' : 's'}. Se abre con Excel.`, 'ok');
 }
 
+async function descargarXlsxGestor() {
+  const m = mesDelGestor();
+  if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
+  mensajeGestor('Preparando el Excel…', '');
+  const r = await apiGet('gestorXlsx', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mensajeGestor('No se pudo preparar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
+  await descargarPDF(r.base64, r.nombre, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  mensajeGestor(`${r.nombre}: ${r.filas} fila${r.filas === 1 ? '' : 's'} en 3 hojas (emitidas, recibidas e IVA).`, 'ok');
+}
+
 async function descargarLibroGestor(accion) {
   const m = mesDelGestor();
   if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
@@ -4482,6 +4511,7 @@ function cablearPanelYGestor() {
   panelMes.addEventListener('change', cargarPanel);
   document.getElementById('btnPanelAnterior').addEventListener('click', () => { panelMes.value = desplazarMesISO(panelMes.value || mesActualISO(), -1); cargarPanel(); });
   document.getElementById('btnPanelSiguiente').addEventListener('click', () => { panelMes.value = desplazarMesISO(panelMes.value || mesActualISO(), 1); cargarPanel(); });
+  document.getElementById('btnGestorXlsx').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', descargarXlsxGestor));
   document.getElementById('btnGestorEmitidas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('emitidas')));
   document.getElementById('btnGestorRecibidas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('recibidas')));
   document.getElementById('btnGestorIva').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', () => descargarCsvGestor('iva')));
@@ -4510,17 +4540,18 @@ async function cargarFormularioFactura() {
   sel.innerHTML = '<option value="">Elige el proveedor…</option>' +
     proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
   document.getElementById('facNumero').value = (pre && pre.numFactura) || '';
-  if (pre && pre.fecha) document.getElementById('facFecha').value = pre.fecha; else document.getElementById('facFecha').valueAsDate = new Date();
+  if (pre && pre.fecha) document.getElementById('facFecha').value = pre.fecha; else document.getElementById('facFecha').value = hoyISO();
   facturaDestino = (pre && pre.volver) || 'gastos-ver';
   const atras = document.querySelector('#tab-gasto-factura [data-volver]');
   atras.dataset.volver = facturaDestino;
   atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas de hoy' : facturaDestino === 'facturas-semana' ? '← Facturas de la semana' : facturaDestino === 'cuadrar' ? '← Cuadrar con el resumen' : '← Gastos';
   document.getElementById('facBase').value = '';
   document.getElementById('facIva').value = '';
+  reiniciarDesgloseFactura(pre && pre.desglosar);   // si se viene de "Desglosar IVA" de una fila, el desglose ya está abierto
   document.getElementById('facRetencion').value = '';
   document.getElementById('facCategoria').value = 'Mercancía';
   document.getElementById('facPagada').checked = false;   // una factura de proveedor suele quedar pendiente hasta que se paga
-  document.getElementById('facFechaPago').valueAsDate = new Date();
+  document.getElementById('facFechaPago').value = hoyISO();
   alternarFechaPagoFactura();
   reiniciarJustificante('fac');
   cargarCategoriasGasto();
@@ -4599,6 +4630,68 @@ function recalcularFactura() {
   el.textContent = `Estimado de lo que cubre: ${formatoEuros(estimado)}  ·  Factura: ${formatoEuros(total)}` + (total > 0 ? `  ·  Diferencia: ${dif > 0 ? '+' : ''}${formatoEuros(dif)}` : '');
 }
 
+/* ---- desglose del IVA por tipos (4 %, 10 %, 21 % y otro) ---- */
+const redondeo2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const FILAS_DESGLOSE = [{ id: 'facD4', tipo: 4 }, { id: 'facD10', tipo: 10 }, { id: 'facD21', tipo: 21 }];
+
+function lineasDesgloseFactura() {
+  const el = (i) => document.getElementById(i);
+  const lineas = [];
+  FILAS_DESGLOSE.forEach((f) => {
+    const base = Number(el(f.id + 'Base').value) || 0;
+    if (base > 0) lineas.push({ tipo: f.tipo, base: base, cuota: el(f.id + 'Cuota').value === '' ? redondeo2(base * f.tipo / 100) : Number(el(f.id + 'Cuota').value) });
+  });
+  const baseOtro = Number(el('facDOtroBase').value) || 0;
+  if (baseOtro > 0 && el('facDOtroTipo').value !== '') {
+    const tipo = Number(el('facDOtroTipo').value);
+    lineas.push({ tipo: tipo, base: baseOtro, cuota: el('facDOtroCuota').value === '' ? redondeo2(baseOtro * tipo / 100) : Number(el('facDOtroCuota').value) });
+  }
+  return lineas;
+}
+
+// Con el desglose activado, la base y el IVA de la factura son la SUMA de los tipos (y no se escriben a mano)
+function recalcularDesgloseFactura() {
+  const el = (i) => document.getElementById(i);
+  FILAS_DESGLOSE.forEach((f) => {
+    const cuota = el(f.id + 'Cuota');
+    const base = Number(el(f.id + 'Base').value) || 0;
+    if (!cuota.dataset.manual) cuota.value = base > 0 ? String(redondeo2(base * f.tipo / 100)) : '';
+  });
+  const cuotaOtro = el('facDOtroCuota');
+  const baseOtro = Number(el('facDOtroBase').value) || 0;
+  if (!cuotaOtro.dataset.manual) cuotaOtro.value = baseOtro > 0 && el('facDOtroTipo').value !== '' ? String(redondeo2(baseOtro * Number(el('facDOtroTipo').value) / 100)) : '';
+  const lineas = lineasDesgloseFactura();
+  const base = redondeo2(lineas.reduce((s, l) => s + l.base, 0));
+  const iva = redondeo2(lineas.reduce((s, l) => s + l.cuota, 0));
+  el('facBase').value = base > 0 ? String(base) : '';
+  el('facIva').value = base > 0 ? String(iva) : '';
+  el('facDesgloseTotal').textContent = base > 0 ? `Suma de los tipos: base ${formatoEuros(base)} + IVA ${formatoEuros(iva)} = ${formatoEuros(base + iva)}` : '';
+  recalcularFactura();
+}
+
+function alternarDesgloseFactura() {
+  const activo = document.getElementById('facDesglosar').checked;
+  document.getElementById('facDesgloseBloque').style.display = activo ? 'block' : 'none';
+  document.getElementById('facBase').readOnly = activo;
+  document.getElementById('facIva').readOnly = activo;
+  if (activo) recalcularDesgloseFactura();
+}
+
+function reiniciarDesgloseFactura(activar) {
+  ['facD4Base', 'facD4Cuota', 'facD10Base', 'facD10Cuota', 'facD21Base', 'facD21Cuota', 'facDOtroTipo', 'facDOtroBase', 'facDOtroCuota'].forEach((i) => { const e = document.getElementById(i); e.value = ''; delete e.dataset.manual; });
+  document.getElementById('facDesglosar').checked = !!activar;
+  alternarDesgloseFactura();
+}
+
+function cablearDesgloseFactura() {
+  document.getElementById('facDesglosar').addEventListener('change', alternarDesgloseFactura);
+  ['facD4Base', 'facD10Base', 'facD21Base', 'facDOtroBase', 'facDOtroTipo'].forEach((i) => document.getElementById(i).addEventListener('input', recalcularDesgloseFactura));
+  ['facD4Cuota', 'facD10Cuota', 'facD21Cuota', 'facDOtroCuota'].forEach((i) => document.getElementById(i).addEventListener('input', (e) => {
+    if (e.target.value === '') delete e.target.dataset.manual; else e.target.dataset.manual = '1';   // si la escribes tú, deja de calcularse sola
+    recalcularDesgloseFactura();
+  }));
+}
+
 async function guardarFacturaProveedor() {
   if (guardandoFactura) return;
   const msg = document.getElementById('facMsg');
@@ -4610,6 +4703,9 @@ async function guardarFacturaProveedor() {
   if (!proveedorId) { fallo('Elige el proveedor.'); return; }
   if (!numFactura) { fallo('Pon el número de la factura.'); return; }
   if (!fecha) { fallo('Elige la fecha de la factura.'); return; }
+  const desglosar = document.getElementById('facDesglosar').checked;
+  const lineasDesglose = desglosar ? lineasDesgloseFactura() : [];
+  if (desglosar && !lineasDesglose.length) { fallo('Pon la base de al menos un tipo de IVA (o desmarca el desglose).'); return; }
   if (!(base > 0)) { fallo('Pon la base imponible de la factura.'); return; }
 
   if (estadoJustificante('fac').subiendo) { fallo('Espera a que termine de subirse la factura.'); return; }
@@ -4627,6 +4723,7 @@ async function guardarFacturaProveedor() {
     pagado: pagada ? 'true' : 'false', fechaPago: pagada ? formatoFechaES(document.getElementById('facFechaPago').value) : '',
     ...datosJustificante('fac'),
   };
+  if (desglosar) datos.desglose = JSON.stringify(lineasDesglose);
   const huella = JSON.stringify(datos);
   if (!solicitudFactura || solicitudFactura.huella !== huella) solicitudFactura = { id: idUnico(), huella: huella };
   datos.idSolicitud = solicitudFactura.id;
@@ -4665,6 +4762,7 @@ async function descargarLibroGastos() {
 
 function cablearCompras() {
   cablearPanelYGestor();
+  cablearDesgloseFactura();
   cablearCuadrar();
   document.getElementById('btnNuevoProveedor').addEventListener('click', () => abrirFormularioProveedor(null));
   document.getElementById('btnGuardarProveedor').addEventListener('click', guardarProveedor);
@@ -4712,7 +4810,22 @@ async function cerrarAnio() {
   msg.textContent = 'Archivando… puede tardar un poco, no cierres esta pantalla.';
   msg.className = 'form-msg';
 
-  const r = await apiGet('cerrarAnio', { anio }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  let r = await apiGet('cerrarAnio', { anio }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  if (!r.ok && r.requiereConfirmacion && r.pendientes) {
+    // quedan cosas sin resolver de ese año: al archivarlo dejan de verse en el Panel y en Facturas de la semana
+    const p = r.pendientes;
+    const linea = (x, singular, plural) => (x.n ? `\n· ${x.n} ${x.n === 1 ? singular : plural} (${formatoEuros(x.total)})` : '');
+    const detalle = linea(p.facturasSinCobrar, 'factura sin cobrar', 'facturas sin cobrar') + linea(p.albaranesSinCobrar, 'albarán sin cobrar', 'albaranes sin cobrar') +
+      linea(p.gastosSinPagar, 'factura de proveedor sin pagar', 'facturas de proveedor sin pagar') + linea(p.estimadosSinFactura, 'gasto estimado sin factura', 'gastos estimados sin factura');
+    const aviso = (p.estimadosSinFactura.n ? 'Los gastos estimados sin factura dejarán de verse en Facturas de la semana: apunta antes sus facturas. ' : '') + 'Lo que falte por cobrar o pagar seguirá apareciendo en el Panel como "de años anteriores".';
+    if (!confirm(`Del año ${anio} todavía queda sin resolver:${detalle}\n\n${aviso} ¿Archivar igualmente?`)) {
+      msg.textContent = `No se ha archivado nada. Cobra, paga o apunta primero lo que queda de ${anio}.`;
+      msg.className = 'form-msg';
+      return;
+    }
+    msg.textContent = 'Archivando… puede tardar un poco, no cierres esta pantalla.';
+    r = await apiGet('cerrarAnio', { anio, confirmarPendientes: 'true' }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  }
   if (r.ok) {
     msg.textContent = `Listo — pedidos: ${r.pedidosArchivados}, facturas: ${r.facturasArchivadas}, gastos: ${r.gastosArchivados} movidos al archivo de ${r.anio}.`;
     msg.className = 'form-msg is-ok';

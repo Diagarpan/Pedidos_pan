@@ -4298,6 +4298,8 @@ async function guardarFacturasSemana() {
 
 /* ============ CUADRAR CON EL RESUMEN DEL PROVEEDOR ============ */
 let cuadrando = false;
+let importandoResumen = false;
+let ultimoCuadre = null;   // lo último que se comprobó: { proveedorId, proveedorNombre, texto, importables }
 async function iniciarCuadrar() {
   if (!proveedoresCache.length) {
     const r = await apiGet('proveedores').catch(() => null);
@@ -4311,8 +4313,12 @@ async function iniciarCuadrar() {
 
 function iso(f) { return f.split('/').reverse().join('-'); }
 
-function pintarCuadre(r, proveedorId) {
+function pintarCuadre(r, proveedorId, texto) {
   const cont = document.getElementById('cdResultado');
+  const importables = r.faltanEnApp.filter((x) => x.importable);
+  const selProv = document.getElementById('cdProveedor');
+  ultimoCuadre = { proveedorId, proveedorNombre: selProv.selectedOptions && selProv.selectedOptions[0] ? selProv.selectedOptions[0].textContent : '', texto: texto || '', importables };
+  const sumaImp = (k) => redondeo2(importables.reduce((s, x) => s + (Number(x[k]) || 0), 0));
   const e = (n) => escapeHtml(formatoEuros(n));
   const dif = (n) => (n > 0 ? '+' : '') + formatoEuros(n);
   const bloque = (titulo, color, filas, vacio) => filas.length ? `<div class="card"><div class="card__name"${color ? ` style="color:${color};"` : ''}>${titulo} (${filas.length})</div>${filas.join('')}</div>` : (vacio || '');
@@ -4321,13 +4327,22 @@ function pintarCuadre(r, proveedorId) {
       <div class="card__name" style="color:${r.cuadra ? 'var(--ok-green, #2E7D4F)' : 'var(--warn-red)'};">${r.cuadra ? '✓ Todo cuadra' : 'No cuadra'}</div>
       <div class="card__meta">Del ${escapeHtml(r.desde)} al ${escapeHtml(r.hasta)} · ${r.lineas} factura${r.lineas === 1 ? '' : 's'} en el resumen</div>
       <div class="card__meta">Resumen del proveedor: ${e(r.totalResumen)} · Lo que tienes apuntado: ${e(r.totalApp)} · Diferencia: ${escapeHtml(dif(r.diferencia))}</div>
+      ${r.repetidasEnResumen.length ? `<div class="card__meta" style="color:var(--warn-red); margin-top:4px;">⚠ El listado repite ${r.repetidasEnResumen.length} número${r.repetidasEnResumen.length === 1 ? '' : 's'} de factura: el total del proveedor cuenta esas líneas y aquí no. Revísalo con él.</div>` : ''}
     </div>
+    ${importables.length ? `<div class="card">
+      <div class="card__name">Apuntar de golpe las que faltan</div>
+      <div class="card__meta" style="margin-top:4px;">${importables.length} factura${importables.length === 1 ? '' : 's'}: base ${e(sumaImp('base'))} + IVA ${e(sumaImp('iva'))} = ${e(sumaImp('total'))}. Se apuntan con los datos del listado, cubren el gasto estimado de su día (si lo hay) y el listado se guarda en Drive como justificante.${r.faltanEnApp.length > importables.length ? ` ${r.faltanEnApp.length - importables.length} no se pueden apuntar solas (están abajo con el motivo).` : ''}</div>
+      <label style="display:flex; gap:8px; align-items:center; margin:10px 0 6px; font-size:15px;"><input type="checkbox" id="cdPagadas"><span>Ya están pagadas</span></label>
+      <button class="btn-primary" id="btnCdImportar" style="width:100%;">Apuntar las ${importables.length} que se pueden</button>
+    </div>` : ''}
     ${bloque('⚠ Importe distinto', 'var(--warn-red)', r.importeDistinto.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · el proveedor dice ${e(x.resumen)} y tienes ${e(x.app)} (${escapeHtml(dif(x.diferencia))})</div>`))}
-    ${bloque('✗ Están en el resumen y NO las tienes apuntadas', 'var(--warn-red)', r.faltanEnApp.map((x, i) => `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;"><div class="card__meta"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}</div><button class="chip-btn" data-cd-apuntar="${i}">Apuntarla</button></div>`))}
+    ${bloque('✗ Están en el resumen y NO las tienes apuntadas', 'var(--warn-red)', r.faltanEnApp.map((x, i) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><div class="card__meta"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}${x.base !== null && x.base !== undefined ? ` (base ${e(x.base)} + IVA ${e(x.iva)})` : ''}</div><button class="chip-btn" data-cd-apuntar="${i}">Apuntarla</button></div>${x.importable ? '' : `<div class="card__meta" style="color:var(--warn-red);">${escapeHtml(x.motivo || '')}</div>`}</div>`))}
     ${bloque('? Las tienes apuntadas pero NO salen en el resumen', 'var(--warn-red)', r.sobranEnApp.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura || 'sin número')}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
-    ${bloque('Repetidas en el resumen', '', r.repetidasEnResumen.map((x) => `<div class="card__meta" style="margin-top:6px;">${escapeHtml(x.numFactura)} · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
+    ${bloque('Repetidas en el resumen (no se apuntan: revísalas con el proveedor)', '', r.repetidasEnResumen.map((x) => `<div class="card__meta" style="margin-top:6px;">${escapeHtml(x.numFactura)} · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
     ${r.ignoradas.length ? `<div class="card"><div class="card__name">Líneas que no he entendido (${r.ignoradas.length})</div>${r.ignoradas.map((x) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(x)}</div>`).join('')}</div>` : ''}
     ${r.coinciden.length ? `<div class="card"><div class="card__name">✓ Coinciden (${r.coinciden.length})</div><div class="card__meta" style="margin-top:6px;">${r.coinciden.map((x) => escapeHtml(x.numFactura)).join(' · ')}</div></div>` : ''}`;
+  const botonImportar = document.getElementById('btnCdImportar');
+  if (botonImportar) botonImportar.addEventListener('click', importarDelListado);
   cont.querySelectorAll('[data-cd-apuntar]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const x = r.faltanEnApp[Number(btn.dataset.cdApuntar)];
@@ -4335,6 +4350,59 @@ function pintarCuadre(r, proveedorId) {
       cambiarTab('gasto-factura');
     });
   });
+}
+
+// Apunta de golpe las facturas que faltan con los datos del listado. El servidor lo hace por tandas (cada factura tarda unos segundos), así que se repite
+// la petición hasta que no queden. Al terminar se vuelve a comprobar para ver cómo ha quedado.
+async function importarDelListado() {
+  if (importandoResumen || !ultimoCuadre || !ultimoCuadre.importables.length) return;
+  const c = ultimoCuadre;
+  const msg = document.getElementById('cdMsg');
+  const total = redondeo2(c.importables.reduce((s, x) => s + x.total, 0));
+  const base = redondeo2(c.importables.reduce((s, x) => s + x.base, 0));
+  const iva = redondeo2(c.importables.reduce((s, x) => s + x.iva, 0));
+  if (!confirm(`¿Apuntar ${c.importables.length} factura${c.importables.length === 1 ? '' : 's'} de ${c.proveedorNombre}?\n\nBase ${formatoEuros(base)} + IVA ${formatoEuros(iva)} = ${formatoEuros(total)}\n\nSe apuntan con los datos del listado y cubren el gasto estimado de su día. El listado se guarda en Drive como justificante.`)) return;
+  const pagadas = !!(document.getElementById('cdPagadas') && document.getElementById('cdPagadas').checked);
+  const boton = document.getElementById('btnCdImportar');
+  importandoResumen = true;
+  if (boton) boton.disabled = true;
+  const acum = { importadas: 0, yaEstaban: 0, errores: [], listadoUrl: '', fallo: '' };
+  try {
+    for (let vuelta = 0; vuelta < 12; vuelta++) {
+      msg.textContent = `Apuntando las facturas… ${acum.importadas} de ${c.importables.length}`;
+      msg.className = 'form-msg';
+      const r = await apiPost('importarResumen', { idProveedor: c.proveedorId, texto: c.texto, pagado: pagadas ? 'true' : 'false', fechaPago: pagadas ? formatoFechaES(hoyISO()) : '' })
+        .catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!r.ok) { acum.fallo = r.error || 'No se pudo apuntar.'; break; }
+      acum.importadas += r.importadas || 0;
+      acum.yaEstaban += r.yaEstaban || 0;
+      (r.resultados || []).filter((x) => !x.ok).forEach((x) => acum.errores.push(x));
+      if (r.listadoUrl) acum.listadoUrl = r.listadoUrl;
+      if (!(r.quedan > 0) || ((r.importadas || 0) + (r.yaEstaban || 0)) === 0) break;   // no quedan, o no se avanza (para no dar vueltas)
+    }
+  } finally {
+    importandoResumen = false;
+  }
+  await comprobarResumen();   // vuelve a cuadrar con lo ya apuntado
+  const partes = [];
+  if (acum.importadas) partes.push(`${acum.importadas} factura${acum.importadas === 1 ? '' : 's'} apuntada${acum.importadas === 1 ? '' : 's'}`);
+  if (acum.yaEstaban) partes.push(`${acum.yaEstaban} ya estaba${acum.yaEstaban === 1 ? '' : 'n'}`);
+  if (acum.errores.length) partes.push(`${acum.errores.length} con problema (${acum.errores.slice(0, 3).map((x) => `${x.numFactura}: ${x.error}`).join('; ')}${acum.errores.length > 3 ? '…' : ''})`);
+  if (acum.fallo) partes.push(`se paró: ${acum.fallo}${acum.importadas ? ' (lo ya apuntado se conserva)' : ''}`);
+  msg.textContent = partes.join(' · ') || 'No se ha apuntado nada.';
+  msg.className = 'form-msg ' + (acum.errores.length || acum.fallo ? 'is-error' : 'is-ok');
+  if (/^https:\/\//.test(acum.listadoUrl)) {
+    const tarjeta = document.createElement('div');
+    tarjeta.className = 'card';
+    const meta = document.createElement('div');
+    meta.className = 'card__meta';
+    meta.appendChild(document.createTextNode('El listado queda guardado en Drive como justificante de esas facturas: '));
+    const enlace = document.createElement('a');
+    enlace.href = acum.listadoUrl; enlace.target = '_blank'; enlace.rel = 'noopener'; enlace.textContent = 'abrirlo';
+    meta.appendChild(enlace);
+    tarjeta.appendChild(meta);
+    document.getElementById('cdResultado').insertBefore(tarjeta, document.getElementById('cdResultado').firstChild);
+  }
 }
 
 async function comprobarResumen() {
@@ -4359,7 +4427,7 @@ async function comprobarResumen() {
       return;
     }
     msg.textContent = '';
-    pintarCuadre(r, proveedorId);
+    pintarCuadre(r, proveedorId, texto);
   } finally {
     cuadrando = false;
     boton.disabled = false;
@@ -4456,7 +4524,7 @@ function pintarResultadoCarpeta(r) {
       <div class="card__name">Carpeta de ${escapeHtml(r.mes)} preparada</div>
       ${/^https:\/\//.test(r.url) ? `<div class="card__meta"><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Abrir la carpeta en Google Drive</a></div>` : ''}
       <div class="card__meta" style="margin-top:6px;">${r.ficheros.map((f) => escapeHtml(f.nombre) + ' · ' + f.filas + ' fila' + (f.filas === 1 ? '' : 's')).join('<br>')}</div>
-      <div class="card__meta" style="margin-top:6px;">Facturas de proveedor: ${j.copiados} copiadas${j.yaEstaban ? ', ' + j.yaEstaban + ' ya estaban' : ''} · PDF de facturas emitidas: ${r.pdfsEmitidas}</div>
+      <div class="card__meta" style="margin-top:6px;">Justificantes de compras: ${j.copiados} archivo${j.copiados === 1 ? '' : 's'} copiado${j.copiados === 1 ? '' : 's'}${j.yaEstaban ? ', ' + j.yaEstaban + ' ya estaba' + (j.yaEstaban === 1 ? '' : 'n') : ''} · PDF de facturas emitidas: ${r.pdfsEmitidas}</div>
       ${j.sinJustificante.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">Sin factura adjunta (${j.sinJustificante.length}): ${j.sinJustificante.map(ficha).join('; ')}</div>` : ''}
       ${j.perdidos.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">La factura adjunta ya no está en Drive (${j.perdidos.length}): ${j.perdidos.map(ficha).join('; ')}</div>` : ''}
     </div>`;

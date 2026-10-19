@@ -410,20 +410,26 @@
   <section class="tab tab--hidden" id="tab-compras">
     <div class="home-welcome">
       <div class="home-title">Compras</div>
-      <div class="home-sub">Lo que compráis vosotros — proveedores, gastos y balance</div>
+      <div class="home-sub">Pedidos, facturas y gastos de proveedores</div>
     </div>
     <div class="home-grid">
-      <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span>Proveedores</button>
-      <button class="home-btn home-btn--factura" data-tab="pedido-proveedores"><span class="home-btn__icon" data-icon="compras"></span>Pedido a proveedores</button>
-      <button class="home-btn home-btn--factura" data-tab="facturas-dia"><span class="home-btn__icon" data-icon="compras"></span>Facturas de hoy</button>
-      <button class="home-btn home-btn--factura" data-tab="facturas-semana"><span class="home-btn__icon" data-icon="compras"></span>Facturas de la semana</button>
-      <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo gasto</button>
-      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span>Ver gastos</button>
-      <button class="home-btn home-btn--factura" data-tab="balance">Balance: ventas y coste</button>
-      <button class="home-btn home-btn--factura" data-tab="panel">Panel de resultados</button>
-      <button class="home-btn home-btn--factura" data-tab="cuadrar">Cuadrar con el resumen del proveedor</button>
-      <button class="home-btn home-btn--factura" data-tab="gestor">Zona del gestor</button>
-      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span>Cerrar año (archivar)</button>
+      <div class="home-grupo">Cada día</div>
+      <button class="home-btn home-btn--factura" data-tab="pedido-proveedores"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Pedido a proveedores<small>Lo que hay que comprar para mañana, con su gasto estimado</small></span></button>
+      <div class="home-grupo">Facturas de proveedores</div>
+      <div class="home-nota">Guarda también la factura original de cada compra (papel o PDF): hay que conservarla entre 4 y 6 años.</div>
+      <button class="home-btn home-btn--factura" data-tab="cuadrar"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Listado mensual del proveedor<small>Pega el listado: lo compara con lo apuntado y apunta de golpe las que faltan</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="facturas-semana"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Facturas de la semana<small>Una por una, con cada factura delante: número, importes y archivo</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="facturas-dia"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Facturas de hoy<small>Qué proveedores han traído factura hoy y cuáles faltan</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span><span class="home-btn__texto">Nuevo gasto<small>Gasoil, alquiler, suministros…: lo que no es mercancía</small></span></button>
+      <div class="home-grupo">Cómo va el negocio</div>
+      <button class="home-btn home-btn--factura" data-tab="panel"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Panel de resultados<small>Ventas, gastos, IVA y lo pendiente de cobrar y de pagar</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="balance"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Balance: ventas y coste<small>Lo que vendes frente a lo que te cuesta, por día</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Gastos y facturas<small>Todo lo apuntado: editar, marcar pagadas y ver justificantes</small></span></button>
+      <div class="home-grupo">Para el gestor</div>
+      <button class="home-btn home-btn--factura" data-tab="gestor"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Zona del gestor<small>El Excel y la carpeta del mes con todo lo que necesita</small></span></button>
+      <div class="home-grupo">Ajustes</div>
+      <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span><span class="home-btn__texto">Proveedores<small>Altas y datos de cada proveedor</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span><span class="home-btn__texto">Cerrar año (archivar)<small>Una vez al año, en enero</small></span></button>
     </div>
   </section>
 
@@ -592,6 +598,9 @@
 
   <section class="tab tab--hidden" id="tab-gastos-ver">
     <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Gastos y facturas</div>
+    </div>
     <div class="date-range">
       <input type="date" id="gastosFechaIni">
       <span>—</span>
@@ -659,8 +668,8 @@
   <section class="tab tab--hidden" id="tab-cuadrar">
     <button class="link-btn" data-volver="compras">← Compras</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Cuadrar con el resumen del proveedor</div>
-      <div class="home-sub">Pega el listado que te manda el proveedor (una línea por factura: número, fecha e importe) y mira si coincide con lo que tienes apuntado. No apunta nada.</div>
+      <div class="home-title">Listado mensual del proveedor</div>
+      <div class="home-sub">Pega el listado que te manda el proveedor (una línea por factura: número, fecha, base, IVA y total). Lo compara con lo que tienes apuntado y, si quieres, apunta de golpe las que faltan.</div>
     </div>
     <label class="field-label" for="cdProveedor">Proveedor</label>
     <select id="cdProveedor" class="select-input"><option value="">Elige el proveedor…</option></select>

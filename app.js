@@ -803,12 +803,12 @@ const BREADCRUMBS = {
   'pedido-proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Pedido a proveedores', tab: 'pedido-proveedores' }],
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
-  'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }],
-  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Ver gastos', tab: 'gastos-ver' }, { label: 'Incorporar factura', tab: 'gasto-factura' }],
+  'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }],
+  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }, { label: 'Incorporar factura', tab: 'gasto-factura' }],
   'panel': [{ label: 'Compras', tab: 'compras' }, { label: 'Panel de resultados', tab: 'panel' }],
   'facturas-dia': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de hoy', tab: 'facturas-dia' }],
   'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de la semana', tab: 'facturas-semana' }],
-  'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Cuadrar con el resumen', tab: 'cuadrar' }],
+  'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Listado del proveedor', tab: 'cuadrar' }],
   'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
@@ -4299,7 +4299,9 @@ async function guardarFacturasSemana() {
 /* ============ CUADRAR CON EL RESUMEN DEL PROVEEDOR ============ */
 let cuadrando = false;
 let importandoResumen = false;
-let ultimoCuadre = null;   // lo último que se comprobó: { proveedorId, proveedorNombre, texto, importables }
+let adjuntandoOriginales = false;
+let guardandoListado = false;
+let ultimoCuadre = null;   // lo último que se comprobó: { proveedorId, proveedorNombre, texto, importables, conFactura }
 async function iniciarCuadrar() {
   if (!proveedoresCache.length) {
     const r = await apiGet('proveedores').catch(() => null);
@@ -4317,7 +4319,9 @@ function pintarCuadre(r, proveedorId, texto) {
   const cont = document.getElementById('cdResultado');
   const importables = r.faltanEnApp.filter((x) => x.importable);
   const selProv = document.getElementById('cdProveedor');
-  ultimoCuadre = { proveedorId, proveedorNombre: selProv.selectedOptions && selProv.selectedOptions[0] ? selProv.selectedOptions[0].textContent : '', texto: texto || '', importables };
+  const conFactura = r.coinciden.concat(r.importeDistinto);   // las ya apuntadas (con su id) que están en el listado
+  const sinOriginal = conFactura.filter((x) => !x.tieneArchivo || x.archivoEsListado);
+  ultimoCuadre = { proveedorId, proveedorNombre: selProv.selectedOptions && selProv.selectedOptions[0] ? selProv.selectedOptions[0].textContent : '', texto: texto || '', importables, conFactura };
   const sumaImp = (k) => redondeo2(importables.reduce((s, x) => s + (Number(x[k]) || 0), 0));
   const e = (n) => escapeHtml(formatoEuros(n));
   const dif = (n) => (n > 0 ? '+' : '') + formatoEuros(n);
@@ -4335,6 +4339,17 @@ function pintarCuadre(r, proveedorId, texto) {
       <label style="display:flex; gap:8px; align-items:center; margin:10px 0 6px; font-size:15px;"><input type="checkbox" id="cdPagadas"><span>Ya están pagadas</span></label>
       <button class="btn-primary" id="btnCdImportar" style="width:100%;">Apuntar las ${importables.length} que se pueden</button>
     </div>` : ''}
+    ${conFactura.length ? `<div class="card">
+      <div class="card__name">Adjuntar las facturas originales</div>
+      <div class="card__meta" style="margin-top:4px;">${sinOriginal.length ? `${sinOriginal.length} de ${conFactura.length} facturas todavía no tienen su factura original (PDF o foto)${conFactura.filter((x) => x.archivoEsListado).length ? ', algunas solo tienen el listado' : ''}.` : `Las ${conFactura.length} facturas ya tienen su factura original.`} Elige las facturas del proveedor (varias a la vez): se asignan solas por el número de factura que lleve el nombre de cada archivo.</div>
+      <label class="btn-secondary" for="cdOriginales" style="display:block; text-align:center; cursor:pointer; margin:8px 0 0;">📄 Elegir las facturas (PDF o fotos)</label>
+      <input type="file" id="cdOriginales" multiple accept="image/*,application/pdf" style="display:none;">
+    </div>` : ''}
+    <div class="card">
+      <div class="card__name">Guardar el listado</div>
+      <div class="card__meta" style="margin-top:4px;">Se guarda en Drive como dato extra del mes y va en la carpeta del gestor (Listados de proveedores). No apunta nada.</div>
+      <button class="btn-secondary" id="btnCdGuardarListado" style="width:100%; margin-top:8px;">Guardar el listado en Drive</button>
+    </div>
     ${bloque('⚠ Importe distinto', 'var(--warn-red)', r.importeDistinto.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · el proveedor dice ${e(x.resumen)} y tienes ${e(x.app)} (${escapeHtml(dif(x.diferencia))})</div>`))}
     ${bloque('✗ Están en el resumen y NO las tienes apuntadas', 'var(--warn-red)', r.faltanEnApp.map((x, i) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><div class="card__meta"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}${x.base !== null && x.base !== undefined ? ` (base ${e(x.base)} + IVA ${e(x.iva)})` : ''}</div><button class="chip-btn" data-cd-apuntar="${i}">Apuntarla</button></div>${x.importable ? '' : `<div class="card__meta" style="color:var(--warn-red);">${escapeHtml(x.motivo || '')}</div>`}</div>`))}
     ${bloque('? Las tienes apuntadas pero NO salen en el resumen', 'var(--warn-red)', r.sobranEnApp.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura || 'sin número')}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}</div>`))}
@@ -4343,6 +4358,10 @@ function pintarCuadre(r, proveedorId, texto) {
     ${r.coinciden.length ? `<div class="card"><div class="card__name">✓ Coinciden (${r.coinciden.length})</div><div class="card__meta" style="margin-top:6px;">${r.coinciden.map((x) => escapeHtml(x.numFactura)).join(' · ')}</div></div>` : ''}`;
   const botonImportar = document.getElementById('btnCdImportar');
   if (botonImportar) botonImportar.addEventListener('click', importarDelListado);
+  const botonListado = document.getElementById('btnCdGuardarListado');
+  if (botonListado) botonListado.addEventListener('click', guardarListadoEnDrive);
+  const elegirOriginales = document.getElementById('cdOriginales');
+  if (elegirOriginales) elegirOriginales.addEventListener('change', () => { const lista = elegirOriginales.files ? Array.from(elegirOriginales.files) : []; elegirOriginales.value = ''; adjuntarOriginalesDelListado(lista); });
   cont.querySelectorAll('[data-cd-apuntar]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const x = r.faltanEnApp[Number(btn.dataset.cdApuntar)];
@@ -4350,6 +4369,107 @@ function pintarCuadre(r, proveedorId, texto) {
       cambiarTab('gasto-factura');
     });
   });
+}
+
+// Guarda el listado pegado en Drive (Justificantes / año / mes) como dato extra; no apunta nada
+async function guardarListadoEnDrive() {
+  if (guardandoListado || !ultimoCuadre) return;
+  guardandoListado = true;
+  const msg = document.getElementById('cdMsg');
+  const boton = document.getElementById('btnCdGuardarListado');
+  if (boton) boton.disabled = true;
+  msg.textContent = 'Guardando el listado…'; msg.className = 'form-msg';
+  try {
+    const r = await apiPost('guardarListado', { idProveedor: ultimoCuadre.proveedorId, texto: ultimoCuadre.texto }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) { msg.textContent = r.error || 'No se pudo guardar el listado.'; msg.className = 'form-msg is-error'; return; }
+    msg.textContent = r.yaEstaba ? `Ese listado ya estaba guardado en Drive (${r.nombre}).` : `Listado guardado en Drive (${r.nombre}).`;
+    msg.className = 'form-msg is-ok';
+  } finally {
+    guardandoListado = false;
+    if (boton) boton.disabled = false;
+  }
+}
+
+// Un nombre de archivo o un número de factura, en trozos de letras y cifras (sin tildes ni mayúsculas): "FS-2026/118" → fs · 2026 · 118
+const trozosDeTexto = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter(Boolean);
+const claveDeNumero = (s) => trozosDeTexto(s).join('');
+// ¿lleva este nombre de archivo ese número de factura? Se compara por trozos completos ("1234" no está en "12345"), y vale con letras pegadas delante
+// ("F631682"). Solo se juntan varios trozos del nombre cuando el propio número es de varios trozos ("FS-2026/118" = "FS-2026-118"): así "1012" no se
+// confunde con la fecha "2026-10-12".
+function nombreLleva(nombreArchivo, numero) {
+  const clave = claveDeNumero(numero);
+  const nTrozos = trozosDeTexto(numero).length;
+  if (clave.length < 3) return false;
+  const trozos = trozosDeTexto(String(nombreArchivo || '').replace(/\.[^.]*$/, ''));
+  for (let i = 0; i < trozos.length; i++) {
+    let junto = '';
+    for (let k = i; k < Math.min(trozos.length, i + 6); k++) {
+      junto += trozos[k];
+      if (junto === clave && (k === i || k - i + 1 === nTrozos)) return true;
+      if (junto.length > clave.length) break;
+    }
+    const t = trozos[i];
+    if (t.length > clave.length && t.endsWith(clave) && /^[a-z]{1,6}$/.test(t.slice(0, t.length - clave.length))) return true;
+  }
+  return false;
+}
+// Empareja cada archivo con la factura cuyo número lleva en el nombre. Si coincide con varias, gana la de número más largo; si empatan, no se asigna.
+function emparejarArchivosConFacturas(archivos, facturas) {
+  const pares = [], sinPareja = [], usadas = {};
+  archivos.forEach((a) => {
+    const encontradas = [];
+    facturas.forEach((f) => {
+      const numeros = [f.numFacturaApp, f.numFactura].filter((n) => claveDeNumero(n).length >= 3 && nombreLleva(a.name, n));
+      if (numeros.length) encontradas.push({ f, largo: Math.max.apply(null, numeros.map((n) => claveDeNumero(n).length)) });
+    });
+    if (!encontradas.length) { sinPareja.push({ nombre: a.name, motivo: 'no encuentro ningún número de factura en el nombre' }); return; }
+    const mayor = Math.max.apply(null, encontradas.map((e) => e.largo));
+    const mejores = encontradas.filter((e) => e.largo === mayor);
+    if (mejores.length > 1) { sinPareja.push({ nombre: a.name, motivo: 'su nombre coincide con varias facturas' }); return; }
+    const f = mejores[0].f;
+    if (usadas[f.id]) { sinPareja.push({ nombre: a.name, motivo: 'esa factura ya tiene otro archivo en esta tanda' }); return; }
+    usadas[f.id] = true;
+    pares.push({ archivo: a, factura: f });
+  });
+  return { pares, sinPareja };
+}
+
+// Sube las facturas originales elegidas y las pega a las facturas ya apuntadas que coinciden por número. Las que ya tienen su original se respetan.
+async function adjuntarOriginalesDelListado(archivos) {
+  if (adjuntandoOriginales || !ultimoCuadre || !archivos.length) return;
+  adjuntandoOriginales = true;
+  const c = ultimoCuadre;
+  const msg = document.getElementById('cdMsg');
+  const { pares, sinPareja } = emparejarArchivosConFacturas(archivos, c.conFactura);
+  const yaTenian = [], fallos = [];
+  let adjuntadas = 0;
+  try {
+    const pendientes = pares.filter((p) => { if (p.factura.tieneArchivo && !p.factura.archivoEsListado) { yaTenian.push(p.factura.numFacturaApp || p.factura.numFactura); return false; } return true; });
+    for (let i = 0; i < pendientes.length; i++) {
+      const { archivo, factura } = pendientes[i];
+      msg.textContent = `Adjuntando ${i + 1} de ${pendientes.length}…`; msg.className = 'form-msg';
+      try {
+        const f = await prepararArchivoJustificante(archivo);
+        const r = await apiPost('subirJustificante', { mime: f.mime, base64: f.base64, fecha: factura.fecha, proveedor: c.proveedorNombre, numFactura: factura.numFacturaApp || factura.numFactura });
+        if (!r.ok) throw new Error(r.error || 'No se pudo subir.');
+        const a = await apiGet('adjuntarJustificante', { id: factura.id, justificanteId: r.id, justificanteUrl: r.url }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+        if (!a.ok) throw new Error('Se ha subido, pero no se ha podido guardar en la factura: ' + (a.error || ''));
+        adjuntadas++;
+      } catch (err) {
+        fallos.push(`${archivo.name}: ${(err && err.message) ? err.message : textoDeFallo(err)}`);
+      }
+    }
+  } finally {
+    adjuntandoOriginales = false;
+  }
+  await comprobarResumen();   // vuelve a comprobar para ver cuáles quedan sin su original
+  const partes = [];
+  if (adjuntadas) partes.push(`${adjuntadas} factura${adjuntadas === 1 ? '' : 's'} original${adjuntadas === 1 ? '' : 'es'} adjuntada${adjuntadas === 1 ? '' : 's'}`);
+  if (yaTenian.length) partes.push(`${yaTenian.length} ya tenía${yaTenian.length === 1 ? '' : 'n'} su original (no se toca)`);
+  if (sinPareja.length) partes.push(`${sinPareja.length} sin factura que coincida (${sinPareja.slice(0, 3).map((x) => `${x.nombre}: ${x.motivo}`).join('; ')}${sinPareja.length > 3 ? '…' : ''})`);
+  if (fallos.length) partes.push(`${fallos.length} con problema (${fallos.slice(0, 3).join('; ')}${fallos.length > 3 ? '…' : ''})`);
+  msg.textContent = partes.join(' · ') || 'No se ha adjuntado nada.';
+  msg.className = 'form-msg ' + (fallos.length || sinPareja.length ? 'is-error' : 'is-ok');
 }
 
 // Apunta de golpe las facturas que faltan con los datos del listado. El servidor lo hace por tandas (cada factura tarda unos segundos), así que se repite
@@ -4518,13 +4638,15 @@ async function descargarLibroGestor(accion) {
 function pintarResultadoCarpeta(r) {
   const cont = document.getElementById('gestorResultado');
   const j = r.justificantes;
-  const ficha = (x) => escapeHtml((x.proveedor || 'sin proveedor') + (x.numFactura ? ' nº ' + x.numFactura : '') + ' (' + x.fecha + ')');
+  const ficha = (x) => escapeHtml((x.proveedor || 'sin proveedor') + (x.numFactura ? ' nº ' + x.numFactura : '') + ' (' + x.fecha + ')' + (x.soloListado ? ' · solo hay listado' : ''));
+  const lis = r.listados || { copiados: 0, yaEstaban: 0 };
   cont.innerHTML = `
     <div class="card">
       <div class="card__name">Carpeta de ${escapeHtml(r.mes)} preparada</div>
       ${/^https:\/\//.test(r.url) ? `<div class="card__meta"><a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">Abrir la carpeta en Google Drive</a></div>` : ''}
       <div class="card__meta" style="margin-top:6px;">${r.ficheros.map((f) => escapeHtml(f.nombre) + ' · ' + f.filas + ' fila' + (f.filas === 1 ? '' : 's')).join('<br>')}</div>
       <div class="card__meta" style="margin-top:6px;">Justificantes de compras: ${j.copiados} archivo${j.copiados === 1 ? '' : 's'} copiado${j.copiados === 1 ? '' : 's'}${j.yaEstaban ? ', ' + j.yaEstaban + ' ya estaba' + (j.yaEstaban === 1 ? '' : 'n') : ''} · PDF de facturas emitidas: ${r.pdfsEmitidas}</div>
+      ${lis.copiados || lis.yaEstaban ? `<div class="card__meta" style="margin-top:6px;">Listados de proveedores: ${lis.copiados} copiado${lis.copiados === 1 ? '' : 's'}${lis.yaEstaban ? ', ' + lis.yaEstaban + ' ya estaba' + (lis.yaEstaban === 1 ? '' : 'n') : ''}</div>` : ''}
       ${j.sinJustificante.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">Sin factura adjunta (${j.sinJustificante.length}): ${j.sinJustificante.map(ficha).join('; ')}</div>` : ''}
       ${j.perdidos.length ? `<div class="card__meta" style="margin-top:6px; color:var(--warn-red);">La factura adjunta ya no está en Drive (${j.perdidos.length}): ${j.perdidos.map(ficha).join('; ')}</div>` : ''}
     </div>`;
@@ -4612,7 +4734,7 @@ async function cargarFormularioFactura() {
   facturaDestino = (pre && pre.volver) || 'gastos-ver';
   const atras = document.querySelector('#tab-gasto-factura [data-volver]');
   atras.dataset.volver = facturaDestino;
-  atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas de hoy' : facturaDestino === 'facturas-semana' ? '← Facturas de la semana' : facturaDestino === 'cuadrar' ? '← Cuadrar con el resumen' : '← Gastos';
+  atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas de hoy' : facturaDestino === 'facturas-semana' ? '← Facturas de la semana' : facturaDestino === 'cuadrar' ? '← Listado del proveedor' : '← Gastos';
   document.getElementById('facBase').value = '';
   document.getElementById('facIva').value = '';
   reiniciarDesgloseFactura(pre && pre.desglosar);   // si se viene de "Desglosar IVA" de una fila, el desglose ya está abierto

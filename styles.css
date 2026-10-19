@@ -416,6 +416,19 @@ select.select-input {
 }
 .home-btn:active { background: var(--wheat); }
 .home-btn__icon { font-size: 19px; display: flex; color: var(--crust); flex-shrink: 0; }
+.home-grupo {
+  font-family: var(--font-data);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 20px 4px 7px;
+  border-bottom: 1px solid var(--wheat-line);
+}
+.home-grid > .home-grupo:first-child { padding-top: 14px; }
+.home-nota { font-size: 12.5px; line-height: 1.4; color: var(--ink-muted); padding: 9px 4px 10px; border-bottom: 1px solid var(--wheat-line); }
+.home-btn__texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.home-btn__texto small { font-size: 12.5px; font-weight: 400; line-height: 1.3; color: var(--ink-muted); }
 .home-btn__icon svg { width: 20px; height: 20px; }
 
 /* ---------- SELECTOR DE FECHA (Reparto) ---------- */

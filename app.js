@@ -931,6 +931,8 @@ async function cargarResumenInicio() {
   await cargarVista({ pantalla: 'inicio', accion: 'resumenInicio', params: {}, pintar: (d) => pintarResumenInicio({ data: d }) });
 }
 
+let ultimosAtrasados = null;   // pedidos de días anteriores sin marcar, del último resumen de Inicio
+
 function pintarResumenInicio(r) {
   document.getElementById('riRecaudado').textContent = formatoEuros(r.data.recaudado);
   document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
@@ -949,6 +951,20 @@ function pintarResumenInicio(r) {
   const pendientes = total - r.data.entregados;
   document.getElementById('badgeReparto').textContent = total ? `${total} hoy` : '';
   document.getElementById('badgePedidos').textContent = pendientes ? `${pendientes} pendientes` : (total ? 'Al día' : '');
+
+  // Pedidos de DÍAS ANTERIORES sin entregar, o sin cobrar y ya vencidos: triángulo rojo en "Pedidos" (y aviso dentro) hasta que se marquen todos
+  const atr = r.data.atrasados && r.data.atrasados.total > 0 ? r.data.atrasados : null;
+  ultimosAtrasados = atr;
+  const badgeP = document.getElementById('badgePedidos');
+  badgeP.classList.toggle('home-btn__badge--alerta', !!atr);
+  if (atr) badgeP.textContent = `⚠ ${atr.total} sin marcar`;
+  const avisoAtr = document.getElementById('avisoAtrasados');
+  if (atr) {
+    avisoAtr.textContent = `⚠ ${atr.total} pedido${atr.total === 1 ? '' : 's'} de días anteriores sin marcar (${atr.sinEntregar} sin entregar · ${atr.sinCobrar} sin cobrar) — ver`;
+    avisoAtr.classList.remove('tab--hidden');
+  } else {
+    avisoAtr.classList.add('tab--hidden');
+  }
 }
 
 async function cargarBadgesInicio() {
@@ -1235,6 +1251,8 @@ async function prepararPedidosLista() {
   const selEstado = document.getElementById('filtroEstadoPedido');
   const opAnulado = selEstado.querySelector('option[value="anulado"]');
   if (opAnulado && !esAdmin) opAnulado.remove();
+  const opAtrasados = selEstado.querySelector('option[value="atrasados"]');
+  if (opAtrasados && !esAdmin) opAtrasados.remove();
 
   // Los clientes y los pedidos se piden A LA VEZ: la lista no espera a los clientes
   const selCliente = document.getElementById('selectClientePedidos');
@@ -1333,15 +1351,21 @@ function pintarPedidos(pedidos) {
   const filtroEstado = document.getElementById('filtroEstadoPedido').value;
   const variosDias = document.getElementById('pedidosFechaIni').value !== document.getElementById('pedidosFechaFin').value;
 
+  // pedidos de días anteriores que siguen sin marcar: se sigue enseñando cada uno solo mientras le falte lo que se avisó (entregar o cobrar)
+  const sinEntregarAviso = new Set(ultimosAtrasados ? (ultimosAtrasados.idsSinEntregar || []) : []);
+  const sinCobrarAviso = new Set(ultimosAtrasados ? (ultimosAtrasados.idsSinCobrar || []) : []);
   const filtrados = pedidos.filter((p) => {
     if (!coincideBusqueda(p.cliente, filtroTexto)) return false;
     if (filtroEstado === 'incidencia') return !p.anulado && !!p.incidencia;
+    if (filtroEstado === 'noentregado') return !p.anulado && !p.entregado;
+    if (filtroEstado === 'nocobrado') return !p.anulado && !p.cobrado;
+    if (filtroEstado === 'atrasados') return !p.anulado && ((sinEntregarAviso.has(String(p.id)) && !p.entregado) || (sinCobrarAviso.has(String(p.id)) && !p.cobrado));
     const estado = estadoDePedido(p).toLowerCase();
     return filtroEstado === 'todos' ? estado !== 'anulado' : estado === filtroEstado;
   });
 
   if (!filtrados.length) {
-    cont.innerHTML = '<div class="empty-state">No hay pedidos que coincidan.</div>';
+    cont.innerHTML = filtroEstado === 'atrasados' ? '<div class="empty-state">No hay pedidos de días anteriores sin marcar ✓</div>' : '<div class="empty-state">No hay pedidos que coincidan.</div>';
     resumen.textContent = '';
     return;
   }
@@ -1350,7 +1374,13 @@ function pintarPedidos(pedidos) {
     ? `${filtrados.length} pedido(s) anulado(s)`
     : filtroEstado === 'incidencia'
       ? `${filtrados.length} pedido(s) con incidencia`
-      : `${filtrados.length} pedido(s) · Total ${formatoEuros(suma)}`;
+      : filtroEstado === 'noentregado'
+        ? `${filtrados.length} pedido(s) sin entregar`
+        : filtroEstado === 'nocobrado'
+          ? `${filtrados.length} pedido(s) sin cobrar · ${formatoEuros(suma)} por cobrar`
+          : filtroEstado === 'atrasados'
+            ? `${filtrados.length} pedido(s) de días anteriores sin marcar`
+            : `${filtrados.length} pedido(s) · Total ${formatoEuros(suma)}`;
 
   cont.innerHTML = filtrados.map((p) => {
     const estado = estadoDePedido(p);
@@ -2619,6 +2649,12 @@ function cablearIncidencias() {
   document.getElementById('btnQuitarIncidencia').addEventListener('click', () => guardarIncidencia(true));
   document.getElementById('btnCerrarIncidencia').addEventListener('click', cerrarIncidencia);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && incidenciaIdEnEdicion !== null) cerrarIncidencia(); });
+  // El aviso de Pedidos abre la lista de los pedidos de días anteriores que siguen sin marcar (desde el más antiguo hasta ayer)
+  document.getElementById('avisoAtrasados').addEventListener('click', () => {
+    const at = ultimosAtrasados;
+    pedidosFiltroPendiente = { ini: at && at.desde ? iso(at.desde) : sumarDiasISO(hoyISO(), -60), fin: sumarDiasISO(hoyISO(), -1), clienteId: '', estado: 'atrasados' };
+    cambiarTab('pedidos-lista');
+  });
   // El aviso de Inicio abre la lista de pedidos de hoy con incidencia
   document.getElementById('avisoIncidencias').addEventListener('click', () => {
     pedidosFiltroPendiente = { ini: hoyISO(), fin: hoyISO(), clienteId: '', estado: 'incidencia' };
@@ -3827,6 +3863,7 @@ function pintarPanel(d) {
     <div class="card">
       <div class="card__name">Ventas del mes</div>
       <div class="card__products">${e(d.ventas.base)} sin IVA · ${d.ventas.pedidos} pedidos</div>
+      ${d.ventas.albaranesBase !== undefined ? `<div class="card__meta">De ellas, albaranes (no van al gestor): ${e(d.ventas.albaranesBase)} sin IVA · ${d.ventas.albaranesPedidos} pedido${d.ventas.albaranesPedidos === 1 ? '' : 's'}</div>` : ''}
       <div class="card__meta">Facturado: ${e(d.ventas.facturadoBase)} + IVA ${e(d.ventas.facturadoIva)} = ${e(d.ventas.facturadoTotal)} (${d.ventas.facturas} facturas)</div>
       <div class="card__meta">Margen bruto (ventas menos coste de fábrica de lo vendido): ${e(d.ventas.margenBruto)}${margen}</div>
     </div>
@@ -3940,10 +3977,17 @@ async function cargarFacturasDia() {
         </div>
         <div class="card__total">${estimable ? escapeHtml(formatoEuros(e.total)) : '—'}</div>
       </div>
-      ${tiene(p) ? '' : `<div class="card__meta">${estimable ? 'Estimado según tu pedido (con IVA)' : 'Sin coste puesto en sus productos: no hay estimado'}</div>
+      ${tiene(p) ? `<div class="card__actions"><button class="chip-btn" data-fd-otra="${escapeHtml(String(p.idProveedor))}">＋ Otra factura de este proveedor</button></div>` : `<div class="card__meta">${estimable ? 'Estimado según tu pedido (con IVA)' : 'Sin coste puesto en sus productos: no hay estimado'}</div>
       <div class="card__actions"><button class="chip-btn" data-fd-apuntar="${escapeHtml(String(p.idProveedor))}">Apuntar factura</button></div>`}
     </div>`;
   }).join('') : '<div class="empty-state">No hay pedidos a proveedores para ese día.</div>';
+  // un proveedor que ya tiene su factura de ese día y manda otra: se apunta sin cubrir ningún estimado (ya está cubierto)
+  lista.querySelectorAll('[data-fd-otra]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      facturaPreseleccion = { proveedorId: btn.dataset.fdOtra, cubre: [], fecha: iso, volver: 'facturas-dia' };
+      cambiarTab('gasto-factura');
+    });
+  });
   lista.querySelectorAll('[data-fd-apuntar]').forEach((btn) => {
     btn.addEventListener('click', () => apuntarFacturaDelDia(provs.find((p) => String(p.idProveedor) === btn.dataset.fdApuntar), iso, btn));
   });
@@ -4012,7 +4056,7 @@ function infoFilaSemana(g, b) {
   if ((Number(b.base) || 0) > 0) {
     const dif = total - g.total;
     const raro = g.total > 0 && Math.abs(dif) / g.total > 0.2;
-    partes.push(`Factura ${formatoEuros(total)} · estimado ${formatoEuros(g.total)} · ${dif > 0 ? '+' : ''}${formatoEuros(dif)}${raro ? ' ⚠ muy distinta del estimado' : ''}${!b.ivaManual && (Number(b.iva) || 0) > 0 ? ' · IVA calculado según tu pedido: compruébalo con la factura' : ''}`);
+    partes.push(`Factura ${formatoEuros(total)} · estimado ${formatoEuros(g.total)} · ${dif > 0 ? '+' : ''}${formatoEuros(dif)}${raro ? ' ⚠ muy distinta del estimado' : ''}${raro && dif < 0 ? ' · ¿hay más facturas de este proveedor ese día? Apúntalas con "＋ Otra factura"' : ''}${!b.ivaManual && (Number(b.iva) || 0) > 0 ? ' · IVA calculado según tu pedido: compruébalo con la factura' : ''}`);
   }
   return partes.join(' ');
 }
@@ -4100,6 +4144,7 @@ async function cargarFacturasSemana() {
         <input type="file" id="fsArchivo-${g.id}" data-fs-archivo accept="image/*,application/pdf" style="display:none;">
         ${opcionesEntradaSemana()}
         <button type="button" class="chip-btn" data-fs-desglosar>Desglosar IVA</button>
+        <button type="button" class="chip-btn" data-fs-otra>＋ Otra factura de este día</button>
         <button type="button" class="chip-btn" data-fs-igualmente style="display:none;">Guardar igualmente</button>
       </div>
       <div class="card__meta" data-fs-archivo-estado style="margin-top:4px;"></div>
@@ -4123,6 +4168,11 @@ async function cargarFacturasSemana() {
     // una factura con varios tipos de IVA se apunta en el formulario completo (con su desglose); al guardarla se vuelve aquí
     fila.querySelector('[data-fs-desglosar]').addEventListener('click', () => {
       facturaPreseleccion = { proveedorId: g.proveedorId, cubre: [g.id], fecha: b.fecha, numFactura: b.num, volver: 'facturas-semana', desglosar: true };
+      cambiarTab('gasto-factura');
+    });
+    // el proveedor mandó más de una factura ese día: la otra se apunta en el formulario completo, sin cubrir ningún estimado (el estimado de este día lo cubre la primera)
+    fila.querySelector('[data-fs-otra]').addEventListener('click', () => {
+      facturaPreseleccion = { proveedorId: g.proveedorId, cubre: [], fecha: b.fecha, numFactura: '', volver: 'facturas-semana' };
       cambiarTab('gasto-factura');
     });
     const selEntrada = fila.querySelector('[data-fs-entrada]');
@@ -5052,7 +5102,14 @@ async function buscarBalance() {
       ${d.ventasSinCoste > 0 ? `<div class="card__meta" style="color:var(--warn-red); margin-top:6px;">Hay ${formatoEuros(d.ventasSinCoste)} de ventas de productos sin coste puesto: no entran en el margen. Ponles el coste en Productos.</div>` : ''}
       <div class="card__meta" style="margin-top:6px;">Gastos registrados en Compras (referencia): ${formatoEuros(d.gastosBase)}</div>
       ${d.gastosEstimadosBase > 0 ? `<div class="card__meta">Gastos estimados de pedidos a proveedores, pendientes de factura: ${formatoEuros(d.gastosEstimadosBase)}</div>` : ''}
-    </div>`;
+    </div>
+    ${d.pedidosAlbaranes !== undefined ? `<div class="card">
+      <div class="card__name">Ventas por tipo de documento (sin IVA)</div>
+      <div style="display:flex; justify-content:space-between; gap:8px; margin-top:8px;"><span>Con factura <span class="card__meta">(${d.pedidosFacturas} pedido${d.pedidosFacturas === 1 ? '' : 's'})</span></span><strong>${formatoEuros(d.ventasFacturas)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:8px; margin-top:4px;"><span>Con albarán <span class="card__meta">(${d.pedidosAlbaranes} pedido${d.pedidosAlbaranes === 1 ? '' : 's'})</span></span><strong>${formatoEuros(d.ventasAlbaranes)}</strong></div>
+      <div style="display:flex; justify-content:space-between; gap:8px; margin-top:6px; padding-top:6px; border-top:1px solid var(--wheat-line);"><span>Total</span><strong>${formatoEuros(d.ventasTotal)}</strong></div>
+      <div class="card__meta" style="margin-top:6px;">Los albaranes no van al gestor: esto es solo para tu control.</div>
+    </div>` : ''}`;
 
   lista.innerHTML = d.productos.length ? d.productos.map((p) => `
     <div class="card">

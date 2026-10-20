@@ -566,6 +566,7 @@ select.select-input {
   color: #FFFFFF;
 }
 .home-btn__badge:empty { display: none; }
+.home-btn__badge--alerta { background: var(--warn-red); }
 
 /* ---------- FECHA EN EL MENÚ LATERAL (debajo de Modo oscuro) ---------- */
 .sidebar__date {

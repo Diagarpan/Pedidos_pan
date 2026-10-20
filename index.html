@@ -162,6 +162,7 @@
       <div class="home-title">Pedidos</div>
       <div class="home-sub">Consulta, crea y gestiona pedidos</div>
     </div>
+    <button class="aviso-incidencias tab--hidden" id="avisoAtrasados" data-solo-admin="1"></button>
     <div class="home-grid">
       <button class="home-btn home-btn--pedidos" data-tab="pedidos-lista"><span class="home-btn__icon" data-icon="pedidos"></span>Ver pedidos</button>
       <button class="home-btn home-btn--pedidos" data-tab="nuevo" data-solo-admin="1"><span class="home-btn__icon" data-icon="nuevo"></span>Nuevo pedido</button>
@@ -196,10 +197,13 @@
       <input type="search" id="buscarPedido" class="search-input" placeholder="Filtrar por nombre…">
       <select id="filtroEstadoPedido" class="select-input select-input--auto">
         <option value="todos">Todos</option>
-        <option value="pendiente">Pendientes</option>
+        <option value="noentregado">Sin entregar</option>
+        <option value="nocobrado">Sin cobrar</option>
+        <option value="pendiente">Ni entregados ni cobrados</option>
         <option value="entregado">Entregados</option>
         <option value="cobrado">Cobrados</option>
         <option value="incidencia">Con incidencia</option>
+        <option value="atrasados" data-solo-admin="1">⚠ Sin marcar de días anteriores</option>
         <option value="anulado" data-solo-admin="1">Anulados</option>
       </select>
     </div>

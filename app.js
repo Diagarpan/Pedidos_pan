@@ -1132,7 +1132,18 @@ function tarjetaDeRuta(r, lista, seguimiento, seleccionable) {
     <div class="card__top"><div class="card__name">${escapeHtml(etiquetaRuta(r))}</div><div class="card__total">${formatoEuros(seguimiento ? s.cobrado : s.total)}</div></div>
     <div class="card__meta">${s.n} ${plural(s.n, 'pedido', 'pedidos')}${seguimiento ? ` · ${s.entregados} ${plural(s.entregados, 'entregado', 'entregados')} · ${s.cobrados} ${plural(s.cobrados, 'cobrado', 'cobrados')}` : ''}</div>
     ${seguimiento ? `<div class="card__meta"><strong>A entregar (lo cobrado): ${formatoEuros(s.cobrado)}</strong> · falta cobrar ${formatoEuros(s.falta)} · total ${formatoEuros(s.total)}</div>` : `<div class="card__meta">Total ${formatoEuros(s.total)}</div>`}
+    <button class="chip-btn" data-hoja-ruta="${escapeHtml(r)}" style="margin-top:8px;">📄 Imprimir hoja de esta ruta</button>
   </div>`;
+}
+// La ruta como la entiende el servidor: sin ruta elegida (todas) no se manda; "sin ruta" = "__sin"
+function rutaParaServidor(r) { return r === null ? undefined : (r === '' ? '__sin' : r); }
+async function descargarHojaRuta(r) {
+  const params = { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) };
+  const ruta = rutaParaServidor(r);
+  if (ruta !== undefined) params.ruta = ruta;
+  const resp = await apiGet('hojaRutaPdf', params).catch((err) => ({ ok: false, error: String(err) }));
+  if (!resp.ok) { alert('No se pudo generar: ' + (resp.error || 'error')); return; }
+  descargarPDF(resp.base64, resp.nombre);
 }
 
 let ultimoReparto = null;
@@ -1149,6 +1160,7 @@ function pintarReparto(data) {
   const hayFiltro = ROL === 'admin' && rutas.length > 1;
   if (!hayFiltro || (rutaRepartoSel !== null && !rutas.includes(rutaRepartoSel))) rutaRepartoSel = null;
   const vista = rutaRepartoSel === null ? todos : todos.filter((x) => String(x.ruta || '').trim() === rutaRepartoSel);
+  document.getElementById('btnHojaRuta').textContent = rutaRepartoSel === null ? '📄 Imprimir hoja de ruta' : `📄 Imprimir hoja de ruta · ${etiquetaRuta(rutaRepartoSel)}`;
   const productos = rutaRepartoSel === null ? data.productos : productosDePedidos(vista);
 
   if (!productos.length) {
@@ -1183,6 +1195,10 @@ function pintarReparto(data) {
     const elegir = (r) => { rutaRepartoSel = r; pintarReparto(ultimoReparto); };
     contRutas.querySelectorAll('[data-ruta]').forEach((b) => b.addEventListener('click', () => elegir(b.dataset.ruta === '__todas' ? null : b.dataset.ruta)));
     contPorRuta.querySelectorAll('[data-ruta-card]').forEach((b) => b.addEventListener('click', () => elegir(b.dataset.rutaCard)));
+    contPorRuta.querySelectorAll('[data-hoja-ruta]').forEach((b) => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();   // imprimir una ruta no la elige
+      conEstadoCarga(b, 'Generando…', () => descargarHojaRuta(b.dataset.hojaRuta));
+    }));
   } else {
     contRutas.classList.add('tab--hidden'); contRutas.innerHTML = '';
     contPorRuta.classList.add('tab--hidden'); contPorRuta.innerHTML = '';
@@ -2134,9 +2150,7 @@ async function anularPedido(idPedido) {
 function cablearHojaRuta() {
   document.getElementById('btnHojaRuta').addEventListener('click', (e) => {
     conEstadoCarga(e.target, 'Generando…', async () => {
-      const r = await apiGet('hojaRutaPdf', { fecha: fechaOffsetDDMMYYYY(offsetRepartoSeleccionado) }).catch((err) => ({ ok: false, error: String(err) }));
-      if (!r.ok) { alert('No se pudo generar: ' + (r.error || 'error')); return; }
-      descargarPDF(r.base64, r.nombre);
+      await descargarHojaRuta(rutaRepartoSel);
     });
   });
   document.getElementById('btnResumenDia').addEventListener('click', (e) => {
@@ -2568,12 +2582,75 @@ function htmlAnalisisEvolucion(d) {
   return html;
 }
 
+// ---- clientes que llevan días sin pedir ----
+let statsDiasSinPedir = 14, sinPedirDatos = null, sinPedirError = '', cargandoSinPedir = false;
+// WhatsApp: del texto del teléfono (puede traer espacios, +34, varios números…) se toma el PRIMER móvil/fijo válido de 9 cifras
+function enlaceWhatsApp(telefono, mensaje) {
+  const m = String(telefono === undefined || telefono === null ? '' : telefono).match(/(?:\+?\s*34|0034)?[\s.-]*([6-9](?:[\s.-]?\d){8})/);
+  return m ? `https://wa.me/34${m[1].replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}` : '';
+}
+function sinPedirValido(d) { return !!d && Array.isArray(d.clientes) && Array.isArray(d.sinPedidos); }
+function clientesSinPedirOrdenados(d) { return d.clientes.slice().sort((a, b) => (b.habitual ? 1 : 0) - (a.habitual ? 1 : 0) || b.diasSin - a.diasSin); }
+function actualizarChipSinPedir() {
+  const chip = document.querySelector('[data-stats-sec="sinpedir"]');
+  const n = sinPedirValido(sinPedirDatos) ? sinPedirDatos.clientes.length : 0;
+  chip.textContent = n ? `Sin pedir (${n})` : 'Sin pedir';
+  chip.classList.toggle('chip-btn--alerta', n > 0);
+}
+function bannerSinPedir() {
+  if (!sinPedirValido(sinPedirDatos) || !sinPedirDatos.clientes.length) return '';
+  const n = sinPedirDatos.clientes.length, hab = sinPedirDatos.clientes.filter((c) => c.habitual).length;
+  return `<div class="card aviso-sin-pedir" data-ir-sinpedir style="cursor:pointer;"><strong>⚠ ${n} cliente${n === 1 ? '' : 's'} ${n === 1 ? 'lleva' : 'llevan'} más de ${sinPedirDatos.dias} días sin pedir</strong>${hab ? `<div class="card__meta">${hab === 1 ? 'Uno de ellos pedía' : hab + ' de ellos pedían'} con regularidad. Toca para verlos.</div>` : '<div class="card__meta">Toca para verlos.</div>'}</div>`;
+}
+function htmlAnalisisSinPedir() {
+  const opciones = [7, 14, 30, 60];
+  let html = '<div class="card__meta" style="margin-bottom:10px;">Clientes activos que llevan <strong>más de X días</strong> sin hacer ningún pedido (se miran los últimos 180 días; un pedido ya hecho para los próximos días cuenta). Es independiente del periodo de arriba.</div>' +
+    '<div class="rutas-chips">' + opciones.map((n) => `<button class="chip-btn${statsDiasSinPedir === n ? ' is-activo' : ''}" data-sp-dias="${n}">${n} días</button>`).join('') + '</div>';
+  if (sinPedirError) return html + `<div class="empty-state">${sinPedirError}</div>`;
+  if (!sinPedirValido(sinPedirDatos)) return html + '<div class="empty-state">Calculando…</div>';
+  const d = sinPedirDatos, lista = clientesSinPedirOrdenados(d);
+  if (!lista.length && !d.sinPedidos.length) return html + `<div class="empty-state">✓ Todos tus clientes activos han pedido en los últimos ${d.dias} días.</div>`;
+  const plural = (n, a, b) => (n === 1 ? a : b);
+  if (lista.length) {
+    html += `<div class="section-label">Llevan más de ${d.dias} días sin pedir (${lista.length})</div><div class="stack">` + lista.map((c) => {
+      const wa = enlaceWhatsApp(c.telefono, `Hola, hace ${c.diasSin} días que no recibimos tu pedido de pan. ¿Necesitas algo o ha cambiado algo? Estamos a tu disposición.`);
+      return `<div class="card"><div class="card__top"><div class="card__name">${escapeHtml(c.nombre)}</div><div class="card__total">${c.diasSin} días</div></div>
+        <div class="card__meta">${escapeHtml(etiquetaRuta(c.ruta))} · último pedido ${escapeHtml(c.ultimo)}${c.cadaDias !== null ? ` · solía pedir cada ${c.cadaDias} día${c.cadaDias === 1 ? '' : 's'} (${c.pedidos} días con pedido)` : ` · ${c.pedidos} ${plural(c.pedidos, 'día', 'días')} con pedido`}</div>
+        ${c.habitual ? '<div style="margin-top:6px;"><span class="badge-habitual">Pedía con regularidad</span></div>' : ''}
+        ${wa ? `<a class="chip-btn" style="margin-top:8px; display:inline-block; text-decoration:none;" href="${wa}" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>` : (c.telefono ? `<div class="card__meta" style="margin-top:6px;">Tel: ${escapeHtml(c.telefono)}</div>` : '')}</div>`;
+    }).join('') + '</div>';
+  }
+  if (d.sinPedidos.length) html += `<div class="section-label">Sin ningún pedido en ${d.ventana} días (${d.sinPedidos.length})</div><div class="card__meta" style="margin-bottom:8px;">Pueden ser clientes nuevos o de los que ya no piden.</div><div class="ticket">` + d.sinPedidos.map((c) => `<div class="ticket-row"><span>${escapeHtml(c.nombre)}<span class="card__meta"> · ${escapeHtml(etiquetaRuta(c.ruta))}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</span></span></div>`).join('') + '</div>';
+  return html;
+}
+async function cargarSinPedir(dias) {
+  if (cargandoSinPedir) return;
+  cargandoSinPedir = true; sinPedirError = '';
+  try {
+    const r = await apiGet('clientesSinPedir', { dias: dias || statsDiasSinPedir }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok || !sinPedirValido(r.data)) {
+      sinPedirDatos = null;
+      sinPedirError = /no reconocid|desconocid/i.test(r.error || '') ? 'Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.' : 'No se pudo cargar: ' + escapeHtml(r.error || 'respuesta no válida');
+    } else { sinPedirDatos = r.data; }
+  } finally { cargandoSinPedir = false; }
+  actualizarChipSinPedir();
+  if (statsSeccion === 'sinpedir' || statsSeccion === 'resumen') pintarAnalisis();
+}
+
 function pintarAnalisis() {
   const cont = document.getElementById('statsResumen'), d = analisisActual;
+  if (statsSeccion === 'sinpedir') {
+    document.querySelectorAll('[data-stats-sec]').forEach((b) => b.classList.toggle('is-activo', b.dataset.statsSec === statsSeccion));
+    cont.innerHTML = htmlAnalisisSinPedir();
+    cont.querySelectorAll('[data-sp-dias]').forEach((b) => b.addEventListener('click', () => { statsDiasSinPedir = Number(b.dataset.spDias); sinPedirDatos = null; pintarAnalisis(); cargarSinPedir(statsDiasSinPedir); }));
+    return;
+  }
   document.querySelectorAll('[data-stats-sec]').forEach((b) => b.classList.toggle('is-activo', b.dataset.statsSec === statsSeccion));
   if (!d) return;
   if (!d.resumen.pedidos) { cont.innerHTML = cabeceraAnalisis(d) + '<div class="empty-state">No hay pedidos en este periodo.</div>'; return; }
-  cont.innerHTML = { resumen: htmlAnalisisResumen, clientes: htmlAnalisisClientes, productos: htmlAnalisisProductos, evolucion: htmlAnalisisEvolucion }[statsSeccion](d);
+  cont.innerHTML = (statsSeccion === 'resumen' ? bannerSinPedir() : '') + { resumen: htmlAnalisisResumen, clientes: htmlAnalisisClientes, productos: htmlAnalisisProductos, evolucion: htmlAnalisisEvolucion }[statsSeccion](d);
+  const aviso = cont.querySelector('[data-ir-sinpedir]');
+  if (aviso) aviso.addEventListener('click', () => { statsSeccion = 'sinpedir'; pintarAnalisis(); });
   cont.querySelectorAll('[data-met-cli]').forEach((b) => b.addEventListener('click', () => { statsMetCli = b.dataset.metCli; pintarAnalisis(); }));
   cont.querySelectorAll('[data-met-prod]').forEach((b) => b.addEventListener('click', () => { statsMetProd = b.dataset.metProd; pintarAnalisis(); }));
 }
@@ -2588,6 +2665,17 @@ function periodoRapido(clave) {
 
 function cablearEstadisticas() {
   document.getElementById('btnVerEstadisticas').addEventListener('click', buscarEstadisticas);
+  document.getElementById('btnExcelAnalisis').addEventListener('click', (e) => {
+    conEstadoCarga(e.currentTarget, 'Generando…', async () => {
+      // el del periodo que se está viendo (no el de las fechas si se han tocado sin pulsar "Ver")
+      const ini = analisisActual ? analisisActual.periodo.ini : formatoFechaES(document.getElementById('statsFechaIni').value);
+      const fin = analisisActual ? analisisActual.periodo.fin : formatoFechaES(document.getElementById('statsFechaFin').value);
+      if (!ini || !fin) { alert('Elige primero las dos fechas.'); return; }
+      const r = await apiGet('analisisXlsx', { fechaIni: ini, fechaFin: fin }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!r.ok) { alert('No se pudo generar el Excel: ' + (r.error || 'error')); return; }
+      await descargarPDF(r.base64, r.nombre, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    });
+  });
   document.querySelectorAll('[data-stats-rapido]').forEach((b) => b.addEventListener('click', () => {
     const [ini, fin] = periodoRapido(b.dataset.statsRapido);
     document.getElementById('statsFechaIni').value = ini; document.getElementById('statsFechaFin').value = fin; buscarEstadisticas();
@@ -2621,6 +2709,7 @@ async function buscarEstadisticas() {
     }
     analisisActual = r.data;
     pintarAnalisis();
+    if (!sinPedirValido(sinPedirDatos) && !sinPedirError) cargarSinPedir(statsDiasSinPedir);   // la alerta no depende del periodo: se pide una vez
   } finally {
     buscandoEstadisticas = false;
   }

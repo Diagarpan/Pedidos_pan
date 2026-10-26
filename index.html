@@ -133,7 +133,9 @@
       <div class="home-title" id="repartoDiaTitulo"></div>
     </div>
 
+    <div id="repartoRutas" class="rutas-chips solo-admin tab--hidden"></div>
     <div id="repartoResumen" class="tab--hidden"></div>
+    <div id="repartoPorRuta" class="stack solo-admin tab--hidden"></div>
 
     <div class="section-label">Total a preparar</div>
     <div class="ticket" id="repartoProductos">
@@ -195,6 +197,9 @@
     </div>
     <div class="filtros-pedidos">
       <input type="search" id="buscarPedido" class="search-input" placeholder="Filtrar por nombre…">
+      <select id="filtroRutaPedido" class="select-input select-input--auto solo-admin" aria-label="Filtrar por ruta">
+        <option value="todas">Todas las rutas</option>
+      </select>
       <select id="filtroEstadoPedido" class="select-input select-input--auto">
         <option value="todos">Todos</option>
         <option value="noentregado">Sin entregar</option>
@@ -987,13 +992,25 @@
   <section class="tab tab--hidden" id="tab-estadisticas">
     <div class="home-welcome">
       <div class="home-title">Estadísticas</div>
-      <div class="home-sub">Ventas, productos y clientes por periodo</div>
+      <div class="home-sub">Análisis de ventas, clientes, productos y márgenes</div>
+    </div>
+    <div class="rutas-chips" id="statsRapidos">
+      <button class="chip-btn" data-stats-rapido="mes">Este mes</button>
+      <button class="chip-btn" data-stats-rapido="mesant">Mes pasado</button>
+      <button class="chip-btn" data-stats-rapido="30">30 días</button>
+      <button class="chip-btn" data-stats-rapido="anio">Este año</button>
     </div>
     <div class="date-range">
       <input type="date" id="statsFechaIni">
       <span>—</span>
       <input type="date" id="statsFechaFin">
       <button class="btn-secondary" id="btnVerEstadisticas">Ver</button>
+    </div>
+    <div class="rutas-chips" id="statsSecciones">
+      <button class="chip-btn is-activo" data-stats-sec="resumen">Resumen</button>
+      <button class="chip-btn" data-stats-sec="clientes">Clientes</button>
+      <button class="chip-btn" data-stats-sec="productos">Productos</button>
+      <button class="chip-btn" data-stats-sec="evolucion">Evolución</button>
     </div>
     <div id="statsResumen" class="stack">
       <div class="empty-state">Elige un periodo y pulsa Ver.</div>

@@ -233,8 +233,10 @@ select.select-input {
   padding-right: 32px;
 }
 .select-input--auto { width: auto; flex: 0 0 auto; margin-bottom: 0; }
-.filtros-pedidos { display: flex; gap: 8px; margin-bottom: 12px; align-items: stretch; }
-.filtros-pedidos .search-input { margin-bottom: 0; flex: 1; }
+.filtros-pedidos { display: flex; gap: 8px; margin-bottom: 12px; align-items: stretch; flex-wrap: wrap; }
+.filtros-pedidos .search-input { margin-bottom: 0; flex: 1; min-width: 150px; }
+.rutas-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 14px; }
+.chip-btn.is-activo { background: var(--crust); color: #fff; border-color: var(--crust-dark); }
 
 .field-label {
   display: block;
@@ -820,3 +822,46 @@ html[data-tema="oscuro"] { --ambar: #E8AE4A; }
   border: 1px solid var(--ambar); border-radius: var(--radius);
   background: transparent; color: var(--ambar);
 }
+
+/* ---- Estadísticas: análisis completo ---- */
+.kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi { background: var(--paper-raised); border: 1px solid var(--wheat-line); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-card); min-width: 0; }
+.kpi__etiqueta { font-family: var(--font-data); font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ink-muted); }
+.kpi__valor { font-size: 22px; font-weight: 700; margin: 4px 0 2px; overflow-wrap: anywhere; }
+.kpi__extra { font-size: 12.5px; color: var(--ink-muted); }
+.var { font-weight: 600; white-space: nowrap; }
+.var--sube { color: var(--ok-green, #2E7D4F); }
+.var--baja { color: var(--warn-red); }
+.var--igual, .var--nd { color: var(--ink-muted); font-weight: 500; }
+.destacados { display: flex; flex-direction: column; gap: 12px; }
+.destacado { display: flex; gap: 12px; align-items: flex-start; }
+.destacado__icono { font-size: 22px; line-height: 1.2; flex-shrink: 0; }
+.destacado__titulo { font-size: 12px; color: var(--ink-muted); }
+.destacado__texto { font-weight: 600; overflow-wrap: anywhere; }
+.barras-h { display: flex; flex-direction: column; gap: 12px; }
+.barra-h__top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.barra-h__nombre { font-weight: 600; overflow-wrap: anywhere; }
+.barra-h__valor { font-family: var(--font-data); white-space: nowrap; }
+.barra-h__pista { height: 10px; background: var(--wheat); border-radius: 6px; margin-top: 5px; overflow: hidden; }
+.barra-h__relleno { height: 100%; background: var(--crust); border-radius: 6px; }
+.barra-h__relleno--neg { background: var(--warn-red); }
+.grafico-svg { width: 100%; height: auto; display: block; }
+.grafico-svg text { fill: var(--ink-muted); font-size: 11px; font-family: var(--font-data); }
+.grafico-rejilla { stroke: var(--wheat-line); stroke-width: 1; }
+.grafico-barra { fill: var(--crust); }
+.grafico-linea { fill: none; stroke: #2E52A6; stroke-width: 2.5; stroke-linejoin: round; }
+.grafico-punto { fill: #2E52A6; }
+.leyenda-fila { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-muted); margin-top: 6px; }
+.leyenda-color { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.leyenda-color--linea { height: 3px; background: #2E52A6; margin-left: 10px; }
+.donut-wrap { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.donut-svg { width: 130px; height: 130px; flex-shrink: 0; }
+.donut-leyenda { flex: 1; min-width: 160px; display: flex; flex-direction: column; gap: 8px; }
+.leyenda-item { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+.leyenda-nombre { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.leyenda-valor { font-family: var(--font-data); font-size: 12.5px; color: var(--ink-muted); white-space: nowrap; }
+.tabla-scroll { overflow-x: auto; }
+.tabla-datos { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tabla-datos th { text-align: left; font-family: var(--font-data); font-size: 10.5px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink-muted); padding: 6px 6px; border-bottom: 1px solid var(--wheat-line); }
+.tabla-datos td { padding: 7px 6px; border-bottom: 1px solid var(--wheat-line); }
+.tabla-datos .num { text-align: right; white-space: nowrap; }

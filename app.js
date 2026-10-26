@@ -2407,6 +2407,8 @@ async function guardarCliente() {
 
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
+// Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
+const VERSION_APP = '2026.10.41';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -2664,6 +2666,8 @@ function periodoRapido(clave) {
 }
 
 function cablearEstadisticas() {
+  document.getElementById('versionAppStats').textContent = 'App ' + VERSION_APP;
+  document.getElementById('versionAppEmpresa').textContent = 'Versión de la app: ' + VERSION_APP;
   document.getElementById('btnVerEstadisticas').addEventListener('click', buscarEstadisticas);
   document.getElementById('btnExcelAnalisis').addEventListener('click', (e) => {
     conEstadoCarga(e.currentTarget, 'Generando…', async () => {

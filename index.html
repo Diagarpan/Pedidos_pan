@@ -933,6 +933,7 @@
     </div>
     <div class="section-label" style="margin-top:28px;">Estado del servidor</div>
     <div class="card">
+      <div class="card__meta" id="versionAppEmpresa" style="margin-bottom:6px;"></div>
       <div class="card__meta" id="estadoServidor">Comprobando…</div>
       <button class="btn-secondary" id="btnComprobarServidor" style="width:100%; margin-top:10px;">Comprobar ahora</button>
     </div>
@@ -999,6 +1000,7 @@
       <button class="chip-btn" data-stats-rapido="mesant">Mes pasado</button>
       <button class="chip-btn" data-stats-rapido="30">30 días</button>
       <button class="chip-btn" data-stats-rapido="anio">Este año</button>
+      <button class="chip-btn" id="btnExcelAnalisis">📊 Descargar Excel</button>
     </div>
     <div class="date-range">
       <input type="date" id="statsFechaIni">
@@ -1016,7 +1018,7 @@
     <div id="statsResumen" class="stack">
       <div class="empty-state">Elige un periodo y pulsa Ver.</div>
     </div>
-    <button class="btn-secondary" id="btnExcelAnalisis" style="width:100%; margin-top:14px;">📊 Descargar Excel del análisis</button>
+    <div class="card__meta" id="versionAppStats" style="text-align:center; margin-top:14px;"></div>
   </section>
 
     </main>

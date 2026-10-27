@@ -871,3 +871,8 @@ html[data-tema="oscuro"] { --ambar: #E8AE4A; }
 .badge-habitual { display: inline-block; background: #FBE9E7; color: var(--warn-red); border-radius: 10px; padding: 2px 9px; font-size: 12px; font-weight: 600; }
 .kpi__valor--neg { color: var(--warn-red); }
 .grafico-barra--neg { fill: var(--warn-red); }
+.veredicto { border-left: 4px solid var(--wheat-line); line-height: 1.45; }
+.veredicto--cuadra { border-left-color: var(--ok-green, #2E7D4F); }
+.veredicto--albaranes { border-left-color: #2E52A6; }
+.veredicto--parcial { border-left-color: #E0A23C; }
+.veredicto--otra { border-left-color: var(--warn-red); }

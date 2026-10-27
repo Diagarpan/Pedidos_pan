@@ -2408,7 +2408,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.43';
+const VERSION_APP = '2026.10.44';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -2565,6 +2565,65 @@ function htmlAnalisisResumen(d) {
   if (docs && (docs.factura.pedidos || docs.albaran.pedidos)) html += '<div class="section-label">Facturas y albaranes</div><div class="card">' + graficoDonut([{ etiqueta: `Con factura (${docs.factura.pedidos})`, valor: docs.factura.ventas }, { etiqueta: `Con albarán (${docs.albaran.pedidos})`, valor: docs.albaran.ventas }], formatoEuros) + '</div>';
   return html;
 }
+// ---- ESTIMADO FRENTE A FACTURA (al final de la sección Beneficio) ----
+let comparadorDatos = null, comparadorClave = '', comparadorError = '', cargandoComparador = false;
+function comparadorValido(d) { return !!d && !!d.totales && !!d.pendientes && !!d.avisos && Array.isArray(d.proveedores) && Array.isArray(d.facturas); }
+function pctConSigno(x) { return x === null || x === undefined || isNaN(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x * 100).toFixed(1).replace('.', ',') + ' %'; }
+function eurosConSigno(n) { return n > 0 ? '+' + formatoEuros(n) : n < 0 ? '−' + formatoEuros(Math.abs(n)) : formatoEuros(n); }   // el mismo signo menos que los porcentajes
+function textoVeredictoComparador(d) {
+  const T = d.totales, mayor = T.diferencia > 0 ? 'mayor' : 'menor', abs = (x) => pct1(Math.abs(x));
+  if (d.veredicto === 'cuadra') return `✓ El estimado cuadra con lo facturado (diferencia de ${pctConSigno(T.difPct)}).`;
+  if (d.veredicto === 'albaranes') return `El estimado es un ${abs(T.difPct)} ${mayor} que lo facturado, y la diferencia SE EXPLICA POR LOS ALBARANES: quitando los pedidos de clientes con albarán (${formatoEuros(T.estimadoAlbaran)}) el estimado queda a un ${abs(T.difSinAlbaranPct)} de la factura.`;
+  if (d.veredicto === 'parcial') return `El estimado es un ${abs(T.difPct)} ${mayor} que lo facturado. Los pedidos de clientes con albarán son el ${pct1(T.albaranPct)} del estimado (${formatoEuros(T.estimadoAlbaran)}) y explican PARTE de la diferencia, pero quitándolos aún quedan ${pctConSigno(T.difSinAlbaranPct)} de diferencia.`;
+  if (d.veredicto === 'otra') return `El estimado se desvía un ${abs(T.difPct)} de lo facturado y los albaranes NO lo explican: quitándolos, la diferencia pasa a ser ${pctConSigno(T.difSinAlbaranPct)}. Mira por proveedor y por factura qué pasa.`;
+  return '';
+}
+function htmlComparadorEstimado() {
+  let html = '<div class="section-label">Estimado frente a factura</div><div class="card__meta" style="margin-bottom:8px;">Compara lo que la app estimó que ibas a pagar a cada proveedor (según los pedidos de los clientes) con lo que luego te facturó, y separa la parte del estimado que viene de pedidos de clientes con ALBARÁN, para ver si la diferencia sale de ahí. Solo entran las facturas que ya cubren un estimado.</div>';
+  if (comparadorError) return html + `<div class="empty-state">${comparadorError}</div>`;
+  if (!comparadorValido(comparadorDatos)) return html + '<div class="empty-state">Calculando…</div>';
+  const d = comparadorDatos, T = d.totales, P = d.pendientes, A = d.avisos;
+  const plural = (n, a, b) => (n === 1 ? a : b);
+  if (d.veredicto === 'sinDatos') {
+    html += '<div class="empty-state">Todavía no hay facturas de proveedores ligadas a un estimado en este periodo.</div>';
+  } else {
+    html += `<div class="card veredicto veredicto--${d.veredicto}"><strong>${escapeHtml(textoVeredictoComparador(d))}</strong></div>`;
+    const kpi = (etiqueta, valor, extra, neg) => `<div class="kpi"><div class="kpi__etiqueta">${etiqueta}</div><div class="kpi__valor${neg ? ' kpi__valor--neg' : ''}">${valor}</div><div class="kpi__extra">${extra}</div></div>`;
+    html += '<div class="kpi-grid" style="margin-top:10px;">' +
+      kpi('Estimado', formatoEuros(T.estimado), `${T.facturas} factura${T.facturas === 1 ? '' : 's'} comparada${T.facturas === 1 ? '' : 's'}`) +
+      kpi('Facturado', formatoEuros(T.facturado), 'lo que dicen las facturas') +
+      kpi('Diferencia', eurosConSigno(T.diferencia), `${pctConSigno(T.difPct)} · estimado − factura`) +
+      kpi('De albarán', formatoEuros(T.estimadoAlbaran), `${pct1(T.albaranPct)} del estimado`) +
+      kpi('Estimado sin albarán', formatoEuros(T.estimadoFactura), 'solo clientes con factura') +
+      kpi('Diferencia sin albarán', eurosConSigno(T.difSinAlbaran), `${pctConSigno(T.difSinAlbaranPct)} sobre lo facturado`) + '</div>';
+    if (d.proveedores.length) {
+      html += '<div class="section-label">Diferencia por proveedor (estimado − factura)</div><div class="card">' + graficoBarrasH(d.proveedores.slice(0, 8).map((p) => ({ etiqueta: p.proveedor, valor: p.diferencia, nota: `${p.facturas} factura${p.facturas === 1 ? '' : 's'} · estimado ${formatoEuros(p.estimado)} (albarán ${formatoEuros(p.estimadoAlbaran)}) · facturado ${formatoEuros(p.facturado)} · sin albarán ${eurosConSigno(p.difSinAlbaran)}` })), eurosConSigno) + '</div>';
+    }
+    if (d.facturas.length) {
+      html += '<div class="section-label">Facturas con más diferencia</div>' + tablaDatos(['Factura', 'Proveedor', 'Estim.', 'Albarán', 'Factura', 'Dif.'], d.facturas.slice(0, 15).map((f) => [`${f.numFactura || '#' + f.idFactura} (${f.dias[0].slice(0, 5)}${f.dias.length > 1 ? ' +' + (f.dias.length - 1) : ''})`, f.proveedor, formatoEuros(f.estimado), formatoEuros(f.estimadoAlbaran), formatoEuros(f.facturado), eurosConSigno(f.diferencia)]));
+    }
+  }
+  if (P.n) html += `<div class="card__meta" style="margin:8px 2px 0;">Pendiente de factura: ${P.n} pedido${P.n === 1 ? '' : 's'} a proveedores por ${formatoEuros(P.estimado)} (de ellos ${formatoEuros(P.estimadoAlbaran)} de clientes con albarán). Aún no se comparan.</div>`;
+  if (A.parciales) html += `<div class="card__meta" style="margin:8px 2px 0;">${A.parciales} factura${A.parciales === 1 ? '' : 's'} cubre${A.parciales === 1 ? '' : 'n'} días de fuera de este periodo y no se compara${A.parciales === 1 ? '' : 'n'}. Elige un periodo que las incluya enteras.</div>`;
+  if (A.huerfanos) html += `<div class="card__meta" style="margin:8px 2px 0;">⚠ ${A.huerfanos} estimado${A.huerfanos === 1 ? '' : 's'} figura${A.huerfanos === 1 ? '' : 'n'} como cubierto${A.huerfanos === 1 ? '' : 's'} por una factura que ya no existe: revísa${A.huerfanos === 1 ? 'lo' : 'los'} en Compras.</div>`;
+  if (A.cambiados) html += `<div class="card__meta" style="margin:8px 2px 0;">En ${A.cambiados} factura${A.cambiados === 1 ? '' : 's'} los pedidos de los clientes cambiaron después de calcular el estimado: la parte de albarán de ${A.cambiados === 1 ? 'esa' : 'esas'} es aproximada.</div>`;
+  return html;
+}
+async function cargarComparador() {
+  const d = analisisActual;
+  if (!d) return;
+  const clave = d.periodo.ini + '|' + d.periodo.fin;
+  if (cargandoComparador || (comparadorClave === clave && (comparadorValido(comparadorDatos) || comparadorError))) return;
+  cargandoComparador = true; comparadorClave = clave; comparadorError = ''; comparadorDatos = null;
+  try {
+    const r = await apiGet('comparadorEstimado', { fechaIni: d.periodo.ini, fechaFin: d.periodo.fin }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok || !comparadorValido(r.data)) {
+      comparadorError = /no reconocid|desconocid/i.test(r.error || '') ? 'Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.' : 'No se pudo cargar: ' + escapeHtml(r.error || 'respuesta no válida');
+    } else { comparadorDatos = r.data; }
+  } finally { cargandoComparador = false; }
+  if (statsSeccion === 'beneficio' && analisisActual && analisisActual.periodo.ini + '|' + analisisActual.periodo.fin === clave) pintarAnalisis();
+}
+
 function htmlAnalisisBeneficio(d) {
   const B = d.beneficio, C = d.compras;
   if (!B || !C) return cabeceraAnalisis(d) + '<div class="empty-state">Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.</div>';
@@ -2588,7 +2647,7 @@ function htmlAnalisisBeneficio(d) {
     html += tablaDatos(['Proveedor', 'Fact.', 'Registrado', 'Estimado'], C.proveedores.slice(0, 25).map((p) => [p.nombre, p.facturas, formatoEuros(p.base), p.estimado ? formatoEuros(p.estimado) : '—']));
   }
   if (C.categorias.length) html += '<div class="section-label">Gastos por categoría</div><div class="card">' + graficoBarrasH(C.categorias.slice(0, 8).map((x) => ({ etiqueta: x.categoria, valor: x.base })), formatoEuros) + '</div>';
-  return html;
+  return html + htmlComparadorEstimado();
 }
 function metricaBotones(attr, actual, opciones) { return '<div class="rutas-chips">' + opciones.map(([k, t]) => `<button class="chip-btn${actual === k ? ' is-activo' : ''}" ${attr}="${k}">${t}</button>`).join('') + '</div>'; }
 function tablaDatos(cabeceras, filas) {
@@ -2702,6 +2761,7 @@ function pintarAnalisis() {
   cont.innerHTML = (statsSeccion === 'resumen' ? bannerSinPedir() : '') + { resumen: htmlAnalisisResumen, beneficio: htmlAnalisisBeneficio, clientes: htmlAnalisisClientes, productos: htmlAnalisisProductos, evolucion: htmlAnalisisEvolucion }[statsSeccion](d);
   const aviso = cont.querySelector('[data-ir-sinpedir]');
   if (aviso) aviso.addEventListener('click', () => { statsSeccion = 'sinpedir'; pintarAnalisis(); });
+  if (statsSeccion === 'beneficio' && d.beneficio && d.compras) cargarComparador();
   const irBeneficio = cont.querySelector('[data-ir-beneficio]');
   if (irBeneficio) irBeneficio.addEventListener('click', () => { statsSeccion = 'beneficio'; pintarAnalisis(); });
   cont.querySelectorAll('[data-met-cli]').forEach((b) => b.addEventListener('click', () => { statsMetCli = b.dataset.metCli; pintarAnalisis(); }));

@@ -2408,7 +2408,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.41';
+const VERSION_APP = '2026.10.43';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -2438,7 +2438,7 @@ function graficoBarrasH(items, formato, color) {
     </div>`).join('') + '</div>';
 }
 // Columnas con línea opcional (ventas y margen): etiquetas[], barras[], linea[] (puede traer null), titulos
-function graficoColumnas(etiquetas, barras, linea, formatoTitulo, descripcion) {
+function graficoColumnas(etiquetas, barras, linea, formatoTitulo, descripcion, nombreLinea) {
   const W = 640, H = 250, ml = 54, mr = 12, mt = 14, mb = 34, n = etiquetas.length;
   if (!n) return '<div class="empty-state">Sin datos.</div>';
   const max = Math.max.apply(null, barras.concat((linea || []).filter((v) => v !== null && v !== undefined), [1]));
@@ -2451,11 +2451,11 @@ function graficoColumnas(etiquetas, barras, linea, formatoTitulo, descripcion) {
     const v = min + rango * k / 3;
     g += `<line x1="${ml}" x2="${W - mr}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" class="grafico-rejilla"/><text x="${ml - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${eurosCortos(v)}</text>`;
   }
-  barras.forEach((v, i) => { g += `<rect class="grafico-barra" x="${(x(i) - ancho / 2).toFixed(1)}" y="${Math.min(y(v), y(0)).toFixed(1)}" width="${ancho.toFixed(1)}" height="${Math.max(1, Math.abs(y(0) - y(v))).toFixed(1)}" rx="2"><title>${escapeHtml(etiquetas[i] + ': ' + formatoTitulo(v))}</title></rect>`; });
+  barras.forEach((v, i) => { g += `<rect class="grafico-barra${v < 0 ? ' grafico-barra--neg' : ''}" x="${(x(i) - ancho / 2).toFixed(1)}" y="${Math.min(y(v), y(0)).toFixed(1)}" width="${ancho.toFixed(1)}" height="${Math.max(1, Math.abs(y(0) - y(v))).toFixed(1)}" rx="2"><title>${escapeHtml(etiquetas[i] + ': ' + formatoTitulo(v))}</title></rect>`; });
   if (linea) {
     const pts = linea.map((v, i) => (v === null || v === undefined ? null : [x(i), y(v), v, i])).filter(Boolean);
     if (pts.length > 1) g += `<polyline class="grafico-linea" points="${pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>`;
-    pts.forEach((p) => { g += `<circle class="grafico-punto" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3"><title>${escapeHtml('Margen ' + etiquetas[p[3]] + ': ' + formatoTitulo(p[2]))}</title></circle>`; });
+    pts.forEach((p) => { g += `<circle class="grafico-punto" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3"><title>${escapeHtml((nombreLinea || 'Margen') + ' ' + etiquetas[p[3]] + ': ' + formatoTitulo(p[2]))}</title></circle>`; });
   }
   const paso = Math.max(1, Math.ceil(n / 8));
   etiquetas.forEach((e, i) => { if (i % paso === 0) g += `<text x="${x(i).toFixed(1)}" y="${H - 12}" text-anchor="middle">${escapeHtml(e)}</text>`; });
@@ -2476,21 +2476,39 @@ function graficoDonut(items, formato) {
 }
 
 // ---- datos para el gráfico de evolución: por día, por semana o por mes según lo largo que sea el periodo ----
-function agruparEvolucion(d) {
+function gruposDelPeriodo(d) {
   const ini = fechaDeTextoES(d.periodo.ini), fin = fechaDeTextoES(d.periodo.fin), n = d.periodo.dias;
-  const porDia = {}; d.dias.forEach((x) => { porDia[x.fecha] = x; });
   const modo = n <= 45 ? 'dia' : n <= 190 ? 'semana' : 'mes';
-  const grupos = []; const idx = {};
+  const etiquetas = [], indiceDeFecha = {}, idx = {};
   for (let f = new Date(ini); f <= fin; f = new Date(f.getFullYear(), f.getMonth(), f.getDate() + 1)) {
     let clave, etiqueta;
     if (modo === 'dia') { clave = fechaATextoES(f); etiqueta = clave.slice(0, 5); }
     else if (modo === 'semana') { const lunes = new Date(f.getFullYear(), f.getMonth(), f.getDate() - ((f.getDay() + 6) % 7)); clave = fechaATextoES(lunes); etiqueta = clave.slice(0, 5); }
     else { clave = (f.getFullYear() * 100 + f.getMonth()).toString(); etiqueta = String(f.getMonth() + 1).padStart(2, '0') + '/' + String(f.getFullYear()).slice(2); }
-    if (!(clave in idx)) { idx[clave] = grupos.length; grupos.push({ etiqueta, ventas: 0, margen: 0, conMargen: false, pedidos: 0 }); }
-    const x = porDia[fechaATextoES(f)];
-    if (x) { const g = grupos[idx[clave]]; g.ventas += x.ventas; g.pedidos += x.pedidos; if (x.margen !== null && x.margen !== undefined) { g.margen += x.margen; g.conMargen = true; } }
+    if (!(clave in idx)) { idx[clave] = etiquetas.length; etiquetas.push(etiqueta); }
+    indiceDeFecha[fechaATextoES(f)] = idx[clave];
   }
-  return { modo, etiquetas: grupos.map((g) => g.etiqueta), ventas: grupos.map((g) => redondeo2(g.ventas)), margen: grupos.map((g) => (g.conMargen ? redondeo2(g.margen) : null)), pedidos: grupos.map((g) => g.pedidos) };
+  return { modo, etiquetas, indiceDeFecha };
+}
+function agruparEvolucion(d) {
+  const g = gruposDelPeriodo(d), n = g.etiquetas.length;
+  const ventas = new Array(n).fill(0), margen = new Array(n).fill(0), conMargen = new Array(n).fill(false), pedidos = new Array(n).fill(0);
+  d.dias.forEach((x) => {
+    const i = g.indiceDeFecha[x.fecha]; if (i === undefined) return;
+    ventas[i] += x.ventas; pedidos[i] += x.pedidos;
+    if (x.margen !== null && x.margen !== undefined) { margen[i] += x.margen; conMargen[i] = true; }
+  });
+  return { modo: g.modo, etiquetas: g.etiquetas, ventas: ventas.map(redondeo2), margen: margen.map((m, i) => (conMargen[i] ? redondeo2(m) : null)), pedidos };
+}
+// Ventas, compras+estimado y beneficio por día, semana o mes (el beneficio es la diferencia)
+function agruparBeneficio(d) {
+  const g = gruposDelPeriodo(d), n = g.etiquetas.length;
+  const ventas = new Array(n).fill(0), gastos = new Array(n).fill(0);
+  ((d.beneficio && d.beneficio.dias) || []).forEach((x) => {
+    const i = g.indiceDeFecha[x.fecha]; if (i === undefined) return;
+    ventas[i] += x.ventas; gastos[i] += x.compras + x.estimado;
+  });
+  return { modo: g.modo, etiquetas: g.etiquetas, ventas: ventas.map(redondeo2), gastos: gastos.map(redondeo2), beneficio: ventas.map((v, i) => redondeo2(v - gastos[i])) };
 }
 
 // ---- lo más destacado del periodo ----
@@ -2534,12 +2552,42 @@ function htmlAnalisisResumen(d) {
     kpi('Clientes activos', String(R.clientes), variacionHtml(v.clientes)) +
     kpi('Unidades', String(R.unidades), `${R.diasConReparto} día${R.diasConReparto === 1 ? '' : 's'} de reparto`) +
     '</div>';
+  if (d.beneficio) {
+    const B = d.beneficio;
+    html += `<div class="card" data-ir-beneficio style="cursor:pointer; margin-top:10px;"><div class="card__top"><div class="card__name">💶 Beneficio del periodo</div><div class="card__total${B.beneficio < 0 ? ' kpi__valor--neg' : ''}">${formatoEuros(B.beneficio)}</div></div>` +
+      (B.hayGastos ? `<div class="card__meta">${pct1(B.margenPct)} de las ventas · ${variacionHtml(B.variacion.beneficio)} · ventas − compras − estimado. Toca para ver el detalle.</div>` : '<div class="card__meta">⚠ No hay compras ni gastos registrados en este periodo, así que esto son solo las ventas. Toca para ver el detalle.</div>') + '</div>';
+  }
   if (R.ventasSinCoste > 0) html += `<div class="card__meta" style="margin:8px 2px 0;">⚠ ${formatoEuros(R.ventasSinCoste)} de ventas son de productos sin coste puesto: no entran en el margen.</div>`;
   const dest = destacadosAnalisis(d);
   if (dest.length) html += '<div class="section-label">Lo más destacado</div><div class="card destacados">' + dest.map((x) => `<div class="destacado"><span class="destacado__icono" aria-hidden="true">${x.icono}</span><div><div class="destacado__titulo">${escapeHtml(x.titulo)}</div><div class="destacado__texto">${escapeHtml(x.texto)}</div></div></div>`).join('') + '</div>';
   if ((d.rutas || []).length > 1) html += '<div class="section-label">Ventas por ruta</div><div class="card">' + graficoDonut(d.rutas.map((r) => ({ etiqueta: etiquetaRuta(r.ruta), valor: r.ventas })), formatoEuros) + '</div>';
   const docs = d.documentos;
   if (docs && (docs.factura.pedidos || docs.albaran.pedidos)) html += '<div class="section-label">Facturas y albaranes</div><div class="card">' + graficoDonut([{ etiqueta: `Con factura (${docs.factura.pedidos})`, valor: docs.factura.ventas }, { etiqueta: `Con albarán (${docs.albaran.pedidos})`, valor: docs.albaran.ventas }], formatoEuros) + '</div>';
+  return html;
+}
+function htmlAnalisisBeneficio(d) {
+  const B = d.beneficio, C = d.compras;
+  if (!B || !C) return cabeceraAnalisis(d) + '<div class="empty-state">Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.</div>';
+  const kpi = (etiqueta, valor, extra, neg) => `<div class="kpi"><div class="kpi__etiqueta">${etiqueta}</div><div class="kpi__valor${neg ? ' kpi__valor--neg' : ''}">${valor}</div><div class="kpi__extra">${extra}</div></div>`;
+  let html = cabeceraAnalisis(d) + '<div class="kpi-grid">' +
+    kpi('Ventas', formatoEuros(B.ventas), variacionHtml(d.resumen.variacion.ventas)) +
+    kpi('Compras y gastos', formatoEuros(B.compras), `${formatoEuros(C.confirmado.mercancia)} mercancía · ${formatoEuros(C.confirmado.otros)} otros`) +
+    kpi('Estimado sin factura', formatoEuros(B.estimado), 'pedido a proveedores sin factura todavía') +
+    kpi('Beneficio', formatoEuros(B.beneficio), `${pct1(B.margenPct)} de las ventas · ${variacionHtml(B.variacion.beneficio)}`, B.beneficio < 0) +
+    kpi('Solo con facturas', formatoEuros(B.beneficioConfirmado), 'sin contar el estimado', B.beneficioConfirmado < 0) +
+    kpi('Pendiente de pagar', formatoEuros(C.sinPagar.total), `${C.sinPagar.n} factura${C.sinPagar.n === 1 ? '' : 's'} a proveedores`) +
+    '</div>';
+  if (!B.hayGastos) html += '<div class="card__meta" style="margin:8px 2px 0;">⚠ No hay compras ni gastos registrados en este periodo: el beneficio que sale son solo las ventas. Registra las facturas en Compras para ver la ganancia real.</div>';
+  html += '<div class="card__meta" style="margin:8px 2px 0;">Beneficio = ventas − compras y gastos registrados − gasto estimado de lo que aún no tiene factura. Todo sin IVA. Las facturas de los proveedores llegan con retraso, por eso se cuenta también el estimado; cuando llega la factura, sustituye a su estimado.</div>';
+  const e = agruparBeneficio(d), unidad = { dia: 'por día', semana: 'por semana (desde el lunes)', mes: 'por mes' }[e.modo];
+  html += `<div class="section-label">Ventas y gastos ${unidad}</div><div class="card">` + graficoColumnas(e.etiquetas, e.ventas, e.gastos, formatoEuros, 'Ventas y gastos ' + unidad, 'Compras y gastos') +
+    '<div class="leyenda-fila"><span class="leyenda-color" style="background:#C4964A"></span> Ventas <span class="leyenda-color leyenda-color--linea"></span> Compras y gastos (con el estimado)</div></div>';
+  html += `<div class="section-label">Beneficio ${unidad}</div><div class="card">` + graficoColumnas(e.etiquetas, e.beneficio, null, formatoEuros, 'Beneficio ' + unidad) + '<div class="card__meta">En rojo, los días en que se gasta más de lo que se vende (las facturas se anotan el día de su fecha).</div></div>';
+  if (C.proveedores.length) {
+    html += '<div class="section-label">Compras por proveedor</div><div class="card">' + graficoBarrasH(C.proveedores.slice(0, 8).map((p) => ({ etiqueta: p.nombre, valor: redondeo2(p.base + p.estimado), nota: `${p.facturas} factura${p.facturas === 1 ? '' : 's'} · ${formatoEuros(p.base)} registrado${p.estimado ? ' + ' + formatoEuros(p.estimado) + ' estimado' : ''}` })), formatoEuros) + '</div>';
+    html += tablaDatos(['Proveedor', 'Fact.', 'Registrado', 'Estimado'], C.proveedores.slice(0, 25).map((p) => [p.nombre, p.facturas, formatoEuros(p.base), p.estimado ? formatoEuros(p.estimado) : '—']));
+  }
+  if (C.categorias.length) html += '<div class="section-label">Gastos por categoría</div><div class="card">' + graficoBarrasH(C.categorias.slice(0, 8).map((x) => ({ etiqueta: x.categoria, valor: x.base })), formatoEuros) + '</div>';
   return html;
 }
 function metricaBotones(attr, actual, opciones) { return '<div class="rutas-chips">' + opciones.map(([k, t]) => `<button class="chip-btn${actual === k ? ' is-activo' : ''}" ${attr}="${k}">${t}</button>`).join('') + '</div>'; }
@@ -2611,6 +2659,7 @@ function htmlAnalisisSinPedir() {
   if (sinPedirError) return html + `<div class="empty-state">${sinPedirError}</div>`;
   if (!sinPedirValido(sinPedirDatos)) return html + '<div class="empty-state">Calculando…</div>';
   const d = sinPedirDatos, lista = clientesSinPedirOrdenados(d);
+  if (typeof d.totalActivos === 'number') html += `<div class="card__meta" style="margin-bottom:10px;">Se revisan <strong>${d.totalActivos}</strong> cliente${d.totalActivos === 1 ? '' : 's'} activo${d.totalActivos === 1 ? '' : 's'}${d.totalInactivos ? ` (los ${d.totalInactivos} dados de baja no entran)` : ''}.</div>`;
   if (!lista.length && !d.sinPedidos.length) return html + `<div class="empty-state">✓ Todos tus clientes activos han pedido en los últimos ${d.dias} días.</div>`;
   const plural = (n, a, b) => (n === 1 ? a : b);
   if (lista.length) {
@@ -2649,10 +2698,12 @@ function pintarAnalisis() {
   }
   document.querySelectorAll('[data-stats-sec]').forEach((b) => b.classList.toggle('is-activo', b.dataset.statsSec === statsSeccion));
   if (!d) return;
-  if (!d.resumen.pedidos) { cont.innerHTML = cabeceraAnalisis(d) + '<div class="empty-state">No hay pedidos en este periodo.</div>'; return; }
-  cont.innerHTML = (statsSeccion === 'resumen' ? bannerSinPedir() : '') + { resumen: htmlAnalisisResumen, clientes: htmlAnalisisClientes, productos: htmlAnalisisProductos, evolucion: htmlAnalisisEvolucion }[statsSeccion](d);
+  if (!d.resumen.pedidos && !(statsSeccion === 'beneficio' && d.beneficio && d.beneficio.hayGastos)) { cont.innerHTML = cabeceraAnalisis(d) + '<div class="empty-state">No hay pedidos en este periodo.</div>'; return; }
+  cont.innerHTML = (statsSeccion === 'resumen' ? bannerSinPedir() : '') + { resumen: htmlAnalisisResumen, beneficio: htmlAnalisisBeneficio, clientes: htmlAnalisisClientes, productos: htmlAnalisisProductos, evolucion: htmlAnalisisEvolucion }[statsSeccion](d);
   const aviso = cont.querySelector('[data-ir-sinpedir]');
   if (aviso) aviso.addEventListener('click', () => { statsSeccion = 'sinpedir'; pintarAnalisis(); });
+  const irBeneficio = cont.querySelector('[data-ir-beneficio]');
+  if (irBeneficio) irBeneficio.addEventListener('click', () => { statsSeccion = 'beneficio'; pintarAnalisis(); });
   cont.querySelectorAll('[data-met-cli]').forEach((b) => b.addEventListener('click', () => { statsMetCli = b.dataset.metCli; pintarAnalisis(); }));
   cont.querySelectorAll('[data-met-prod]').forEach((b) => b.addEventListener('click', () => { statsMetProd = b.dataset.metProd; pintarAnalisis(); }));
 }

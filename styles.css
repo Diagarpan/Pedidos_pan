@@ -869,3 +869,5 @@ html[data-tema="oscuro"] { --ambar: #E8AE4A; }
 .chip-btn--alerta.is-activo { color: #fff; }
 .aviso-sin-pedir { border-left: 4px solid var(--warn-red); }
 .badge-habitual { display: inline-block; background: #FBE9E7; color: var(--warn-red); border-radius: 10px; padding: 2px 9px; font-size: 12px; font-weight: 600; }
+.kpi__valor--neg { color: var(--warn-red); }
+.grafico-barra--neg { fill: var(--warn-red); }

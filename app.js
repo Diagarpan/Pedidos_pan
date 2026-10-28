@@ -1586,8 +1586,10 @@ async function descargarPDF(base64, nombreArchivo, tipoMime) {
   const byteArray = new Uint8Array(byteNumbers);
   const blob = new Blob([byteArray], { type: mime });
 
-  // En móvil, si el navegador lo soporta, ofrece compartir directamente
-  // (WhatsApp, Mail, etc.) usando el panel nativo de compartir.
+  // UNA sola cosa por archivo (así no se llena la carpeta de Descargas de duplicados ni de archivos con nombre raro):
+  //  1. en el móvil, si se puede compartir (WhatsApp, correo…), se comparte; si se cancela el panel, no se hace nada más;
+  //  2. un PDF en un navegador con visor propio (el ordenador) se abre en una pestaña, desde donde se imprime o se guarda;
+  //  3. en cualquier otro caso (un Excel, o un PDF sin visor como en Android) se descarga UNA vez, con su nombre.
   try {
     const archivo = new File([blob], nombreArchivo, { type: mime });
     if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
@@ -1595,17 +1597,19 @@ async function descargarPDF(base64, nombreArchivo, tipoMime) {
       return;
     }
   } catch (e) {
-    // el usuario canceló el panel de compartir, o no está soportado: seguimos con la descarga normal
+    if (e && e.name === 'AbortError') return;   // canceló el panel de compartir: no se descarga nada
+    // no soportado o no permitido: seguimos con la descarga normal
   }
 
   const url = URL.createObjectURL(blob);
-  // Abre el PDF en una pestaña nueva (desde ahí se puede imprimir o guardar)
-  window.open(url, '_blank');
-  // Y además dispara la descarga directa
+  setTimeout(() => URL.revokeObjectURL(url), 600000);
+  if (mime === 'application/pdf' && navigator.pdfViewerEnabled === true && window.open(url, '_blank')) return;
   const a = document.createElement('a');
   a.href = url;
   a.download = nombreArchivo;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
 }
 
 document.addEventListener('input', (e) => {
@@ -2408,7 +2412,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.47';
+const VERSION_APP = '2026.10.48';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -4050,7 +4054,10 @@ async function descargarTexto(nombreArchivo, texto, tipo) {
       await navigator.share({ files: [archivo], title: nombreArchivo });
       return;
     }
-  } catch (e) { /* cancelado o no soportado: descarga normal */ }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;   // canceló el panel de compartir: no se descarga nada
+    /* no soportado o no permitido: descarga normal */
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

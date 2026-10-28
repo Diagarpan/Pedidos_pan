@@ -2408,7 +2408,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.44';
+const VERSION_APP = '2026.10.46';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -4205,14 +4205,62 @@ async function buscarGastos() {
 
 // Se pinta desde lo último recibido (así, marcar "solo pendientes de pago" no vuelve a pedir nada)
 let ultimosGastos = null;
+let gastosProveedorSel = '';   // clave del proveedor elegido ('' = todos; '__sin' = gastos sin proveedor)
+// La misma clave que el servidor: por el NÚMERO del proveedor (aunque cambie de nombre); si no lo tiene, por su nombre; "__sin" si no tiene ninguno
+function claveProveedorGasto(g) {
+  const id = g.proveedorId === undefined || g.proveedorId === null ? '' : String(g.proveedorId).trim();
+  if (id !== '') return 'id:' + id;
+  const nombre = String(g.proveedor || '').trim();
+  return nombre !== '' ? 'n:' + nombre : '__sin';
+}
+// Por proveedor: facturas (confirmadas), total, lo pagado y lo pendiente de pago, y lo estimado todavía sin factura. De más a menos total.
+function resumenPorProveedorGastos(gastos) {
+  const por = {};
+  gastos.forEach((g) => {
+    const k = claveProveedorGasto(g), confirmado = g.estado !== 'Estimado';
+    const r = por[k] = por[k] || { clave: k, nombre: '', nombreDeFactura: false, facturas: 0, total: 0, base: 0, iva: 0, retencion: 0, pagado: 0, pendiente: 0, nPendientes: 0, estimados: 0, estimado: 0 };
+    const nombre = String(g.proveedor || '').trim();
+    if (k === '__sin') r.nombre = 'Sin proveedor';
+    else if (nombre && (!r.nombre || (confirmado && !r.nombreDeFactura))) { r.nombre = nombre; r.nombreDeFactura = confirmado; }
+    if (!confirmado) { r.estimados++; r.estimado += g.total; return; }
+    r.facturas++; r.total += g.total; r.base += g.base; r.iva += g.iva; r.retencion += g.retencion;
+    if (g.pagado === false) { r.pendiente += g.total; r.nPendientes++; } else r.pagado += g.total;
+  });
+  return Object.keys(por).map((k) => { const r = por[k]; if (!r.nombre) r.nombre = 'Proveedor'; ['total', 'base', 'iva', 'retencion', 'pagado', 'pendiente', 'estimado'].forEach((c) => { r[c] = redondeo2(r[c]); }); return r; })
+    .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, 'es'));
+}
 function pintarGastos() {
   const cont = document.getElementById('listaGastos');
   const d = ultimosGastos;
   if (!d) return;
   const soloPendientes = document.getElementById('gastosSoloPendientes').checked;
-  const lista = d.gastos.filter((g) => !soloPendientes || g.pagado === false);
-  const pend = d.pendientePago || { n: 0, total: 0 };
-  const est = d.estimado || { n: 0, total: 0 };
+  // el selector de proveedor: los que tienen gastos en este periodo
+  const proveedores = resumenPorProveedorGastos(d.gastos);
+  const selProv = document.getElementById('gastosProveedor');
+  if (!proveedores.some((p) => p.clave === gastosProveedorSel)) gastosProveedorSel = '';
+  selProv.innerHTML = '<option value="">Todos los proveedores</option>' + proveedores.map((p) => `<option value="${escapeHtml(p.clave)}">${escapeHtml(p.nombre)} (${p.facturas ? p.facturas + (p.facturas === 1 ? ' factura' : ' facturas') : 'solo estimado'})</option>`).join('');
+  selProv.value = gastosProveedorSel;
+  const prov = gastosProveedorSel ? proveedores.find((p) => p.clave === gastosProveedorSel) : null;
+  document.getElementById('btnDescargarLibroGastos').textContent = prov ? `Libro de gastos (PDF) · ${prov.nombre}` : 'Libro de gastos (PDF)';
+  const lista = d.gastos.filter((g) => (!soloPendientes || g.pagado === false) && (!prov || claveProveedorGasto(g) === prov.clave));
+  const pend = prov ? { n: prov.nPendientes, total: prov.pendiente } : (d.pendientePago || { n: 0, total: 0 });
+  const est = prov ? { n: prov.estimados, total: prov.estimado } : (d.estimado || { n: 0, total: 0 });
+  const totBase = prov ? prov.base : d.totalBase, totIva = prov ? prov.iva : d.totalIva, totRet = prov ? prov.retencion : d.totalRetencion, totGen = prov ? prov.total : d.totalGeneral;
+
+  // resumen por proveedor (con "Todos" y varios proveedores) o ficha del elegido
+  const contProv = document.getElementById('gastosPorProveedor');
+  if (!d.gastos.length) { contProv.innerHTML = ''; }
+  else if (prov) {
+    contProv.innerHTML = `<div class="card"><div class="card__top"><div class="card__name">${escapeHtml(prov.nombre)}</div><div class="card__total">${formatoEuros(prov.total)}</div></div>
+      <div class="card__meta">${prov.facturas} factura${prov.facturas === 1 ? '' : 's'} · pagado ${formatoEuros(prov.pagado)}</div>
+      <div class="card__meta"${prov.pendiente !== 0 ? ' style="color:var(--warn-red); font-weight:600;"' : ''}>${prov.pendiente !== 0 ? `⏳ Pendiente de pago: ${prov.nPendientes} factura${prov.nPendientes === 1 ? '' : 's'} · ${formatoEuros(prov.pendiente)}` : '✓ Nada pendiente de pago'}</div>
+      <div class="card__actions"><button class="chip-btn" data-gastos-todos-proveedores>← Todos los proveedores</button></div></div>`;
+  } else if (proveedores.length > 1) {
+    contProv.innerHTML = '<div class="section-label">Por proveedor</div>' + proveedores.map((p) => `<div class="card" data-gastos-proveedor="${escapeHtml(p.clave)}" style="cursor:pointer;"><div class="card__top"><div class="card__name">${escapeHtml(p.nombre)}</div><div class="card__total">${formatoEuros(p.total)}</div></div>
+      <div class="card__meta">${p.facturas ? `${p.facturas} factura${p.facturas === 1 ? '' : 's'} · pagado ${formatoEuros(p.pagado)}` : 'Solo gastos estimados, sin factura todavía'}${p.pendiente !== 0 ? ` · <span style="color:var(--warn-red); font-weight:600;">pendiente de pago ${formatoEuros(p.pendiente)}</span>` : ''}</div></div>`).join('');
+  } else { contProv.innerHTML = ''; }
+  contProv.querySelectorAll('[data-gastos-proveedor]').forEach((c) => c.addEventListener('click', () => { gastosProveedorSel = c.dataset.gastosProveedor; pintarGastos(); }));
+  contProv.querySelectorAll('[data-gastos-todos-proveedores]').forEach((b) => b.addEventListener('click', () => { gastosProveedorSel = ''; pintarGastos(); }));
 
   if (!d.gastos.length) {
     cont.innerHTML = '<div class="empty-state">Sin gastos en ese periodo.</div>';
@@ -4244,9 +4292,9 @@ function pintarGastos() {
         <button class="chip-btn" data-editar-gasto="${g.id}">Editar</button>
       </div>
     </div>`;
-  }).join('') : '<div class="empty-state">No hay gastos pendientes de pago en este periodo.</div>';
+  }).join('') : `<div class="empty-state">No hay gastos pendientes de pago${prov ? ' de este proveedor' : ''} en este periodo.</div>`;
 
-  document.getElementById('gastosTotal').innerHTML = escapeHtml(`Base: ${formatoEuros(d.totalBase)}  ·  IVA: ${formatoEuros(d.totalIva)}` + (d.totalRetencion > 0 ? `  ·  Retención: -${formatoEuros(d.totalRetencion)}` : '') + `  ·  Total: ${formatoEuros(d.totalGeneral)}`) +
+  document.getElementById('gastosTotal').innerHTML = escapeHtml(`Base: ${formatoEuros(totBase)}  ·  IVA: ${formatoEuros(totIva)}` + (totRet > 0 ? `  ·  Retención: -${formatoEuros(totRet)}` : '') + `  ·  Total: ${formatoEuros(totGen)}`) +
     (pend.n ? `<div class="card__meta" style="margin-top:4px; color:var(--warn-red);">Pendiente de pago: ${pend.n} · ${escapeHtml(formatoEuros(pend.total))}</div>` : '') +
     (est.n ? `<div class="card__meta" style="margin-top:4px;">Además, ${est.n} gasto${est.n === 1 ? '' : 's'} estimado${est.n === 1 ? '' : 's'} pendiente${est.n === 1 ? '' : 's'} de factura: ${escapeHtml(formatoEuros(est.total))} (no cuenta${est.n === 1 ? '' : 'n'} para el gestor)</div>` : '');
 
@@ -5330,6 +5378,7 @@ function recalcularFactura() {
   document.getElementById('facAPagar').textContent = retencion > 0 ? `Total a pagar, descontada la retención de ${formatoEuros(retencion)}: ${formatoEuros(total - retencion)}` : '';
   const marcados = idsCubiertosPorLaFactura();
   const el = document.getElementById('facComparacion');
+  if (total < 0) { el.textContent = 'Es un abono (devolución a tu favor): resta de tus compras y no cubre ningún estimado.'; return; }
   if (!marcados.length) { el.textContent = ''; return; }
   const estimado = facturaEstimados.filter((g) => marcados.includes(String(g.id))).reduce((s, g) => s + g.total, 0);
   const dif = total - estimado;
@@ -5411,20 +5460,24 @@ async function guardarFacturaProveedor() {
   if (!fecha) { fallo('Elige la fecha de la factura.'); return; }
   const desglosar = document.getElementById('facDesglosar').checked;
   const lineasDesglose = desglosar ? lineasDesgloseFactura() : [];
+  if (desglosar && ['facD4Base', 'facD10Base', 'facD21Base', 'facDOtroBase'].some((i) => Number(document.getElementById(i).value) < 0)) { fallo('Un abono se apunta sin desglose por tipos de IVA: desmarca el desglose y pon la base y el IVA totales, con signo menos.'); return; }
   if (desglosar && !lineasDesglose.length) { fallo('Pon la base de al menos un tipo de IVA (o desmarca el desglose).'); return; }
-  if (!(base > 0)) { fallo('Pon la base imponible de la factura.'); return; }
+  if (base === 0) { fallo('Pon la base imponible de la factura (en un abono o devolución, con signo menos).'); return; }
+  const esAbono = base < 0;   // devolución a tu favor: base e IVA con signo menos; resta de las compras
 
   if (estadoJustificante('fac').subiendo) { fallo('Espera a que termine de subirse la factura.'); return; }
   const pagada = document.getElementById('facPagada').checked;
   const retencion = Number(document.getElementById('facRetencion').value) || 0;
   const iva = Number(document.getElementById('facIva').value) || 0;
-  if (retencion > base + iva) { fallo('La retención no puede ser mayor que el total de la factura.'); return; }
+  if ((base > 0 && iva < 0) || (base < 0 && iva > 0)) { fallo('La base y el IVA tienen que llevar el mismo signo (en un abono, los dos con signo menos).'); return; }
+  if (esAbono && retencion > 0) { fallo('Un abono no puede llevar retención.'); return; }
+  if (!esAbono && retencion > base + iva) { fallo('La retención no puede ser mayor que el total de la factura.'); return; }
   if (pagada && !document.getElementById('facFechaPago').value) { fallo('Pon la fecha de pago (o desmarca "Ya está pagada").'); return; }
 
   const proveedor = proveedoresCache.find((p) => String(p.id) === proveedorId);
   const datos = {
     fecha: formatoFechaES(fecha), proveedorId, proveedorNombre: proveedor ? proveedor.nombre : '', numFactura,
-    base: String(base), iva: String(iva), cubre: idsCubiertosPorLaFactura().join(','),
+    base: String(base), iva: String(iva), cubre: esAbono ? '' : idsCubiertosPorLaFactura().join(','),
     categoria: document.getElementById('facCategoria').value.trim(), retencion: String(retencion),
     pagado: pagada ? 'true' : 'false', fechaPago: pagada ? formatoFechaES(document.getElementById('facFechaPago').value) : '',
     ...datosJustificante('fac'),
@@ -5446,7 +5499,9 @@ async function guardarFacturaProveedor() {
       r = await apiGet('incorporarFactura', { ...datos, confirmarDuplicado: '1' }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
     }
     if (!r.ok) { fallo(r.error || 'No se pudo incorporar la factura.'); return; }
-    msg.textContent = r.cubiertos
+    msg.textContent = r.abono
+      ? `Abono incorporado (${formatoEuros(r.total)}): resta de tus compras.`
+      : r.cubiertos
       ? `Factura incorporada. Cubre ${r.cubiertos} gasto${r.cubiertos === 1 ? '' : 's'} estimado${r.cubiertos === 1 ? '' : 's'} (${formatoEuros(r.estimado)}); la factura es de ${formatoEuros(r.total)} (${r.diferencia > 0 ? '+' : ''}${formatoEuros(r.diferencia)}).`
       : 'Factura incorporada como gasto.';
     msg.className = 'form-msg is-ok';
@@ -5461,7 +5516,9 @@ async function descargarLibroGastos() {
   const ini = document.getElementById('gastosFechaIni').value;
   const fin = document.getElementById('gastosFechaFin').value;
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('libroGastosPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  const parametros = { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) };
+  if (gastosProveedorSel) parametros.proveedor = gastosProveedorSel;   // el libro es solo de ese proveedor
+  const r = await apiGet('libroGastosPdf', parametros).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -5481,6 +5538,7 @@ function cablearCompras() {
   iniciarJustificante('gastoForm', contextoJustificanteGasto);
   document.getElementById('btnBuscarGastos').addEventListener('click', buscarGastos);
   document.getElementById('gastosSoloPendientes').addEventListener('change', pintarGastos);
+  document.getElementById('gastosProveedor').addEventListener('change', (e) => { gastosProveedorSel = e.target.value; pintarGastos(); });
   document.getElementById('btnGastosEsteMes').addEventListener('click', () => {
     const hoy = new Date();
     document.getElementById('gastosFechaIni').valueAsDate = new Date(hoy.getFullYear(), hoy.getMonth(), 1);

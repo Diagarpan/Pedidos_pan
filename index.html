@@ -560,10 +560,10 @@
     <input type="text" id="facCategoria" class="text-input" list="listaCategoriasGasto" autocomplete="off" placeholder="Mercancía">
     <label class="field-label" for="facFecha">Fecha de la factura</label>
     <input type="date" id="facFecha" class="text-input">
-    <label class="field-label" for="facBase">Base imponible (€)</label>
-    <input type="number" id="facBase" class="text-input" step="0.01" min="0" placeholder="0.00">
-    <label class="field-label" for="facIva">IVA (€, importe — no %)</label>
-    <input type="number" id="facIva" class="text-input" step="0.01" min="0" placeholder="0.00">
+    <label class="field-label" for="facBase">Base imponible (€) — en un abono o devolución, con signo menos</label>
+    <input type="number" id="facBase" class="text-input" step="0.01" placeholder="0.00">
+    <label class="field-label" for="facIva">IVA (€, importe — no %) — en un abono, también con signo menos</label>
+    <input type="number" id="facIva" class="text-input" step="0.01" placeholder="0.00">
     <label style="display:flex; gap:8px; align-items:center; margin:10px 0 4px; font-size:15px;">
       <input type="checkbox" id="facDesglosar">
       <span>Desglosar el IVA por tipos (4 %, 10 %, 21 %…)</span>
@@ -621,6 +621,9 @@
       <button class="btn-secondary" id="btnDescargarLibroGastos">Libro de gastos (PDF)</button>
     </div>
     <button class="btn-primary" id="btnIncorporarFactura" style="width:100%; margin-top:10px;">Incorporar factura de proveedor</button>
+    <label class="field-label" for="gastosProveedor">Proveedor</label>
+    <select id="gastosProveedor" class="select-input"><option value="">Todos los proveedores</option></select>
+    <div id="gastosPorProveedor" class="stack" style="margin-top:8px;"></div>
     <label style="display:flex; gap:8px; align-items:center; margin:10px 0 4px; font-size:14px;">
       <input type="checkbox" id="gastosSoloPendientes">
       <span>Solo pendientes de pago</span>

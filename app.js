@@ -2412,7 +2412,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.48';
+const VERSION_APP = '2026.10.49';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -5551,6 +5551,17 @@ function cablearCompras() {
   iniciarJustificante('gastoForm', contextoJustificanteGasto);
   document.getElementById('btnBuscarGastos').addEventListener('click', buscarGastos);
   document.getElementById('gastosSoloPendientes').addEventListener('change', pintarGastos);
+  document.getElementById('btnActualizarVistas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Actualizando…', async () => {
+    const msg = document.getElementById('msgVistas');
+    const r = await apiGet('actualizarVistas').catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) {
+      msg.style.color = 'var(--warn-red)';
+      msg.textContent = /no reconocid|desconocid/i.test(r.error || '') ? 'Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.' : 'No se pudo actualizar: ' + (r.error || 'error');
+      return;
+    }
+    msg.style.color = '';
+    msg.textContent = `Listo: ${r.facturas} factura${r.facturas === 1 ? '' : 's'} y gasto${r.facturas === 1 ? '' : 's'} y ${r.pedidos} pedido${r.pedidos === 1 ? '' : 's'} a proveedores puestos al día en las pestañas VISTA FACTURAS y VISTA PEDIDOS PROV del Sheet.`;
+  }));
   document.getElementById('gastosSinOriginal').addEventListener('change', pintarGastos);
   document.getElementById('gastosProveedor').addEventListener('change', (e) => { gastosProveedorSel = e.target.value; pintarGastos(); });
   document.getElementById('btnGastosEsteMes').addEventListener('click', () => {

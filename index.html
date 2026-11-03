@@ -95,6 +95,13 @@
     </div>
 
     <button class="aviso-incidencias tab--hidden" id="avisoIncidencias" data-solo-admin="1"></button>
+    <div class="aviso-cierre tab--hidden" id="avisoCierreMes" data-solo-admin="1">
+      <div class="aviso-cierre__texto" id="avisoCierreTexto"></div>
+      <div class="aviso-cierre__acciones">
+        <button class="btn-primary" id="btnCierreRevisar">Revisar y cerrar el mes</button>
+        <button class="chip-btn" id="btnCierreMasTarde">Más tarde</button>
+      </div>
+    </div>
 
     <div class="global-search">
       <input type="search" id="buscarGlobal" class="search-input" placeholder="Buscar cliente, pedido o factura…" style="margin-bottom:0;">
@@ -435,6 +442,7 @@
       <button class="home-btn home-btn--factura" data-tab="balance"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Balance: ventas y coste<small>Lo que vendes frente a lo que te cuesta, por día</small></span></button>
       <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Gastos y facturas<small>Todo lo apuntado: editar, marcar pagadas y ver justificantes</small></span></button>
       <div class="home-grupo">Para el gestor</div>
+      <button class="home-btn home-btn--factura" data-tab="cierre-mes"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cierre de mes<small>Qué falta por revisar antes de pasar el mes al gestor</small></span></button>
       <button class="home-btn home-btn--factura" data-tab="gestor"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Zona del gestor<small>El Excel y la carpeta del mes con todo lo que necesita</small></span></button>
       <div class="home-grupo">Ajustes</div>
       <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span><span class="home-btn__texto">Proveedores<small>Altas y datos de cada proveedor</small></span></button>
@@ -634,6 +642,10 @@
       <input type="checkbox" id="gastosSinOriginal">
       <span>Solo sin factura original (sin archivo o solo con el listado)</span>
     </label>
+    <label style="display:flex; gap:8px; align-items:center; margin:4px 0 4px; font-size:14px;">
+      <input type="checkbox" id="gastosSoloEstimados">
+      <span>Solo pedidos a proveedores pendientes de factura</span>
+    </label>
     <div id="listaGastos" class="stack">
       <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
     </div>
@@ -738,6 +750,22 @@
     <div class="form-msg" id="gestorMsg"></div>
     <div id="gestorResultado" class="stack"></div>
   </section>
+
+  <section class="tab tab--hidden" id="tab-cierre-mes">
+    <button class="link-btn" data-volver="compras">← Compras</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title">Cierre de mes</div>
+      <div class="home-sub">Qué falta por revisar antes de pasar el mes al gestor</div>
+    </div>
+    <input type="month" id="cierreMes" class="text-input">
+    <div class="card__meta" id="cierreEstado" style="margin:8px 2px;"></div>
+    <div id="cierreLista" class="stack"></div>
+    <button class="btn-secondary" id="btnCierreGestor" style="width:100%; margin-top:10px;">📁 Preparar la carpeta del mes para el gestor</button>
+    <button class="btn-secondary" id="btnCierreVistas" style="width:100%; margin-top:8px;">📊 Actualizar las hojas de lectura del Sheet</button>
+    <button class="btn-primary" id="btnCierreCerrar" style="width:100%; margin-top:8px;">✅ Marcar el mes como cerrado</button>
+    <div class="form-msg" id="cierreMsg"></div>
+  </section>
+
 
   <section class="tab tab--hidden" id="tab-balance">
     <button class="link-btn" data-volver="compras">← Compras</button>

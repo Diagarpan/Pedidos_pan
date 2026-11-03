@@ -876,3 +876,8 @@ html[data-tema="oscuro"] { --ambar: #E8AE4A; }
 .veredicto--albaranes { border-left-color: #2E52A6; }
 .veredicto--parcial { border-left-color: #E0A23C; }
 .veredicto--otra { border-left-color: var(--warn-red); }
+
+/* Aviso de cierre de mes en el Inicio */
+.aviso-cierre { margin: 0 0 12px; padding: 12px 14px; font-size: 14px; background: var(--paper-raised); border: 1px solid var(--crust); border-left: 4px solid var(--crust); border-radius: var(--radius); }
+.aviso-cierre__texto { font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+.aviso-cierre__acciones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

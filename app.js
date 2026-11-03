@@ -810,6 +810,7 @@ const BREADCRUMBS = {
   'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de la semana', tab: 'facturas-semana' }],
   'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Listado del proveedor', tab: 'cuadrar' }],
   'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
+  'cierre-mes': [{ label: 'Compras', tab: 'compras' }, { label: 'Cierre de mes', tab: 'cierre-mes' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
   'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
   'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen por periodo e IVA', tab: 'factura-periodo' }],
@@ -915,6 +916,7 @@ function cargarTabActual(nombre) {
   if (activo === 'facturas-semana') cargarFacturasSemana();
   if (activo === 'cuadrar') iniciarCuadrar();
   if (activo === 'gestor') iniciarGestor();
+  if (activo === 'cierre-mes') iniciarCierreMes();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -945,6 +947,8 @@ function pintarResumenInicio(r) {
   } else {
     avisoInc.classList.add('tab--hidden');
   }
+
+  pintarAvisoCierre(r.data.cierreMes);
 
   // Insignias de "Reparto" y "Pedidos" con los mismos datos (sin pedir nada más)
   const total = r.data.pedidosHoy;
@@ -2412,7 +2416,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.49';
+const VERSION_APP = '2026.10.51';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -4245,6 +4249,7 @@ function pintarGastos() {
   if (!d) return;
   const soloPendientes = document.getElementById('gastosSoloPendientes').checked;
   const soloSinOriginal = document.getElementById('gastosSinOriginal').checked;
+  const soloEstimados = document.getElementById('gastosSoloEstimados').checked;
   // el selector de proveedor: los que tienen gastos en este periodo
   const proveedores = resumenPorProveedorGastos(d.gastos);
   const selProv = document.getElementById('gastosProveedor');
@@ -4253,7 +4258,7 @@ function pintarGastos() {
   selProv.value = gastosProveedorSel;
   const prov = gastosProveedorSel ? proveedores.find((p) => p.clave === gastosProveedorSel) : null;
   document.getElementById('btnDescargarLibroGastos').textContent = prov ? `Libro de gastos (PDF) · ${prov.nombre}` : 'Libro de gastos (PDF)';
-  const lista = d.gastos.filter((g) => (!soloPendientes || g.pagado === false) && (!soloSinOriginal || sinFacturaOriginal(g)) && (!prov || claveProveedorGasto(g) === prov.clave));
+  const lista = d.gastos.filter((g) => (!soloPendientes || g.pagado === false) && (!soloSinOriginal || sinFacturaOriginal(g)) && (!soloEstimados || g.estado === 'Estimado') && (!prov || claveProveedorGasto(g) === prov.clave));
   const pend = prov ? { n: prov.nPendientes, total: prov.pendiente } : (d.pendientePago || { n: 0, total: 0 });
   const est = prov ? { n: prov.estimados, total: prov.estimado } : (d.estimado || { n: 0, total: 0 });
   const totBase = prov ? prov.base : d.totalBase, totIva = prov ? prov.iva : d.totalIva, totRet = prov ? prov.retencion : d.totalRetencion, totGen = prov ? prov.total : d.totalGeneral;
@@ -4305,7 +4310,7 @@ function pintarGastos() {
         <button class="chip-btn" data-editar-gasto="${g.id}">Editar</button>
       </div>
     </div>`;
-  }).join('') : `<div class="empty-state">${soloSinOriginal ? `Todas las facturas${prov ? ' de este proveedor' : ''} tienen ya su factura original.` : `No hay gastos pendientes de pago${prov ? ' de este proveedor' : ''} en este periodo.`}</div>`;
+  }).join('') : `<div class="empty-state">${soloEstimados ? `No hay pedidos a proveedores pendientes de factura${prov ? ' de este proveedor' : ''} en este periodo.` : soloSinOriginal ? `Todas las facturas${prov ? ' de este proveedor' : ''} tienen ya su factura original.` : `No hay gastos pendientes de pago${prov ? ' de este proveedor' : ''} en este periodo.`}</div>`;
 
   document.getElementById('gastosTotal').innerHTML = escapeHtml(`Base: ${formatoEuros(totBase)}  ·  IVA: ${formatoEuros(totIva)}` + (totRet > 0 ? `  ·  Retención: -${formatoEuros(totRet)}` : '') + `  ·  Total: ${formatoEuros(totGen)}`) +
     (pend.n ? `<div class="card__meta" style="margin-top:4px; color:var(--warn-red);">Pendiente de pago: ${pend.n} · ${escapeHtml(formatoEuros(pend.total))}</div>` : '') +
@@ -4926,6 +4931,9 @@ function pintarCuadre(r, proveedorId, texto) {
       <div class="card__name">Guardar el listado</div>
       <div class="card__meta" style="margin-top:4px;">Se guarda en Drive como dato extra del mes y va en la carpeta del gestor (Listados de proveedores). No apunta nada.</div>
       <button class="btn-secondary" id="btnCdGuardarListado" style="width:100%; margin-top:8px;">Guardar el listado en Drive</button>
+      <div class="card__meta" style="margin-top:12px;">¿Te ha mandado el proveedor el resumen en PDF o en foto? Súbelo también: el gestor recibe el documento original, no solo el texto.</div>
+      <label class="btn-secondary" for="cdResumenArchivo" style="display:block; text-align:center; cursor:pointer; margin:8px 0 0;">📎 Subir el PDF o la foto del resumen</label>
+      <input type="file" id="cdResumenArchivo" accept="image/*,application/pdf" style="display:none;">
     </div>
     ${bloque('⚠ Importe distinto', 'var(--warn-red)', r.importeDistinto.map((x) => `<div class="card__meta" style="margin-top:6px;"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · el proveedor dice ${e(x.resumen)} y tienes ${e(x.app)} (${escapeHtml(dif(x.diferencia))})</div>`))}
     ${bloque('✗ Están en el resumen y NO las tienes apuntadas', 'var(--warn-red)', r.faltanEnApp.map((x, i) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><div class="card__meta"><strong>${escapeHtml(x.numFactura)}</strong> · ${escapeHtml(x.fecha)} · ${e(x.total)}${x.base !== null && x.base !== undefined ? ` (base ${e(x.base)} + IVA ${e(x.iva)})` : ''}</div><button class="chip-btn" data-cd-apuntar="${i}">Apuntarla</button></div>${x.importable ? '' : `<div class="card__meta" style="color:var(--warn-red);">${escapeHtml(x.motivo || '')}</div>`}</div>`))}
@@ -4937,6 +4945,8 @@ function pintarCuadre(r, proveedorId, texto) {
   if (botonImportar) botonImportar.addEventListener('click', importarDelListado);
   const botonListado = document.getElementById('btnCdGuardarListado');
   if (botonListado) botonListado.addEventListener('click', guardarListadoEnDrive);
+  const elegirResumen = document.getElementById('cdResumenArchivo');
+  if (elegirResumen) elegirResumen.addEventListener('change', () => { const f = elegirResumen.files && elegirResumen.files[0]; elegirResumen.value = ''; if (f) subirResumenOriginal(f); });
   const elegirOriginales = document.getElementById('cdOriginales');
   if (elegirOriginales) elegirOriginales.addEventListener('change', () => { const lista = elegirOriginales.files ? Array.from(elegirOriginales.files) : []; elegirOriginales.value = ''; adjuntarOriginalesDelListado(lista); });
   cont.querySelectorAll('[data-cd-apuntar]').forEach((btn) => {
@@ -4964,6 +4974,27 @@ async function guardarListadoEnDrive() {
   } finally {
     guardandoListado = false;
     if (boton) boton.disabled = false;
+  }
+}
+
+// Sube el PDF o la foto del resumen que manda el proveedor: se guarda en Drive junto al listado en texto (Listado_Proveedor_aaaa-mm) y va a la carpeta del gestor
+let subiendoResumen = false;
+async function subirResumenOriginal(archivo) {
+  if (subiendoResumen || !ultimoCuadre) return;
+  subiendoResumen = true;
+  const msg = document.getElementById('cdMsg');
+  msg.textContent = 'Subiendo el resumen…'; msg.className = 'form-msg';
+  try {
+    const f = await prepararArchivoJustificante(archivo);
+    const r = await apiPost('subirListadoOriginal', { idProveedor: ultimoCuadre.proveedorId, texto: ultimoCuadre.texto, mime: f.mime, base64: f.base64 }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+    if (!r.ok) { msg.textContent = r.error || 'No se pudo subir el resumen.'; msg.className = 'form-msg is-error'; return; }
+    msg.textContent = r.yaEstaba ? `Ese resumen ya estaba guardado (${r.nombre}).` : `Resumen subido (${r.nombre}). Va a la carpeta del gestor, en «Listados de proveedores».`;
+    msg.className = 'form-msg is-ok';
+  } catch (err) {
+    msg.textContent = (err && err.message) ? err.message : textoDeFallo(err);
+    msg.className = 'form-msg is-error';
+  } finally {
+    subiendoResumen = false;
   }
 }
 
@@ -5152,6 +5183,146 @@ function cablearCuadrar() {
     document.getElementById('fdFecha').value = b.dataset.fdRapido === 'ayer' ? ayerISO() : hoyISO();
     cargarFacturasDia();
   }));
+}
+
+/* ============ HOJAS DE LECTURA DEL SHEET (botón compartido) ============ */
+async function actualizarVistasSheet(msg) {
+  const r = await apiGet('actualizarVistas').catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) {
+    msg.style.color = 'var(--warn-red)';
+    msg.textContent = /no reconocid|desconocid/i.test(r.error || '') ? 'Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.' : 'No se pudo actualizar: ' + (r.error || 'error');
+    return;
+  }
+  msg.style.color = '';
+  msg.textContent = `Listo: ${r.facturas} factura${r.facturas === 1 ? '' : 's'} y gasto${r.facturas === 1 ? '' : 's'} y ${r.pedidos} pedido${r.pedidos === 1 ? '' : 's'} a proveedores puestos al día en las pestañas VISTA FACTURAS y VISTA PEDIDOS PROV del Sheet.`;
+}
+
+/* ============ CIERRE DE MES ============ */
+let cierreActual = null;   // la última lista de comprobación cargada
+let cierreInicio = null;   // el estado del cierre que trajo el resumen de Inicio
+function mesAnteriorISO() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function hoyLocalISO() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function mesDelCierre() { const v = document.getElementById('cierreMes').value; if (!v) return null; const [anio, mes] = v.split('-'); return { anio, mes: String(Number(mes)) }; }
+const conMayuscula = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
+
+function iniciarCierreMes() {
+  const entrada = document.getElementById('cierreMes');
+  if (!entrada.value) entrada.value = mesAnteriorISO();
+  document.getElementById('cierreMsg').textContent = '';
+  cargarCierreMes();
+}
+
+async function cargarCierreMes() {
+  const m = mesDelCierre();
+  const cont = document.getElementById('cierreLista');
+  document.getElementById('cierreEstado').textContent = '';
+  if (!m) { cont.innerHTML = '<div class="empty-state">Elige el mes.</div>'; return; }
+  cont.innerHTML = '<div class="empty-state">Revisando el mes…</div>';
+  const r = await apiGet('cierreMes', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  const ahora = mesDelCierre();
+  if (!ahora || ahora.anio !== m.anio || ahora.mes !== m.mes) return;   // cambió de mes mientras cargaba
+  if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo revisar el mes: ${escapeHtml(r.error || '')}</div>`; return; }
+  cierreActual = r;
+  pintarCierreMes(r);
+}
+
+function pintarCierreMes(r) {
+  const cont = document.getElementById('cierreLista');
+  const s = (n, uno, varios) => (n === 1 ? uno : varios);
+  const it = (id) => r.items.find((x) => x.id === id) || {};
+  const provs = (lista) => (lista || []).map((p) => `${escapeHtml(p.proveedor)} (${p.n})`).join(' · ');
+  const tarjeta = (icono, titulo, detalle, ir, textoBoton, rojo) => `<div class="card">
+      <div class="card__name"${rojo ? ' style="color:var(--warn-red);"' : ''}>${icono} ${titulo}</div>
+      ${(detalle || []).filter(Boolean).map((d) => `<div class="card__meta">${d}</div>`).join('')}
+      ${ir ? `<div class="card__actions"><button class="chip-btn" data-cierre-ir="${ir}">${textoBoton}</button></div>` : ''}
+    </div>`;
+  const rs = r.resumen;
+  const tarjetas = [`<div class="card">
+      <div class="card__name">${escapeHtml(conMayuscula(r.nombre))}</div>
+      <div class="card__meta">Ventas ${formatoEuros(rs.ventasBase)} · ${rs.facturasEmitidas.n} factura${s(rs.facturasEmitidas.n, '', 's')} emitida${s(rs.facturasEmitidas.n, '', 's')} (${formatoEuros(rs.facturasEmitidas.total)} con IVA)</div>
+      <div class="card__meta">Compras con factura ${formatoEuros(rs.comprasBase)} · beneficio solo con facturas ${formatoEuros(rs.beneficioConfirmado)}${rs.estimadoBase ? ` (${formatoEuros(rs.beneficioProvisional)} contando ${formatoEuros(rs.estimadoBase)} de pedidos sin factura)` : ''}</div>
+      <div class="card__meta">Importes sin IVA.</div>
+    </div>`];
+  const o = it('originales');
+  if (o.estado === 'aviso') tarjetas.push(tarjeta('⚠️', `${o.n} de ${o.de} factura${s(o.de, '', 's')} de proveedores sin su factura original`, [provs(o.proveedores), 'Sin archivo o solo con el listado del proveedor. Adjúntalas antes de pasar el mes al gestor.'], 'originales', 'Ver y adjuntar', true));
+  else if (o.estado === 'ok') tarjetas.push(tarjeta('✅', `Las ${o.de} factura${s(o.de, '', 's')} de proveedores tienen su factura original`, []));
+  else tarjetas.push(tarjeta('ℹ️', 'No hay facturas de proveedores apuntadas en este mes', ['Si este mes compraste, apúntalas en Compras.']));
+  const e = it('estimados');
+  if (e.estado === 'aviso') tarjetas.push(tarjeta('⚠️', `${e.n} pedido${s(e.n, '', 's')} a proveedores sin factura (${formatoEuros(e.base)} de base)`, [provs(e.proveedores), 'Siguen restando del beneficio: cúbrelos con su factura, o quítalos si ese día no hubo reparto.'], 'estimados', 'Ver pedidos pendientes', true));
+  else tarjetas.push(tarjeta('✅', 'Todos los pedidos a proveedores tienen su factura', []));
+  const p = it('pagos');
+  if (p.n > 0) tarjetas.push(tarjeta('ℹ️', `${p.n} factura${s(p.n, '', 's')} de proveedores sin pagar (${formatoEuros(p.total)})`, [provs(p.proveedores)], 'pagos', 'Ver pendientes de pago'));
+  else tarjetas.push(tarjeta('✅', 'No debes ninguna factura de este mes', []));
+  const c = it('cobros');
+  if (c.n > 0) tarjetas.push(tarjeta('ℹ️', `Clientes por cobrar: ${c.n} (${formatoEuros(c.total)})`, ['Es lo pendiente en total, no solo de este mes.'], 'cobros', 'Ver cobros'));
+  const al = it('albaranes');
+  if (al.n > 0) tarjetas.push(tarjeta('ℹ️', `${al.n} pedido${s(al.n, '', 's')} con albarán, sin factura emitida (${formatoEuros(al.base)} de base)`, []));
+  const ca = it('catalogo');
+  if (ca.estado === 'aviso') {
+    const partes = [];
+    if (ca.fuera && ca.fuera.unidades > 0) partes.push(`Fuera de catálogo: ${ca.fuera.unidades} unidad${s(ca.fuera.unidades, '', 'es')} (${formatoEuros(ca.fuera.ventas)})`);
+    if (ca.sinCoste && ca.sinCoste.n > 0) partes.push(`${ca.sinCoste.n} producto${s(ca.sinCoste.n, '', 's')} sin coste (${formatoEuros(ca.sinCoste.ventas)} vendidos): ${(ca.sinCoste.nombres || []).map(escapeHtml).join(', ')}`);
+    tarjetas.push(tarjeta('⚠️', 'Productos fuera de catálogo o sin coste', [partes.join(' · '), 'Falsean el margen y el pedido a proveedores.'], 'catalogo', 'Ver en Estadísticas', true));
+  } else tarjetas.push(tarjeta('✅', 'Ningún producto fuera de catálogo ni sin coste', []));
+  cont.innerHTML = tarjetas.join('');
+  cont.querySelectorAll('[data-cierre-ir]').forEach((b) => b.addEventListener('click', () => irDesdeCierre(b.dataset.cierreIr)));
+  document.getElementById('cierreEstado').textContent = r.cerrado ? `✅ Cerrado${r.fechaCierre ? ' el ' + r.fechaCierre : ''}` : '🔓 Sin cerrar' + (r.avisos ? ` · ${r.avisos} cosa${s(r.avisos, '', 's')} por revisar` : ' · todo en orden');
+  actualizarBotonCierre(r);
+}
+// El texto del botón de cerrar/reabrir (se vuelve a poner al terminar la operación, porque conEstadoCarga restaura el que tenía al empezar)
+function actualizarBotonCierre(r) {
+  document.getElementById('btnCierreCerrar').textContent = r.cerrado ? '↩ Reabrir este mes' : `✅ Marcar ${r.nombre} como cerrado`;
+}
+
+// Abre Gastos y facturas con las fechas del mes y el filtro que toque
+function irAGastosDelMes(op) {
+  const m = mesDelCierre();
+  if (!m) return;
+  const mm = String(m.mes).padStart(2, '0');
+  const ultimo = new Date(Number(m.anio), Number(m.mes), 0).getDate();
+  cambiarTab('gastos-ver');
+  document.getElementById('gastosFechaIni').value = `${m.anio}-${mm}-01`;
+  document.getElementById('gastosFechaFin').value = `${m.anio}-${mm}-${String(ultimo).padStart(2, '0')}`;
+  gastosProveedorSel = '';
+  document.getElementById('gastosSoloPendientes').checked = !!op.soloPendientes;
+  document.getElementById('gastosSinOriginal').checked = !!op.sinOriginal;
+  document.getElementById('gastosSoloEstimados').checked = !!op.soloEstimados;
+  buscarGastos();
+}
+
+function irDesdeCierre(destino) {
+  if (destino === 'originales') irAGastosDelMes({ sinOriginal: true });
+  else if (destino === 'estimados') irAGastosDelMes({ soloEstimados: true });
+  else if (destino === 'pagos') irAGastosDelMes({ soloPendientes: true });
+  else if (destino === 'cobros') cambiarTab('panel');
+  else if (destino === 'catalogo') cambiarTab('estadisticas');
+}
+
+async function alternarCierreMes() {
+  const m = mesDelCierre();
+  if (!m || !cierreActual) return;
+  const cerrar = !cierreActual.cerrado;
+  if (cerrar && cierreActual.avisos > 0 && !confirm(`Aún quedan ${cierreActual.avisos} cosa${cierreActual.avisos === 1 ? '' : 's'} por revisar en ${cierreActual.nombre}. ¿Cerrar el mes igualmente?`)) return;
+  const msg = document.getElementById('cierreMsg');
+  const r = await apiGet('marcarCierreMes', { anio: m.anio, mes: m.mes, cerrado: cerrar ? '1' : '0' }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { msg.className = 'form-msg is-error'; msg.textContent = 'No se pudo guardar: ' + (r.error || 'inténtalo de nuevo'); return; }
+  cierreActual.cerrado = r.cerrado;
+  cierreActual.fechaCierre = r.fechaCierre;
+  pintarCierreMes(cierreActual);
+  msg.className = 'form-msg is-ok';
+  msg.textContent = cerrar ? `${conMayuscula(r.nombre)} cerrado. Ya no te lo recordaré.` : `${conMayuscula(r.nombre)} reabierto.`;
+  if (cierreInicio && cierreInicio.anio === r.anio && cierreInicio.mes === r.mes) { cierreInicio.cerrado = r.cerrado; pintarAvisoCierre(cierreInicio); }
+}
+
+// El aviso del Inicio: aparece cuando el mes anterior no está cerrado, hasta cerrarlo ("Más tarde" lo esconde solo por hoy)
+function pintarAvisoCierre(c) {
+  const el = document.getElementById('avisoCierreMes');
+  cierreInicio = c || null;
+  let pospuesto = false;
+  try { pospuesto = !!c && localStorage.getItem('cierreMasTarde') === hoyLocalISO() + '|' + c.anio + '-' + c.mes; } catch (e) { pospuesto = false; }
+  if (!c || c.cerrado || pospuesto) { el.classList.add('tab--hidden'); return; }
+  document.getElementById('avisoCierreTexto').textContent = `🗓 ${conMayuscula(c.nombre)} ya ha terminado: revisa las facturas pendientes y cierra el mes.`;
+  el.classList.remove('tab--hidden');
 }
 
 /* ============ ZONA DEL GESTOR ============ */
@@ -5551,18 +5722,25 @@ function cablearCompras() {
   iniciarJustificante('gastoForm', contextoJustificanteGasto);
   document.getElementById('btnBuscarGastos').addEventListener('click', buscarGastos);
   document.getElementById('gastosSoloPendientes').addEventListener('change', pintarGastos);
-  document.getElementById('btnActualizarVistas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Actualizando…', async () => {
-    const msg = document.getElementById('msgVistas');
-    const r = await apiGet('actualizarVistas').catch((err) => ({ ok: false, error: textoDeFallo(err) }));
-    if (!r.ok) {
-      msg.style.color = 'var(--warn-red)';
-      msg.textContent = /no reconocid|desconocid/i.test(r.error || '') ? 'Falta actualizar Apps Script: publica una nueva versión con los archivos nuevos.' : 'No se pudo actualizar: ' + (r.error || 'error');
-      return;
-    }
-    msg.style.color = '';
-    msg.textContent = `Listo: ${r.facturas} factura${r.facturas === 1 ? '' : 's'} y gasto${r.facturas === 1 ? '' : 's'} y ${r.pedidos} pedido${r.pedidos === 1 ? '' : 's'} a proveedores puestos al día en las pestañas VISTA FACTURAS y VISTA PEDIDOS PROV del Sheet.`;
-  }));
+  document.getElementById('btnActualizarVistas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Actualizando…', () => actualizarVistasSheet(document.getElementById('msgVistas'))));
   document.getElementById('gastosSinOriginal').addEventListener('change', pintarGastos);
+  document.getElementById('gastosSoloEstimados').addEventListener('change', pintarGastos);
+  document.getElementById('cierreMes').addEventListener('change', cargarCierreMes);
+  document.getElementById('btnCierreCerrar').addEventListener('click', async (e) => {
+    await conEstadoCarga(e.currentTarget, 'Guardando…', alternarCierreMes);
+    if (cierreActual) actualizarBotonCierre(cierreActual);
+  });
+  document.getElementById('btnCierreVistas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Actualizando…', () => actualizarVistasSheet(document.getElementById('cierreMsg'))));
+  document.getElementById('btnCierreGestor').addEventListener('click', () => { const m = mesDelCierre(); if (m) document.getElementById('gestorMes').value = `${m.anio}-${String(m.mes).padStart(2, '0')}`; cambiarTab('gestor'); });
+  document.getElementById('btnCierreRevisar').addEventListener('click', () => {
+    if (!cierreInicio) return;
+    document.getElementById('cierreMes').value = `${cierreInicio.anio}-${String(cierreInicio.mes).padStart(2, '0')}`;
+    cambiarTab('cierre-mes');
+  });
+  document.getElementById('btnCierreMasTarde').addEventListener('click', () => {
+    if (cierreInicio) { try { localStorage.setItem('cierreMasTarde', hoyLocalISO() + '|' + cierreInicio.anio + '-' + cierreInicio.mes); } catch (e) { /* sin almacenamiento */ } }
+    document.getElementById('avisoCierreMes').classList.add('tab--hidden');
+  });
   document.getElementById('gastosProveedor').addEventListener('change', (e) => { gastosProveedorSel = e.target.value; pintarGastos(); });
   document.getElementById('btnGastosEsteMes').addEventListener('click', () => {
     const hoy = new Date();

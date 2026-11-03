@@ -2416,7 +2416,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.51';
+const VERSION_APP = '2026.10.52';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -4211,11 +4211,33 @@ async function buscarGastos() {
   if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escapeHtml(r.error || '')}</div>`; return; }
 
   ultimosGastos = r.data;
+  periodoGastos = { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) };
   pintarGastos();
+}
+
+// Elimina de golpe las facturas de un proveedor que se apuntaron desde un listado (p. ej. si se importó lo que no era). Primero cuenta, luego pide confirmación.
+async function deshacerImportacionGastos() {
+  const aviso = document.getElementById('gastosAviso');
+  if (!gastosProveedorSel || !periodoGastos || !ultimosGastos) return;
+  const prov = resumenPorProveedorGastos(ultimosGastos.gastos).find((p) => p.clave === gastosProveedorSel);
+  const nombre = prov ? prov.nombre : 'este proveedor';
+  const parametros = { proveedor: gastosProveedorSel, fechaIni: periodoGastos.fechaIni, fechaFin: periodoGastos.fechaFin };
+  const mostrar = (texto, rojo) => { aviso.style.color = rojo ? 'var(--warn-red)' : ''; aviso.textContent = texto; };
+  mostrar('');
+  const cuenta = await apiGet('deshacerImportacion', parametros).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!cuenta.ok) { mostrar('No se pudo comprobar: ' + (cuenta.error || 'error'), true); return; }
+  if (!cuenta.n) { mostrar(`No hay facturas de ${nombre} apuntadas desde un listado en este periodo.`); return; }
+  const s = cuenta.n === 1 ? '' : 's';
+  if (!confirm(`Vas a ELIMINAR ${cuenta.n} factura${s} de ${nombre} que se apuntaron desde un listado, del ${parametros.fechaIni} al ${parametros.fechaFin} (${formatoEuros(cuenta.total)} con IVA).\n\nLos pedidos estimados que cubrían quedarán otra vez pendientes y no se borra ningún archivo de Drive.\nNo se puede deshacer.\n\n¿Eliminarlas?`)) return;
+  const r = await apiGet('deshacerImportacion', { ...parametros, confirmar: '1', n: String(cuenta.n) }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mostrar('No se eliminó nada: ' + (r.error || 'error'), true); return; }
+  await buscarGastos();
+  mostrar(`Eliminadas ${r.eliminadas} factura${r.eliminadas === 1 ? '' : 's'} importada${r.eliminadas === 1 ? '' : 's'} de ${nombre}. ${r.reabiertos} pedido${r.reabiertos === 1 ? '' : 's'} estimado${r.reabiertos === 1 ? '' : 's'} vuelve${r.reabiertos === 1 ? '' : 'n'} a estar pendiente${r.reabiertos === 1 ? '' : 's'}.`);
 }
 
 // Se pinta desde lo último recibido (así, marcar "solo pendientes de pago" no vuelve a pedir nada)
 let ultimosGastos = null;
+let periodoGastos = null;   // las fechas de la última búsqueda de gastos
 let gastosProveedorSel = '';   // clave del proveedor elegido ('' = todos; '__sin' = gastos sin proveedor)
 // La misma clave que el servidor: por el NÚMERO del proveedor (aunque cambie de nombre); si no lo tiene, por su nombre; "__sin" si no tiene ninguno
 function claveProveedorGasto(g) {
@@ -4265,19 +4287,22 @@ function pintarGastos() {
 
   // resumen por proveedor (con "Todos" y varios proveedores) o ficha del elegido
   const contProv = document.getElementById('gastosPorProveedor');
+  const importadas = prov ? d.gastos.filter((g) => g.estado !== 'Estimado' && /^imp-/.test(String(g.idSolicitud || '')) && claveProveedorGasto(g) === prov.clave) : [];
   if (!d.gastos.length) { contProv.innerHTML = ''; }
   else if (prov) {
     contProv.innerHTML = `<div class="card"><div class="card__top"><div class="card__name">${escapeHtml(prov.nombre)}</div><div class="card__total">${formatoEuros(prov.total)}</div></div>
       <div class="card__meta">${prov.facturas} factura${prov.facturas === 1 ? '' : 's'} · pagado ${formatoEuros(prov.pagado)}</div>
       ${prov.sinOriginal ? `<div class="card__meta" style="color:var(--warn-red);">📎 ${prov.sinOriginal} sin factura original (sin archivo o solo con el listado)</div>` : (prov.facturas ? '<div class="card__meta">✓ Todas con su factura original</div>' : '')}
       <div class="card__meta"${prov.pendiente !== 0 ? ' style="color:var(--warn-red); font-weight:600;"' : ''}>${prov.pendiente !== 0 ? `⏳ Pendiente de pago: ${prov.nPendientes} factura${prov.nPendientes === 1 ? '' : 's'} · ${formatoEuros(prov.pendiente)}` : '✓ Nada pendiente de pago'}</div>
-      <div class="card__actions"><button class="chip-btn" data-gastos-todos-proveedores>← Todos los proveedores</button></div></div>`;
+      ${importadas.length ? `<div class="card__meta">📥 ${importadas.length} de estas facturas se apuntaron desde un listado (${formatoEuros(importadas.reduce((s, g) => s + g.total, 0))})</div>` : ''}
+      <div class="card__actions"><button class="chip-btn" data-gastos-todos-proveedores>← Todos los proveedores</button>${importadas.length ? '<button class="chip-btn" data-deshacer-importacion style="border-color:var(--warn-red); color:var(--warn-red);">Deshacer esta importación…</button>' : ''}</div></div>`;
   } else if (proveedores.length > 1) {
     contProv.innerHTML = '<div class="section-label">Por proveedor</div>' + proveedores.map((p) => `<div class="card" data-gastos-proveedor="${escapeHtml(p.clave)}" style="cursor:pointer;"><div class="card__top"><div class="card__name">${escapeHtml(p.nombre)}</div><div class="card__total">${formatoEuros(p.total)}</div></div>
       <div class="card__meta">${p.facturas ? `${p.facturas} factura${p.facturas === 1 ? '' : 's'} · pagado ${formatoEuros(p.pagado)}` : 'Solo gastos estimados, sin factura todavía'}${p.pendiente !== 0 ? ` · <span style="color:var(--warn-red); font-weight:600;">pendiente de pago ${formatoEuros(p.pendiente)}</span>` : ''}${p.sinOriginal ? ` · <span style="color:var(--warn-red);">${p.sinOriginal} sin factura original</span>` : ''}</div></div>`).join('');
   } else { contProv.innerHTML = ''; }
   contProv.querySelectorAll('[data-gastos-proveedor]').forEach((c) => c.addEventListener('click', () => { gastosProveedorSel = c.dataset.gastosProveedor; pintarGastos(); }));
   contProv.querySelectorAll('[data-gastos-todos-proveedores]').forEach((b) => b.addEventListener('click', () => { gastosProveedorSel = ''; pintarGastos(); }));
+  contProv.querySelectorAll('[data-deshacer-importacion]').forEach((b) => b.addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Comprobando…', deshacerImportacionGastos)));
 
   if (!d.gastos.length) {
     cont.innerHTML = '<div class="empty-state">Sin gastos en ese periodo.</div>';

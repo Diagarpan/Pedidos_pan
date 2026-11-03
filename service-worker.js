@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pedidos-pan-v20';
+const CACHE_NAME = 'pedidos-pan-v21';
 const APP_SHELL = [
   './index.html',
   './styles.css',

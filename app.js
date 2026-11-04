@@ -2419,7 +2419,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.56';
+const VERSION_APP = '2026.10.57';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -5580,6 +5580,7 @@ function iniciarGestor() {
   if (!entrada.value) entrada.value = mesActualISO();
   mensajeGestor('', '');
   document.getElementById('gestorResultado').innerHTML = '';
+  cargarEstadoGestorAuto();
 }
 
 async function descargarCsvGestor(tipo) {
@@ -5631,15 +5632,47 @@ function pintarResultadoCarpeta(r) {
     </div>`;
 }
 
+let preparandoCarpetaGestor = false;
+// Copiar los justificantes es lo lento: el servidor trabaja con un presupuesto de tiempo y, si no acaba, dice "completo: false"; se vuelve a llamar con
+// continuar = 1 (sin rehacer los CSV y el Excel) hasta que termina. Lo ya copiado se conserva, así que un corte no pierde nada.
 async function prepararCarpetaGestor() {
+  if (preparandoCarpetaGestor) return;
   const m = mesDelGestor();
   if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
-  mensajeGestor('Preparando la carpeta en Drive… (puede tardar un poco)', '');
-  const r = await apiGet('gestorCarpeta', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
-  if (!r.ok) { mensajeGestor('No se pudo preparar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
-  pintarResultadoCarpeta(r);
-  const avisos = r.justificantes.sinJustificante.length + r.justificantes.perdidos.length;
-  mensajeGestor(avisos ? `Carpeta lista, pero hay ${avisos} factura${avisos === 1 ? '' : 's'} de proveedor sin la factura adjunta.` : 'Carpeta lista.', avisos ? 'error' : 'ok');
+  preparandoCarpetaGestor = true;
+  try {
+    let primera = null, copiadosTotal = 0, continuar = false, sinRespuesta = 0;
+    mensajeGestor('Preparando la carpeta en Drive… (puede tardar un poco)', '');
+    for (let tanda = 0; tanda < 40; tanda++) {
+      const r = await apiGet('gestorCarpeta', continuar ? { anio: m.anio, mes: m.mes, continuar: '1' } : { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!r.ok) {
+        sinRespuesta++;
+        if (sinRespuesta >= 3) { mensajeGestor('No se pudo seguir: ' + (r.error || 'inténtalo de nuevo') + ' Lo ya copiado se conserva: vuelve a pulsar el botón para continuar.', 'error'); return; }
+        mensajeGestor(`Se cortó la conexión. Reintentando… (${sinRespuesta} de 2)`, '');
+        await new Promise((res) => setTimeout(res, 2000));
+        tanda--;   // la tanda que se cortó no cuenta
+        continue;
+      }
+      sinRespuesta = 0;
+      if (!primera) primera = r;
+      copiadosTotal += r.justificantes.copiados;
+      if (r.completo === false) {
+        continuar = true;
+        mensajeGestor(`Copiando los justificantes… quedan ${r.justificantes.aplazados || 0} por copiar`, '');
+        continue;
+      }
+      // al final: los CSV y el Excel son de la primera tanda, y lo copiado en las anteriores ya "estaba" en la última
+      const copiadosEnLaUltima = r.justificantes.copiados;
+      const yaEstaban = Math.max(0, r.justificantes.yaEstaban - (copiadosTotal - copiadosEnLaUltima));
+      pintarResultadoCarpeta(Object.assign({}, r, { ficheros: primera.ficheros || [], justificantes: Object.assign({}, r.justificantes, { copiados: copiadosTotal, yaEstaban }) }));
+      const avisos = r.justificantes.sinJustificante.length + r.justificantes.perdidos.length;
+      mensajeGestor(avisos ? `Carpeta lista, pero hay ${avisos} factura${avisos === 1 ? '' : 's'} de proveedor sin la factura adjunta.` : 'Carpeta lista.', avisos ? 'error' : 'ok');
+      return;
+    }
+    mensajeGestor('La carpeta sigue sin terminar de copiarse. Lo ya copiado se conserva: vuelve a pulsar el botón para continuar.', 'error');
+  } finally {
+    preparandoCarpetaGestor = false;
+  }
 }
 
 let generandoPdfsGestor = false;
@@ -5682,6 +5715,60 @@ async function generarPdfsEmitidasGestor(boton) {
   }
 }
 
+/* ---------- Generación nocturna de lo del gestor (PDF de facturas emitidas y justificantes) ---------- */
+let gestorAutoPeticion = 0;
+// Lo que hizo la última vez, en líneas cortas ("octubre 2026: 24 PDF nuevos, quedan 3 de 120 · justificantes: 2 copiados")
+function resumenGestorAuto(u) {
+  if (!u || !Array.isArray(u.meses)) return [];
+  const lineas = [`Última vez: ${u.cuando || '—'}`];
+  u.meses.forEach((m) => {
+    const p = m.pdfs || {};
+    let t = `${m.nombre}: `;
+    if (m.error) t += m.error;
+    else {
+      t += (p.total === null || p.total === undefined) ? 'sin PDF que hacer' : (p.restantes ? `${p.hechas} PDF nuevos, quedan ${p.restantes} de ${p.total}` : `${p.hechas} PDF nuevos, todo al día (${p.total})`);
+      if (p.anuladasRetiradas) t += ` · ${p.anuladasRetiradas} anulada${p.anuladasRetiradas === 1 ? '' : 's'} retirada${p.anuladasRetiradas === 1 ? '' : 's'}`;
+      if (p.errores && p.errores.length) t += ` · no se pudo: ${p.errores.map((e) => `nº ${e.id} (${e.error})`).join(', ')}`;
+      if (m.sinTiempo) t += ' · se quedó sin tiempo: sigue la próxima noche';
+    }
+    if (m.justificantes) {
+      const j = m.justificantes;
+      t += j.error ? ` · justificantes: ${j.error}` : ` · justificantes: ${j.copiados} copiado${j.copiados === 1 ? '' : 's'}${j.aplazados ? `, ${j.aplazados} por copiar` : ''}${j.sinFactura ? `, ${j.sinFactura} sin factura adjunta` : ''}`;
+    }
+    lineas.push(t);
+  });
+  return lineas;
+}
+function pintarEstadoGestorAuto(r) {
+  const caja = document.getElementById('gestorAutoEstado'), boton = document.getElementById('btnGestorAuto');
+  if (!r || !r.ok) {
+    caja.textContent = 'No se pudo comprobar si está activada' + (r && r.error ? ': ' + r.error : '') + '.';
+    boton.disabled = true; boton.textContent = 'Activar'; boton.dataset.activar = '';
+    return;
+  }
+  boton.disabled = false;
+  if (r.activo === true) { boton.textContent = 'Desactivar'; boton.dataset.activar = '0'; } else { boton.textContent = 'Activar'; boton.dataset.activar = '1'; }
+  const estado = r.activo === true ? '✓ Activada: trabaja cada noche entre las 0:00 y las 7:00.' : (r.activo === false ? 'No está activada.' : 'No se puede comprobar si está activada.');
+  caja.innerHTML = [estado].concat(resumenGestorAuto(r.ultimo)).map(escapeHtml).join('<br>');
+}
+async function cargarEstadoGestorAuto() {
+  const n = ++gestorAutoPeticion;
+  const r = await apiGet('gestorAutoEstado', {}).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (n !== gestorAutoPeticion) return;
+  pintarEstadoGestorAuto(r);
+}
+async function cambiarGestorAuto(boton) {
+  const activar = boton.dataset.activar;
+  if (activar !== '0' && activar !== '1') return;
+  if (activar === '1' && !confirm('Se activará un proceso que, de 0:00 a 7:00, genera los PDF de tus facturas emitidas y copia los justificantes a la carpeta del mes. La primera vez Google puede pedir permiso para programar tareas. ¿Activarlo?')) return;
+  boton.disabled = true; boton.textContent = 'Cambiando…';
+  const r = await apiGet('gestorAutoCambiar', { activar }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+  if (!r.ok) { mensajeGestor(r.error || 'No se pudo cambiar.', 'error'); await cargarEstadoGestorAuto(); return; }
+  gestorAutoPeticion++;   // lo que llegue de una comprobación anterior ya no vale
+  pintarEstadoGestorAuto(r);
+  mensajeGestor(activar === '1' ? 'Activada: esta noche empezará a prepararse sola.' : 'Desactivada.', 'ok');
+}
+
 async function compartirCarpetaGestor() {
   const m = mesDelGestor();
   if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
@@ -5706,6 +5793,7 @@ function cablearPanelYGestor() {
   document.getElementById('btnGestorCarpeta').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Preparando…', prepararCarpetaGestor));
   document.getElementById('btnGestorPdfs').addEventListener('click', (e) => generarPdfsEmitidasGestor(e.currentTarget));
   document.getElementById('btnGestorCompartir').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Compartiendo…', compartirCarpetaGestor));
+  document.getElementById('btnGestorAuto').addEventListener('click', (e) => cambiarGestorAuto(e.currentTarget));
 }
 
 /* ============ INCORPORAR LA FACTURA DE UN PROVEEDOR ============ */

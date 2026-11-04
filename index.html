@@ -780,6 +780,10 @@
     <button class="btn-primary" id="btnGestorCarpeta" style="width:100%; margin-bottom:6px;">Preparar la carpeta del mes</button>
     <button class="btn-secondary" id="btnGestorPdfs" style="width:100%; margin-bottom:6px;">Generar los PDF de las facturas emitidas</button>
     <button class="btn-secondary" id="btnGestorCompartir" style="width:100%; margin-bottom:6px;">Compartir la carpeta con el gestor</button>
+    <div class="field-label" style="margin-top:14px;">Que se vaya preparando sola por las noches</div>
+    <div class="card__meta" style="margin-bottom:6px;">De 0:00 a 7:00 la app genera los PDF de tus facturas emitidas (de días ya cerrados) y copia los justificantes a la carpeta del mes, para que el día de cerrar casi no quede nada por hacer.</div>
+    <div class="card__meta" id="gestorAutoEstado" style="margin-bottom:6px;"></div>
+    <button class="btn-secondary" id="btnGestorAuto" style="width:100%; margin-bottom:6px;" disabled>Comprobando…</button>
     <div class="form-msg" id="gestorMsg"></div>
     <div id="gestorResultado" class="stack"></div>
   </section>

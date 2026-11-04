@@ -802,13 +802,14 @@ const BREADCRUMBS = {
   'proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }],
   'pedido-proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Pedido a proveedores', tab: 'pedido-proveedores' }],
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
-  'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Nuevo gasto', tab: 'gasto-nuevo' }],
+  'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Otro gasto', tab: 'gasto-nuevo' }],
   'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }],
-  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }, { label: 'Incorporar factura', tab: 'gasto-factura' }],
+  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }, { label: 'Apuntar factura', tab: 'gasto-factura' }],
+  'proveedor-ficha': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Ficha', tab: 'proveedor-ficha' }],
   'panel': [{ label: 'Compras', tab: 'compras' }, { label: 'Panel de resultados', tab: 'panel' }],
-  'facturas-dia': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de hoy', tab: 'facturas-dia' }],
-  'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas de la semana', tab: 'facturas-semana' }],
-  'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Listado del proveedor', tab: 'cuadrar' }],
+  'facturas-dia': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Facturas día a día', tab: 'facturas-dia' }],
+  'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Facturas por apuntar', tab: 'facturas-semana' }],
+  'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Importar resumen', tab: 'cuadrar' }],
   'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
   'cierre-mes': [{ label: 'Compras', tab: 'compras' }, { label: 'Cierre de mes', tab: 'cierre-mes' }],
   'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
@@ -917,6 +918,8 @@ function cargarTabActual(nombre) {
   if (activo === 'cuadrar') iniciarCuadrar();
   if (activo === 'gestor') iniciarGestor();
   if (activo === 'cierre-mes') iniciarCierreMes();
+  if (activo === 'compras') pintarPendientesCompras();
+  if (activo === 'proveedor-ficha') cargarFichaProveedor();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
   if (activo === 'estadisticas') prepararEstadisticas();
@@ -2416,7 +2419,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.52';
+const VERSION_APP = '2026.10.55';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -3852,24 +3855,34 @@ async function cargarProveedores() {
   if (!proveedoresCache.length) { cont.innerHTML = '<div class="empty-state">Todavía no has añadido ningún proveedor.</div>'; return; }
 
   cont.innerHTML = proveedoresCache.map((p) => `
-    <div class="card">
+    <div class="card" data-abrir-ficha="${p.id}" style="cursor:pointer;">
       <div class="card__top">
         <div>
           <div class="card__name">${escapeHtml(p.nombre)}</div>
           <div class="card__meta">${p.nif ? 'NIF: ' + escapeHtml(p.nif) + ' · ' : ''}${escapeHtml(p.telefono || '')}</div>
         </div>
+        <span class="home-btn__badge home-btn__badge--alerta" data-pend-prov="${p.id}"></span>
       </div>
       <div class="card__actions">
+        <button class="chip-btn" data-abrir-ficha-btn="${p.id}">Sus facturas</button>
         <button class="chip-btn" data-editar-proveedor="${p.id}">Editar</button>
       </div>
     </div>
   `).join('');
+  const abrir = (id) => { const p = proveedoresCache.find((x) => String(x.id) === String(id)); if (p) abrirFichaProveedor(p); };
+  cont.querySelectorAll('[data-abrir-ficha]').forEach((card) => card.addEventListener('click', (e) => { if (e.target.closest('[data-editar-proveedor]')) return; abrir(card.dataset.abrirFicha); }));
   cont.querySelectorAll('[data-editar-proveedor]').forEach((btn) => {
     btn.addEventListener('click', () => {
       proveedorSeleccionado = proveedoresCache.find((p) => String(p.id) === btn.dataset.editarProveedor);
       abrirFormularioProveedor(proveedorSeleccionado);
     });
   });
+  // cuántas facturas le faltan a cada uno (no frena la lista: llega después)
+  const rp = await apiGet('gastosEstimados', {}).catch(() => ({ ok: false }));
+  if (!rp.ok || !Array.isArray(rp.data)) return;
+  const por = {};
+  rp.data.forEach((g) => { const k = String(g.proveedorId); por[k] = (por[k] || 0) + 1; });
+  cont.querySelectorAll('[data-pend-prov]').forEach((b) => { const n = por[b.dataset.pendProv] || 0; b.textContent = n ? `${n} por apuntar` : ''; });
 }
 
 function abrirFormularioProveedor(proveedor) {
@@ -4074,6 +4087,8 @@ async function descargarTexto(nombreArchivo, texto, tipo) {
 
 /* ============ COMPRAS: GASTOS ============ */
 async function cargarFormularioGasto() {
+  gastoVolver = 'gastos-ver';
+  { const atras = document.querySelector('#tab-gasto-nuevo [data-volver]'); atras.dataset.volver = 'compras'; atras.textContent = '← Compras'; }
   const select = document.getElementById('gastoFormProveedor');
   if (!proveedoresCache.length) {
     const r = await apiGet('proveedores').catch(() => null);
@@ -4101,12 +4116,18 @@ async function cargarFormularioGasto() {
   cargarCategoriasGasto();
 }
 
-async function abrirGastoParaEditar(g) {
+let gastoVolver = 'gastos-ver';   // a dónde vuelve el formulario de gasto al guardar o eliminar
+async function abrirGastoParaEditar(g, volver) {
   if (!proveedoresCache.length) {
     const r = await apiGet('proveedores').catch(() => null);
     if (r && r.ok) proveedoresCache = r.data;
   }
   cambiarTab('gasto-nuevo');
+  if (volver === 'proveedor-ficha') {
+    gastoVolver = 'proveedor-ficha';
+    const atras = document.querySelector('#tab-gasto-nuevo [data-volver]');
+    atras.dataset.volver = 'proveedor-ficha'; atras.textContent = '← ' + (fichaProveedor ? fichaProveedor.nombre : 'Proveedor');
+  }
   document.getElementById('gastoFormTitulo').textContent = 'Editar gasto';
   document.getElementById('gastoFormId').value = g.id;
   document.getElementById('gastoFormFecha').value = g.fecha.split('/').reverse().join('-');
@@ -4184,7 +4205,7 @@ async function guardarGasto() {
   if (r.ok) {
     msg.textContent = 'Gasto guardado.';
     msg.className = 'form-msg is-ok';
-    setTimeout(() => cambiarTab('gastos-ver'), 700);
+    setTimeout(() => cambiarTab(gastoVolver), 700);
   } else {
     msg.textContent = 'Error: ' + (r.error || 'inténtalo de nuevo');
     msg.className = 'form-msg is-error';
@@ -4196,7 +4217,7 @@ async function eliminarGasto() {
   if (!id) return;
   if (!confirm('¿Seguro que quieres eliminar este gasto? No se puede deshacer.')) return;
   const r = await apiGet('eliminarGasto', { id }).catch(() => ({ ok: false }));
-  if (r.ok) cambiarTab('gastos-ver');
+  if (r.ok) cambiarTab(gastoVolver);
   else alert('No se pudo eliminar: ' + (r.error || 'error'));
 }
 
@@ -4401,69 +4422,127 @@ async function cargarPanel() {
   if (numero !== panelPeticion) return;   // se pidió otro mes mientras tanto
   if (!r.ok) { cont.innerHTML = `<div class="empty-state">No se pudo calcular: ${escapeHtml(r.error || '')}</div>`; return; }
   pintarPanel(r);
+  cargarComparacionPanel(r, numero);
+}
+// El mes anterior se pide aparte y llega después, para no retrasar lo importante (el mes en curso no se compara: aún no ha terminado)
+async function cargarComparacionPanel(d, numero) {
+  const iso = `${d.anio}-${String(d.mes).padStart(2, '0')}`;
+  if (iso === mesActualISO()) return;
+  const [anio, mes] = desplazarMesISO(iso, -1).split('-');
+  const rp = await apiGet('panelMes', { anio, mes: String(Number(mes)) }).catch(() => ({ ok: false }));
+  if (numero !== panelPeticion || !rp.ok) return;
+  pintarComparacionPanel(d, rp);
+}
+// "▲ 8,2 % frente a septiembre" (null si no hay con qué comparar). Con peorSiSube (gastos) subir se marca en rojo
+function variacionPanel(actual, previo, nombrePrev, peorSiSube) {
+  if (previo === null || previo === undefined || !Number(previo)) return null;
+  const pct = (actual - previo) / Math.abs(previo) * 100;
+  if (Math.abs(pct) < 0.05) return { texto: `= igual que en ${nombrePrev}`, clase: '' };
+  const sube = pct > 0;
+  return { texto: `${sube ? '▲' : '▼'} ${Math.abs(pct).toFixed(1).replace('.', ',')} % frente a ${nombrePrev}`, clase: (sube !== !!peorSiSube) ? 'is-sube' : 'is-baja' };
+}
+function pintarComparacionPanel(d, rp) {
+  const nombrePrev = rp.nombre ? rp.nombre.split(' ')[0] : 'el mes anterior';
+  const pon = (clave, v) => { const el = document.querySelector(`[data-delta="${clave}"]`); if (!el || !v) return; el.textContent = v.texto; el.classList.remove('is-sube', 'is-baja'); if (v.clase) el.classList.add(v.clase); };
+  pon('ventas', variacionPanel(d.ventas.base, rp.ventas.base, nombrePrev, false));
+  pon('gastos', variacionPanel(d.gastos.base, rp.gastos.base, nombrePrev, true));
+  pon('resultado', variacionPanel(d.resultado.ventas - d.resultado.gastos, rp.resultado.ventas - rp.resultado.gastos, nombrePrev, false));
+}
+// Del panel a la lista de gastos del mes, ya filtrada por "Pedidos sin factura"
+function verPedidosSinFacturaDelMes(d) {
+  const ini = `${d.anio}-${String(d.mes).padStart(2, '0')}-01`, fin = `${d.anio}-${String(d.mes).padStart(2, '0')}-${String(new Date(d.anio, d.mes, 0).getDate()).padStart(2, '0')}`;
+  cambiarTab('gastos-ver');
+  document.getElementById('gastosFechaIni').value = ini;
+  document.getElementById('gastosFechaFin').value = fin;
+  gastosProveedorSel = '';
+  document.getElementById('gastosSoloPendientes').checked = false;
+  document.getElementById('gastosSinOriginal').checked = false;
+  document.getElementById('gastosSoloEstimados').checked = true;
+  buscarGastos();
 }
 
 function pintarPanel(d) {
   const cont = document.getElementById('panelContenido');
   const e = (n) => escapeHtml(formatoEuros(n));
   const res = d.resultado;
-  const color = res.provisional < 0 ? 'var(--warn-red)' : 'var(--ok-green, #2E7D4F)';
+  const conFacturas = res.ventas - res.gastos;                       // ventas − gastos ya facturados (sin IVA)
+  const colorRes = conFacturas < 0 ? 'var(--warn-red)' : 'var(--ok-green, #2E7D4F)';
   const maxCat = Math.max(1, ...d.gastos.porCategoria.map((c) => c.base));
   const margen = d.ventas.margenPct !== null && d.ventas.margenPct !== undefined ? ` (${(d.ventas.margenPct * 100).toFixed(1)}%)` : '';
+  const iso = `${d.anio}-${String(d.mes).padStart(2, '0')}`;
+  const enCurso = iso === mesActualISO();
+  const provs = d.gastos.porProveedor || null;                       // un servidor antiguo no lo trae: entonces no se enseña
+  const maxProv = provs ? Math.max(1, ...provs.map((p) => Math.abs(p.base))) : 1;
+  const aLiquidar = d.iva.aLiquidar;
+  const s = (k) => (k === 1 ? '' : 's');
+  const sec = (titulo, valor, cuerpo, abierta) => `<details class="panel-sec"${abierta ? ' open' : ''}><summary><span>${titulo}</span><strong>${valor}</strong></summary><div class="panel-sec__cuerpo">${cuerpo}</div></details>`;
 
   cont.innerHTML = `
-    <div class="card">
-      <div class="card__top"><div class="card__name">Resultado provisional</div><div class="card__total" style="color:${color};">${e(res.provisional)}</div></div>
-      <div class="card__meta">Ventas ${e(res.ventas)} − gastos ${e(res.gastos)}${res.estimado > 0 ? ` − gastos estimados de pedidos a proveedores sin factura ${e(res.estimado)}` : ''}</div>
-      <div class="card__meta">Sin IVA. Es provisional: faltan las facturas de proveedor que aún no han llegado.</div>
+    <div class="panel-kpis">
+      <div class="panel-kpi"><div class="panel-kpi__t">Ventas</div><div class="panel-kpi__v">${e(d.ventas.base)}</div><div class="panel-kpi__d" data-delta="ventas"></div><div class="panel-kpi__s">sin IVA · ${d.ventas.pedidos} pedido${s(d.ventas.pedidos)}</div></div>
+      <div class="panel-kpi"><div class="panel-kpi__t">Gastos</div><div class="panel-kpi__v">${e(d.gastos.base)}</div><div class="panel-kpi__d" data-delta="gastos"></div><div class="panel-kpi__s">con factura, sin IVA</div></div>
+      <div class="panel-kpi"><div class="panel-kpi__t">Resultado</div><div class="panel-kpi__v" style="color:${colorRes};">${e(conFacturas)}</div><div class="panel-kpi__d" data-delta="resultado"></div><div class="panel-kpi__s">ventas − gastos con factura</div></div>
+      <div class="panel-kpi"><div class="panel-kpi__t">${aLiquidar >= 0 ? 'IVA a ingresar' : 'IVA a compensar'}</div><div class="panel-kpi__v">${e(Math.abs(aLiquidar))}</div><div class="panel-kpi__d"></div><div class="panel-kpi__s">repercutido ${e(d.iva.repercutido)} − soportado ${e(d.iva.soportado)}</div></div>
     </div>
-    <div class="card">
-      <div class="card__name">Ventas del mes</div>
-      <div class="card__products">${e(d.ventas.base)} sin IVA · ${d.ventas.pedidos} pedidos</div>
-      ${d.ventas.albaranesBase !== undefined ? `<div class="card__meta">De ellas, albaranes (no van al gestor): ${e(d.ventas.albaranesBase)} sin IVA · ${d.ventas.albaranesPedidos} pedido${d.ventas.albaranesPedidos === 1 ? '' : 's'}</div>` : ''}
-      <div class="card__meta">Facturado: ${e(d.ventas.facturadoBase)} + IVA ${e(d.ventas.facturadoIva)} = ${e(d.ventas.facturadoTotal)} (${d.ventas.facturas} facturas)</div>
-      <div class="card__meta">Margen bruto (ventas menos coste de fábrica de lo vendido): ${e(d.ventas.margenBruto)}${margen}</div>
-    </div>
-    <div class="card">
-      <div class="card__top"><div class="card__name">Gastos por categoría</div><div class="card__total">${e(d.gastos.base)}</div></div>
-      ${d.gastos.porCategoria.length ? d.gastos.porCategoria.map((c) => `
-        <div style="margin-top:8px;">
-          <div style="display:flex; justify-content:space-between; font-size:14px;"><span>${escapeHtml(c.categoria)} <span class="card__meta">(${c.n})</span></span><strong>${e(c.base)}</strong></div>
-          <div style="background:#E9E2D6; border-radius:4px; height:6px; margin-top:3px;"><div style="width:${Math.round(c.base / maxCat * 100)}%; background:#C0762B; height:6px; border-radius:4px;"></div></div>
-        </div>`).join('') : '<div class="card__meta">Sin gastos este mes.</div>'}
-      <div class="card__meta" style="margin-top:8px;">Sin IVA${d.gastos.retencion > 0 ? ` · retenciones: ${e(d.gastos.retencion)}` : ''}${d.gastos.estimado.n ? ` · más ${e(d.gastos.estimado.base)} estimados (${d.gastos.estimado.n}) pendientes de factura` : ''}</div>
-    </div>
-    <div class="card">
-      <div class="card__top"><div class="card__name">Pendiente de cobro</div><div class="card__total">${e(d.cobros.total)}</div></div>
-      <div class="card__meta">${d.cobros.facturas.n} factura${d.cobros.facturas.n === 1 ? '' : 's'} (${e(d.cobros.facturas.total)}) · ${d.cobros.albaranes.n} albarán${d.cobros.albaranes.n === 1 ? '' : 'es'} (${e(d.cobros.albaranes.total)})</div>
+    ${enCurso ? '<div class="card__meta" style="margin:0 2px 10px;">Mes en curso: aún no ha terminado, por eso no se compara con el anterior.</div>' : ''}
+    ${res.estimado > 0 ? `<div class="card panel-aviso">
+      <div class="card__name">⚠ Faltan facturas de proveedores</div>
+      <div class="card__meta">${d.gastos.estimado.n} pedido${s(d.gastos.estimado.n)} a proveedores todavía sin factura (${e(res.estimado)} sin IVA). Contándolos, el resultado sería <strong>${e(res.provisional)}</strong>.</div>
+      <div class="card__actions"><button class="chip-btn" id="btnPanelSinFactura">Ver esos pedidos</button></div>
+    </div>` : ''}
+    ${sec('Por cobrar', e(d.cobros.total), `
+      <div class="card__meta">${d.cobros.facturas.n} factura${s(d.cobros.facturas.n)} (${e(d.cobros.facturas.total)}) · ${d.cobros.albaranes.n} albarán${d.cobros.albaranes.n === 1 ? '' : 'es'} (${e(d.cobros.albaranes.total)})</div>
       ${d.cobros.clientes.map((c) => `<div class="card__meta" style="margin-top:4px;">${escapeHtml(c.cliente)} · ${e(c.total)}${c.desde ? ' · desde ' + escapeHtml(c.desde) : ''}</div>`).join('')}
-      ${d.cobros.anteriores && d.cobros.anteriores.n ? `<div class="card__meta" style="margin-top:6px;">Incluye ${d.cobros.anteriores.n} documento${d.cobros.anteriores.n === 1 ? '' : 's'} de años anteriores (ya archivados): ${e(d.cobros.anteriores.total)}. Para cobrarlos, búscalos en Facturas o en Pedidos con fechas de ese año.</div>` : ''}
-    </div>
-    <div class="card">
-      <div class="card__top"><div class="card__name">Pagos pendientes a proveedores</div><div class="card__total">${e(d.pagos.total)}</div></div>
-      ${d.pagos.anteriores && d.pagos.anteriores.n ? `<div class="card__meta">Incluye ${d.pagos.anteriores.n} factura${d.pagos.anteriores.n === 1 ? '' : 's'} de años anteriores (ya archivados): ${e(d.pagos.anteriores.total)}</div>` : ''}
+      ${d.cobros.anteriores && d.cobros.anteriores.n ? `<div class="card__meta" style="margin-top:6px;">Incluye ${d.cobros.anteriores.n} documento${s(d.cobros.anteriores.n)} de años anteriores (ya archivados): ${e(d.cobros.anteriores.total)}. Para cobrarlos, búscalos en Facturas o en Pedidos con fechas de ese año.</div>` : ''}`, d.cobros.total > 0)}
+    ${sec('Por pagar a proveedores', e(d.pagos.total), `
+      ${d.pagos.anteriores && d.pagos.anteriores.n ? `<div class="card__meta">Incluye ${d.pagos.anteriores.n} factura${s(d.pagos.anteriores.n)} de años anteriores (ya archivados): ${e(d.pagos.anteriores.total)}</div>` : ''}
       ${(d.pagos.porProveedor || []).map((p) => `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
-          <div class="card__meta"><strong>${escapeHtml(p.proveedor)}</strong> · ${p.n} factura${p.n === 1 ? '' : 's'} · ${e(p.total)}</div>
+          <div class="card__meta"><strong>${escapeHtml(p.proveedor)}</strong> · ${p.n} factura${s(p.n)} · ${e(p.total)}</div>
           <button class="chip-btn" data-pagar-proveedor="${escapeHtml(String(p.idProveedor))}" data-nombre="${escapeHtml(p.proveedor)}" data-n="${p.n}" data-total="${p.total}">Todas pagadas</button>
         </div>`).join('')}
       ${d.pagos.lista.length ? d.pagos.lista.map((p) => `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px;">
           <div class="card__meta">${escapeHtml(p.proveedor || 'Sin proveedor')}${p.numFactura ? ' · nº ' + escapeHtml(p.numFactura) : ''} · ${escapeHtml(p.fecha)}${p.anterior ? ' (año anterior)' : ''} · <strong>${e(p.total)}</strong></div>
           <button class="chip-btn" data-panel-pagar="${p.id}">Pagada</button>
-        </div>`).join('') : '<div class="card__meta">No debes nada a ningún proveedor.</div>'}
-    </div>
-    <div class="card">
-      <div class="card__name">IVA del mes</div>
+        </div>`).join('') : '<div class="card__meta">No debes nada a ningún proveedor ✓</div>'}`, d.pagos.total > 0)}
+    ${provs ? sec('Gastos por proveedor', e(d.gastos.base), provs.length ? provs.map((p) => `
+        <div style="margin-top:8px;">
+          <${p.idProveedor !== '' && p.idProveedor !== undefined && p.idProveedor !== null ? `button class="panel-fila" data-panel-prov="${escapeHtml(String(p.idProveedor))}"` : 'div'}>
+            <div style="display:flex; justify-content:space-between; font-size:14px;"><span>${escapeHtml(p.proveedor)} <span class="card__meta">(${p.n})</span></span><strong>${e(p.base)}</strong></div>
+            <div style="background:#E9E2D6; border-radius:4px; height:6px; margin-top:3px;"><div style="width:${Math.max(0, Math.round(Math.abs(p.base) / maxProv * 100))}%; background:#2F5D8A; height:6px; border-radius:4px;"></div></div>
+          </${p.idProveedor !== '' && p.idProveedor !== undefined && p.idProveedor !== null ? 'button' : 'div'}>
+        </div>`).join('') + (d.gastos.porProveedorResto && d.gastos.porProveedorResto.n ? `<div class="card__meta" style="margin-top:8px;">y ${d.gastos.porProveedorResto.n} proveedor${d.gastos.porProveedorResto.n === 1 ? '' : 'es'} más · ${e(d.gastos.porProveedorResto.base)}</div>` : '') + '<div class="card__meta" style="margin-top:8px;">Toca uno para ver sus facturas. Sin IVA.</div>' : '<div class="card__meta">Sin gastos este mes.</div>', false) : ''}
+    ${sec('Gastos por categoría', e(d.gastos.base), `
+      ${d.gastos.porCategoria.length ? d.gastos.porCategoria.map((c) => `
+        <div style="margin-top:8px;">
+          <div style="display:flex; justify-content:space-between; font-size:14px;"><span>${escapeHtml(c.categoria)} <span class="card__meta">(${c.n})</span></span><strong>${e(c.base)}</strong></div>
+          <div style="background:#E9E2D6; border-radius:4px; height:6px; margin-top:3px;"><div style="width:${Math.round(c.base / maxCat * 100)}%; background:#C0762B; height:6px; border-radius:4px;"></div></div>
+        </div>`).join('') : '<div class="card__meta">Sin gastos este mes.</div>'}
+      <div class="card__meta" style="margin-top:8px;">Sin IVA${d.gastos.retencion > 0 ? ` · retenciones: ${e(d.gastos.retencion)}` : ''}${d.gastos.estimado.n ? ` · más ${e(d.gastos.estimado.base)} estimados (${d.gastos.estimado.n}) pendientes de factura` : ''}</div>`, false)}
+    ${sec('Ventas del mes', e(d.ventas.base), `
+      <div class="card__products">${e(d.ventas.base)} sin IVA · ${d.ventas.pedidos} pedidos</div>
+      ${d.ventas.albaranesBase !== undefined ? `<div class="card__meta">De ellas, albaranes (no van al gestor): ${e(d.ventas.albaranesBase)} sin IVA · ${d.ventas.albaranesPedidos} pedido${s(d.ventas.albaranesPedidos)}</div>` : ''}
+      <div class="card__meta">Facturado: ${e(d.ventas.facturadoBase)} + IVA ${e(d.ventas.facturadoIva)} = ${e(d.ventas.facturadoTotal)} (${d.ventas.facturas} facturas)</div>
+      <div class="card__meta">Margen bruto (ventas menos coste de fábrica de lo vendido): ${e(d.ventas.margenBruto)}${margen}</div>`, false)}
+    ${sec('IVA del mes', `${aLiquidar >= 0 ? 'a ingresar' : 'a compensar'} ${e(Math.abs(aLiquidar))}`, `
       <div class="card__meta">Repercutido (ventas): ${e(d.iva.repercutido)} · Soportado (compras): ${e(d.iva.soportado)}</div>
-      <div class="card__meta">${d.iva.aLiquidar >= 0 ? 'A ingresar' : 'A compensar'}: <strong>${e(Math.abs(d.iva.aLiquidar))}</strong></div>
-    </div>`;
+      <div class="card__meta">${aLiquidar >= 0 ? 'A ingresar' : 'A compensar'}: <strong>${e(Math.abs(aLiquidar))}</strong></div>`, false)}
+    <button class="btn-secondary" id="btnPanelCierre" style="width:100%; margin-top:4px;">Qué falta para cerrar ${escapeHtml(d.nombre || 'el mes')} →</button>`;
   cont.querySelectorAll('[data-panel-pagar]').forEach((btn) => {
     btn.addEventListener('click', () => marcarGastoPagado(btn.dataset.panelPagar, true, btn, cargarPanel));
   });
   cont.querySelectorAll('[data-pagar-proveedor]').forEach((btn) => {
     btn.addEventListener('click', () => marcarTodasPagadasProveedor(btn));
   });
+  cont.querySelectorAll('[data-panel-prov]').forEach((btn) => btn.addEventListener('click', async () => {
+    if (!proveedoresCache.length) { const r = await apiGet('proveedores').catch(() => null); if (r && r.ok) proveedoresCache = r.data; }
+    const p = proveedoresCache.find((x) => String(x.id) === btn.dataset.panelProv);
+    if (p) abrirFichaProveedor(p);
+  }));
+  const sinFactura = document.getElementById('btnPanelSinFactura');
+  if (sinFactura) sinFactura.addEventListener('click', () => verPedidosSinFacturaDelMes(d));
+  document.getElementById('btnPanelCierre').addEventListener('click', () => { document.getElementById('cierreMes').value = iso; cambiarTab('cierre-mes'); });
 }
 
 // "Todas pagadas" de un proveedor: marca de golpe todas sus facturas pendientes (con la fecha de hoy)
@@ -4909,15 +4988,17 @@ let importandoResumen = false;
 let adjuntandoOriginales = false;
 let guardandoListado = false;
 let ultimoCuadre = null;   // lo último que se comprobó: { proveedorId, proveedorNombre, texto, importables, conFactura }
+let cuadrarProveedorInicial = '';   // el proveedor con el que se abre la pantalla de importar (desde su ficha)
 async function iniciarCuadrar() {
   if (!proveedoresCache.length) {
     const r = await apiGet('proveedores').catch(() => null);
     if (r && r.ok) proveedoresCache = r.data;
   }
   const sel = document.getElementById('cdProveedor');
-  const elegido = sel.value;
+  const elegido = cuadrarProveedorInicial === '__ninguno' ? '' : (cuadrarProveedorInicial || sel.value);   // '__ninguno': se llega desde la lista general, sin proveedor
+  cuadrarProveedorInicial = '';
   sel.innerHTML = '<option value="">Elige el proveedor…</option>' + proveedoresCache.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)}</option>`).join('');
-  sel.value = elegido;   // al volver de apuntar una factura se conserva lo que había
+  sel.value = elegido;   // al volver de apuntar una factura se conserva lo que había (o el proveedor desde el que se llega)
 }
 
 function iso(f) { return f.split('/').reverse().join('-'); }
@@ -5208,6 +5289,129 @@ function cablearCuadrar() {
     document.getElementById('fdFecha').value = b.dataset.fdRapido === 'ayer' ? ayerISO() : hoyISO();
     cargarFacturasDia();
   }));
+}
+
+/* ============ FICHA DE PROVEEDOR ============ */
+let fichaProveedor = null;   // el proveedor abierto
+let fichaPeriodo = 'mes';    // 'mes' | 'anterior' | 'tres'
+let fichaPeticion = 0;
+let fichaGastos = [];        // sus facturas apuntadas en el periodo
+const isoDeFecha = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function periodoFicha(clave) {
+  const hoy = new Date(), y = hoy.getFullYear(), m = hoy.getMonth();
+  if (clave === 'anterior') return { ini: isoDeFecha(new Date(y, m - 1, 1)), fin: isoDeFecha(new Date(y, m, 0)), etiqueta: 'el mes pasado' };
+  if (clave === 'tres') return { ini: isoDeFecha(new Date(y, m - 2, 1)), fin: isoDeFecha(new Date(y, m + 1, 0)), etiqueta: 'en los últimos 3 meses' };
+  return { ini: isoDeFecha(new Date(y, m, 1)), fin: isoDeFecha(new Date(y, m + 1, 0)), etiqueta: 'este mes' };
+}
+function abrirFichaProveedor(p) {
+  fichaProveedor = p;
+  fichaPeriodo = 'mes';
+  cambiarTab('proveedor-ficha');
+}
+async function cargarFichaProveedor() {
+  const p = fichaProveedor;
+  if (!p) { cambiarTab('proveedores'); return; }
+  document.getElementById('pfNombre').textContent = p.nombre;
+  document.getElementById('pfDatos').textContent = [p.nif ? 'NIF ' + p.nif : '', p.telefono || ''].filter(Boolean).join(' · ');
+  document.getElementById('btnPfApuntar').textContent = `＋ Apuntar una factura de ${p.nombre}`;
+  document.querySelectorAll('[data-pf-periodo]').forEach((b) => b.classList.toggle('is-activo', b.dataset.pfPeriodo === fichaPeriodo));
+  document.getElementById('pfMsg').textContent = '';
+  const per = periodoFicha(fichaPeriodo);
+  const n = ++fichaPeticion;
+  if (!document.querySelector('#pfPorApuntar [data-pf-apuntar]')) document.getElementById('pfPorApuntar').innerHTML = '<div class="empty-state">Cargando…</div>';
+  const [rp, rg] = await Promise.all([
+    apiGet('gastosEstimados', { idProveedor: String(p.id) }).catch((err) => ({ ok: false, error: textoDeFallo(err) })),
+    apiGet('gastosPeriodo', { fechaIni: formatoFechaES(per.ini), fechaFin: formatoFechaES(per.fin) }).catch((err) => ({ ok: false, error: textoDeFallo(err) })),
+  ]);
+  if (n !== fichaPeticion) return;   // se cambió de proveedor o de periodo mientras cargaba
+  pintarFichaProveedor(p, rp, rg, per);
+}
+function pintarFichaProveedor(p, rp, rg, per) {
+  const s = (k) => (k === 1 ? '' : 's');
+  // ----- lo que falta por apuntar -----
+  const cajaPend = document.getElementById('pfPorApuntar');
+  if (!rp.ok) {
+    cajaPend.innerHTML = `<div class="empty-state">No se pudieron cargar los pedidos pendientes: ${escapeHtml(rp.error || '')}</div>`;
+    document.getElementById('pfPorApuntarTitulo').textContent = 'Facturas por apuntar';
+  } else {
+    const pend = (rp.data || []).slice().sort((x, y) => ((x.pedidoFecha || x.fecha || '').split('/').reverse().join('')).localeCompare((y.pedidoFecha || y.fecha || '').split('/').reverse().join('')));
+    document.getElementById('pfPorApuntarTitulo').textContent = pend.length ? `Facturas por apuntar (${pend.length})` : 'Facturas por apuntar';
+    cajaPend.innerHTML = pend.length
+      ? (pend.length > 1 ? `<div class="card"><div class="card__name">Una sola factura para los ${pend.length} pedidos</div><div class="card__meta">Si ${escapeHtml(p.nombre)} te factura varios días juntos.</div><div class="card__actions"><button class="chip-btn" data-pf-todos>Apuntarla</button></div></div>` : '') +
+        pend.map((g) => `<div class="card"><div class="card__top"><div><div class="card__name">Pedido del ${escapeHtml(g.pedidoFecha || g.fecha)}</div><div class="card__meta">Estimado: ${escapeHtml(formatoEuros(g.total))}</div></div></div><div class="card__actions"><button class="chip-btn" data-pf-apuntar="${g.id}">Apuntar su factura</button></div></div>`).join('')
+      : '<div class="empty-state">No tiene pedidos esperando factura ✓</div>';
+    cajaPend.querySelectorAll('[data-pf-apuntar]').forEach((b) => b.addEventListener('click', () => {
+      const g = pend.find((x) => String(x.id) === b.dataset.pfApuntar);
+      if (!g) return;
+      facturaPreseleccion = { proveedorId: p.id, cubre: [g.id], fecha: (g.pedidoFecha || g.fecha).split('/').reverse().join('-'), volver: 'proveedor-ficha' };
+      cambiarTab('gasto-factura');
+    }));
+    cajaPend.querySelectorAll('[data-pf-todos]').forEach((b) => b.addEventListener('click', () => { facturaPreseleccion = { proveedorId: p.id, volver: 'proveedor-ficha' }; cambiarTab('gasto-factura'); }));
+  }
+  // ----- lo ya apuntado -----
+  const cajaAp = document.getElementById('pfApuntadas'), resumen = document.getElementById('pfResumen');
+  if (!rg.ok) { cajaAp.innerHTML = `<div class="empty-state">No se pudieron cargar las facturas: ${escapeHtml(rg.error || '')}</div>`; resumen.textContent = ''; fichaGastos = []; return; }
+  const suyas = (rg.data.gastos || []).filter((g) => g.estado !== 'Estimado' && claveProveedorGasto(g) === 'id:' + p.id)
+    .sort((x, y) => (y.fecha.split('/').reverse().join('') + String(y.id).padStart(8, '0')).localeCompare(x.fecha.split('/').reverse().join('') + String(x.id).padStart(8, '0')));
+  fichaGastos = suyas;
+  const total = suyas.reduce((t, g) => t + g.total, 0), pendiente = suyas.filter((g) => g.pagado === false).reduce((t, g) => t + g.total, 0);
+  const sinOriginal = suyas.filter(sinFacturaOriginal).length;
+  resumen.textContent = suyas.length
+    ? `${suyas.length} factura${s(suyas.length)} ${per.etiqueta} · ${formatoEuros(total)} con IVA · pagado ${formatoEuros(total - pendiente)}${pendiente ? ` · pendiente de pago ${formatoEuros(pendiente)}` : ''}${sinOriginal ? ` · ${sinOriginal} sin factura original` : ''}`
+    : `Sin facturas apuntadas ${per.etiqueta}.`;
+  const mostradas = suyas.slice(0, 15);
+  cajaAp.innerHTML = mostradas.map((g) => {
+    const archivo = g.justificanteUrl ? (g.justificanteEsListado ? '📄 Solo tiene el listado' : '📎 Con su factura') : 'Sin factura adjunta';
+    return `<div class="card"><div class="card__top"><div><div class="card__name">Factura ${escapeHtml(g.numFactura || 'sin número')}</div><div class="card__meta">${escapeHtml(g.fecha)} · ${g.pagado === false ? '⏳ Pendiente de pago' : '✓ Pagada' + (g.fechaPago ? ' el ' + escapeHtml(g.fechaPago) : '')} · ${archivo}</div></div><div class="card__total">${escapeHtml(formatoEuros(g.total))}</div></div>
+      <div class="card__actions">
+        <button class="chip-btn" data-pf-pagar="${g.id}" data-pagado="${g.pagado === false ? 'true' : 'false'}">${g.pagado === false ? 'Marcar como pagada' : 'Marcar como pendiente'}</button>
+        ${sinFacturaOriginal(g) ? `<button class="chip-btn" data-pf-editar="${g.id}">📎 Adjuntar la factura</button>` : ''}
+        <button class="chip-btn" data-pf-editar="${g.id}">Editar</button>
+      </div></div>`;
+  }).join('') + (suyas.length > mostradas.length ? `<div class="card__meta">Se enseñan las ${mostradas.length} más recientes de ${suyas.length}: el resto, en "Ver todo en Gastos y facturas".</div>` : '');
+  cajaAp.querySelectorAll('[data-pf-pagar]').forEach((b) => b.addEventListener('click', () => marcarGastoPagado(b.dataset.pfPagar, b.dataset.pagado === 'true', b, cargarFichaProveedor)));
+  cajaAp.querySelectorAll('[data-pf-editar]').forEach((b) => b.addEventListener('click', () => { const g = fichaGastos.find((x) => String(x.id) === b.dataset.pfEditar); if (g) abrirGastoParaEditar(g, 'proveedor-ficha'); }));
+}
+// Todo lo suyo en la lista general (con las mismas fechas), para buscar, filtrar o sacar su libro en PDF
+function verTodoDelProveedor() {
+  if (!fichaProveedor) return;
+  const per = periodoFicha(fichaPeriodo);
+  cambiarTab('gastos-ver');
+  document.getElementById('gastosFechaIni').value = per.ini;
+  document.getElementById('gastosFechaFin').value = per.fin;
+  gastosProveedorSel = 'id:' + fichaProveedor.id;
+  ['gastosSoloPendientes', 'gastosSinOriginal', 'gastosSoloEstimados'].forEach((id) => { document.getElementById(id).checked = false; });
+  buscarGastos();
+}
+
+/* ============ COMPRAS: lo pendiente, a la vista ============ */
+let comprasPeticion = 0;
+function abrirCierreDelAviso() {
+  if (!cierreInicio) return;
+  document.getElementById('cierreMes').value = `${cierreInicio.anio}-${String(cierreInicio.mes).padStart(2, '0')}`;
+  cambiarTab('cierre-mes');
+}
+// Arriba del menú de Compras: cuántas facturas faltan por apuntar y si hay un mes por cerrar (nada si no hay nada pendiente)
+async function pintarPendientesCompras() {
+  const caja = document.getElementById('comprasAhora');
+  const cierre = cierreInicio && !cierreInicio.cerrado ? cierreInicio : null;
+  document.getElementById('badgeCierreMes').textContent = cierre ? 'Pendiente' : '';
+  const n = ++comprasPeticion;
+  const r = await apiGet('gastosEstimados', {}).catch(() => ({ ok: false }));
+  if (n !== comprasPeticion) return;
+  const pendientes = r.ok && Array.isArray(r.data) ? r.data : [];
+  const totalEstimado = pendientes.reduce((s, g) => s + (Number(g.total) || 0), 0);
+  document.getElementById('badgeProveedores').textContent = pendientes.length ? `${pendientes.length} por apuntar` : '';
+  const por = {};
+  pendientes.forEach((g) => { const k = String(g.proveedorId) + '|' + g.proveedor; (por[k] = por[k] || { proveedor: g.proveedor, n: 0 }).n++; });
+  const quienes = Object.keys(por).map((k) => por[k]).sort((x, y) => y.n - x.n);
+  const tarjetas = [];
+  if (pendientes.length) tarjetas.push(`<div class="card"><div class="card__name">🧾 ${pendientes.length} factura${pendientes.length === 1 ? '' : 's'} por apuntar</div><div class="card__meta">${quienes.slice(0, 4).map((q) => `${escapeHtml(q.proveedor)} (${q.n})`).join(' · ')}${quienes.length > 4 ? ` · y ${quienes.length - 4} más` : ''}</div><div class="card__meta">Pedidos que esperan su factura: ${formatoEuros(totalEstimado)} estimados</div><div class="card__actions"><button class="chip-btn" data-ir="proveedores">Ir a Proveedores</button></div></div>`);
+  if (cierre) tarjetas.push(`<div class="card"><div class="card__name">🗓 ${escapeHtml(conMayuscula(cierre.nombre))} ya ha terminado</div><div class="card__meta">Revisa las facturas pendientes y cierra el mes.</div><div class="card__actions"><button class="chip-btn" id="btnComprasCierre">Cierre de mes</button></div></div>`);
+  caja.innerHTML = tarjetas.join('');
+  caja.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => cambiarTab(b.dataset.ir)));
+  const botonCierre = document.getElementById('btnComprasCierre');
+  if (botonCierre) botonCierre.addEventListener('click', abrirCierreDelAviso);
 }
 
 /* ============ HOJAS DE LECTURA DEL SHEET (botón compartido) ============ */
@@ -5507,7 +5711,7 @@ async function cargarFormularioFactura() {
   facturaDestino = (pre && pre.volver) || 'gastos-ver';
   const atras = document.querySelector('#tab-gasto-factura [data-volver]');
   atras.dataset.volver = facturaDestino;
-  atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas de hoy' : facturaDestino === 'facturas-semana' ? '← Facturas de la semana' : facturaDestino === 'cuadrar' ? '← Listado del proveedor' : '← Gastos';
+  atras.textContent = facturaDestino === 'facturas-dia' ? '← Facturas día a día' : facturaDestino === 'facturas-semana' ? '← Facturas por apuntar' : facturaDestino === 'cuadrar' ? '← Importar resumen' : facturaDestino === 'proveedor-ficha' ? '← ' + (fichaProveedor ? fichaProveedor.nombre : 'Proveedor') : '← Gastos';
   document.getElementById('facBase').value = '';
   document.getElementById('facIva').value = '';
   reiniciarDesgloseFactura(pre && pre.desglosar);   // si se viene de "Desglosar IVA" de una fila, el desglose ya está abierto
@@ -5736,6 +5940,7 @@ function cablearCompras() {
   cablearPanelYGestor();
   cablearDesgloseFactura();
   cablearCuadrar();
+  document.getElementById('btnProvImportar').addEventListener('click', () => { cuadrarProveedorInicial = '__ninguno'; const atras = document.querySelector('#tab-cuadrar [data-volver]'); atras.dataset.volver = 'proveedores'; atras.textContent = '← Proveedores'; cambiarTab('cuadrar'); });
   document.getElementById('btnNuevoProveedor').addEventListener('click', () => abrirFormularioProveedor(null));
   document.getElementById('btnGuardarProveedor').addEventListener('click', guardarProveedor);
   document.getElementById('btnGuardarGasto').addEventListener('click', guardarGasto);
@@ -5757,11 +5962,19 @@ function cablearCompras() {
   });
   document.getElementById('btnCierreVistas').addEventListener('click', (e) => conEstadoCarga(e.currentTarget, 'Actualizando…', () => actualizarVistasSheet(document.getElementById('cierreMsg'))));
   document.getElementById('btnCierreGestor').addEventListener('click', () => { const m = mesDelCierre(); if (m) document.getElementById('gestorMes').value = `${m.anio}-${String(m.mes).padStart(2, '0')}`; cambiarTab('gestor'); });
-  document.getElementById('btnCierreRevisar').addEventListener('click', () => {
-    if (!cierreInicio) return;
-    document.getElementById('cierreMes').value = `${cierreInicio.anio}-${String(cierreInicio.mes).padStart(2, '0')}`;
-    cambiarTab('cierre-mes');
+  document.getElementById('btnCierreRevisar').addEventListener('click', abrirCierreDelAviso);
+  document.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => cambiarTab(b.dataset.ir)));
+  document.querySelectorAll('[data-pf-periodo]').forEach((b) => b.addEventListener('click', () => { fichaPeriodo = b.dataset.pfPeriodo; cargarFichaProveedor(); }));
+  document.getElementById('btnPfApuntar').addEventListener('click', () => { if (!fichaProveedor) return; facturaPreseleccion = { proveedorId: fichaProveedor.id, volver: 'proveedor-ficha' }; cambiarTab('gasto-factura'); });
+  document.getElementById('btnPfImportar').addEventListener('click', () => {
+    if (!fichaProveedor) return;
+    cuadrarProveedorInicial = String(fichaProveedor.id);
+    const atras = document.querySelector('#tab-cuadrar [data-volver]'); atras.dataset.volver = 'proveedor-ficha'; atras.textContent = '← ' + fichaProveedor.nombre;
+    cambiarTab('cuadrar');
   });
+  document.getElementById('btnPfEditar').addEventListener('click', () => { if (!fichaProveedor) return; proveedorSeleccionado = fichaProveedor; abrirFormularioProveedor(fichaProveedor); });
+  document.getElementById('btnPfVerTodo').addEventListener('click', verTodoDelProveedor);
+  document.getElementById('btnFsFacturaSuelta').addEventListener('click', () => { facturaPreseleccion = { volver: 'facturas-semana' }; cambiarTab('gasto-factura'); });
   document.getElementById('btnCierreMasTarde').addEventListener('click', () => {
     if (cierreInicio) { try { localStorage.setItem('cierreMasTarde', hoyLocalISO() + '|' + cierreInicio.anio + '-' + cierreInicio.mes); } catch (e) { /* sin almacenamiento */ } }
     document.getElementById('avisoCierreMes').classList.add('tab--hidden');

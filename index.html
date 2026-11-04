@@ -428,25 +428,24 @@
       <div class="home-title">Compras</div>
       <div class="home-sub">Pedidos, facturas y gastos de proveedores</div>
     </div>
+    <div id="comprasAhora" class="stack" style="margin-bottom:12px;"></div>
     <div class="home-grid">
-      <div class="home-grupo">Cada día</div>
+      <div class="home-grupo">Proveedores y sus facturas</div>
+      <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span><span class="home-btn__texto">Proveedores<small>Entra en uno para apuntar sus facturas, importar su resumen y ver lo apuntado</small></span><span class="home-btn__badge" id="badgeProveedores"></span></button>
       <button class="home-btn home-btn--factura" data-tab="pedido-proveedores"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Pedido a proveedores<small>Lo que hay que comprar para mañana, con su gasto estimado</small></span></button>
-      <div class="home-grupo">Facturas de proveedores</div>
       <div class="home-nota">Guarda también la factura original de cada compra (papel o PDF): hay que conservarla entre 4 y 6 años.</div>
-      <button class="home-btn home-btn--factura" data-tab="cuadrar"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Listado mensual del proveedor<small>Pega el listado: lo compara con lo apuntado y apunta de golpe las que faltan</small></span></button>
-      <button class="home-btn home-btn--factura" data-tab="facturas-semana"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Facturas de la semana<small>Una por una, con cada factura delante: número, importes y archivo</small></span></button>
-      <button class="home-btn home-btn--factura" data-tab="facturas-dia"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Facturas de hoy<small>Qué proveedores han traído factura hoy y cuáles faltan</small></span></button>
-      <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span><span class="home-btn__texto">Nuevo gasto<small>Gasoil, alquiler, suministros…: lo que no es mercancía</small></span></button>
+      <div class="home-grupo">Gastos que no son de un proveedor</div>
+      <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span><span class="home-btn__texto">Otro gasto<small>Gasoil, alquiler, suministros…: lo que no es mercancía</small></span></button>
+      <div class="home-grupo">Todo lo apuntado</div>
+      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Gastos y facturas<small>Buscar entre todo, editar, marcar pagadas y ver los archivos</small></span></button>
       <div class="home-grupo">Cómo va el negocio</div>
       <button class="home-btn home-btn--factura" data-tab="panel"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Panel de resultados<small>Ventas, gastos, IVA y lo pendiente de cobrar y de pagar</small></span></button>
       <button class="home-btn home-btn--factura" data-tab="balance"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Balance: ventas y coste<small>Lo que vendes frente a lo que te cuesta, por día</small></span></button>
-      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Gastos y facturas<small>Todo lo apuntado: editar, marcar pagadas y ver justificantes</small></span></button>
-      <div class="home-grupo">Para el gestor</div>
-      <button class="home-btn home-btn--factura" data-tab="cierre-mes"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cierre de mes<small>Qué falta por revisar antes de pasar el mes al gestor</small></span></button>
+      <div class="home-grupo">Fin de mes</div>
+      <button class="home-btn home-btn--factura" data-tab="cierre-mes"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cierre de mes<small>Qué falta por revisar antes de pasar el mes al gestor</small></span><span class="home-btn__badge home-btn__badge--alerta" id="badgeCierreMes"></span></button>
       <button class="home-btn home-btn--factura" data-tab="gestor"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Zona del gestor<small>El Excel y la carpeta del mes con todo lo que necesita</small></span></button>
       <div class="home-grupo">Ajustes</div>
-      <button class="home-btn home-btn--factura" data-tab="proveedores"><span class="home-btn__icon" data-icon="clientes"></span><span class="home-btn__texto">Proveedores<small>Altas y datos de cada proveedor</small></span></button>
-      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="empresa"></span><span class="home-btn__texto">Cerrar año (archivar)<small>Una vez al año, en enero</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cerrar año (archivar)<small>Una vez al año, en enero</small></span></button>
     </div>
   </section>
 
@@ -477,11 +476,41 @@
     <button class="link-btn" data-volver="compras">← Compras</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Proveedores</div>
+      <div class="home-sub">Toca un proveedor para apuntar sus facturas, importar su resumen y ver lo apuntado</div>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="chip-btn" data-ir="facturas-semana">📋 Todas las facturas pendientes</button>
+      <button class="chip-btn" id="btnProvImportar">📥 Importar un resumen mensual</button>
     </div>
     <div id="listaProveedores" class="stack">
       <div class="empty-state">Cargando…</div>
     </div>
     <button class="btn-primary" id="btnNuevoProveedor" style="margin-top:16px;">+ Nuevo proveedor</button>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-proveedor-ficha">
+    <button class="link-btn" data-volver="proveedores">← Proveedores</button>
+    <div class="home-welcome" style="padding-top:0; text-align:left;">
+      <div class="home-title" id="pfNombre">Proveedor</div>
+      <div class="home-sub" id="pfDatos"></div>
+    </div>
+    <button class="btn-primary" id="btnPfApuntar" style="width:100%;">＋ Apuntar una factura</button>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-top:10px;">
+      <button class="chip-btn" id="btnPfImportar">📥 Importar su resumen del mes</button>
+      <button class="chip-btn" id="btnPfEditar">✎ Datos del proveedor</button>
+    </div>
+    <div class="field-label" style="margin-top:16px;" id="pfPorApuntarTitulo">Facturas por apuntar</div>
+    <div id="pfPorApuntar" class="stack"><div class="empty-state">Cargando…</div></div>
+    <div class="field-label" style="margin-top:16px;">Facturas apuntadas</div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <button class="chip-btn is-activo" data-pf-periodo="mes">Este mes</button>
+      <button class="chip-btn" data-pf-periodo="anterior">Mes pasado</button>
+      <button class="chip-btn" data-pf-periodo="tres">3 meses</button>
+    </div>
+    <div class="card__meta" id="pfResumen" style="margin-bottom:8px;"></div>
+    <div id="pfApuntadas" class="stack"></div>
+    <button class="btn-secondary" id="btnPfVerTodo" style="width:100%; margin-top:10px;">Ver todo en Gastos y facturas →</button>
+    <div class="form-msg" id="pfMsg"></div>
   </section>
 
   <section class="tab tab--hidden" id="tab-proveedor-form">
@@ -626,27 +655,23 @@
     </div>
     <div class="product-row" style="gap:8px; margin-top:8px;">
       <button class="chip-btn" id="btnGastosEsteMes">Este mes</button>
-      <button class="btn-secondary" id="btnDescargarLibroGastos">Libro de gastos (PDF)</button>
     </div>
-    <button class="btn-primary" id="btnIncorporarFactura" style="width:100%; margin-top:10px;">Incorporar factura de proveedor</button>
-    <button class="btn-secondary" id="btnActualizarVistas" style="width:100%; margin-top:8px;">📊 Actualizar las hojas de lectura del Sheet</button>
-    <div class="card__meta" id="msgVistas" style="margin:6px 2px 0;">Para verificar datos en el Sheet sin la hoja GASTOS: pestañas VISTA FACTURAS y VISTA PEDIDOS PROV.</div>
+    <button class="btn-primary" id="btnIncorporarFactura" style="width:100%; margin-top:10px;">＋ Apuntar una factura de proveedor</button>
+    <div class="filtros-chips">
+      <label class="chip-check"><input type="checkbox" id="gastosSoloPendientes"><span>Sin pagar</span></label>
+      <label class="chip-check"><input type="checkbox" id="gastosSinOriginal"><span>Sin factura original</span></label>
+      <label class="chip-check"><input type="checkbox" id="gastosSoloEstimados"><span>Pedidos sin factura</span></label>
+    </div>
+    <details class="mas-opciones">
+      <summary>Más opciones: libro de gastos en PDF y hojas de lectura del Sheet</summary>
+      <button class="btn-secondary" id="btnDescargarLibroGastos" style="width:100%;">Libro de gastos (PDF)</button>
+      <button class="btn-secondary" id="btnActualizarVistas" style="width:100%; margin-top:8px;">📊 Actualizar las hojas de lectura del Sheet</button>
+      <div class="card__meta" id="msgVistas" style="margin:6px 2px 0;">Para verificar datos en el Sheet sin la hoja GASTOS: pestañas VISTA FACTURAS y VISTA PEDIDOS PROV.</div>
+    </details>
     <label class="field-label" for="gastosProveedor">Proveedor</label>
     <select id="gastosProveedor" class="select-input"><option value="">Todos los proveedores</option></select>
     <div id="gastosPorProveedor" class="stack" style="margin-top:8px;"></div>
     <div class="card__meta" id="gastosAviso" style="margin:6px 2px 0;"></div>
-    <label style="display:flex; gap:8px; align-items:center; margin:10px 0 4px; font-size:14px;">
-      <input type="checkbox" id="gastosSoloPendientes">
-      <span>Solo pendientes de pago</span>
-    </label>
-    <label style="display:flex; gap:8px; align-items:center; margin:4px 0 4px; font-size:14px;">
-      <input type="checkbox" id="gastosSinOriginal">
-      <span>Solo sin factura original (sin archivo o solo con el listado)</span>
-    </label>
-    <label style="display:flex; gap:8px; align-items:center; margin:4px 0 4px; font-size:14px;">
-      <input type="checkbox" id="gastosSoloEstimados">
-      <span>Solo pedidos a proveedores pendientes de factura</span>
-    </label>
     <div id="listaGastos" class="stack">
       <div class="empty-state">Elige un rango de fechas y pulsa Buscar.</div>
     </div>
@@ -655,10 +680,13 @@
 
 
   <section class="tab tab--hidden" id="tab-facturas-dia">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="proveedores">← Proveedores</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Facturas de hoy</div>
+      <div class="home-title">Facturas día a día</div>
       <div class="home-sub">Las facturas de cada proveedor: las que ya has apuntado y las que te faltan</div>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="chip-btn" data-ir="facturas-semana">← Ver todas las pendientes</button>
     </div>
     <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:12px;">
       <button class="chip-btn" data-fd-rapido="hoy">Hoy</button>
@@ -673,10 +701,14 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-facturas-semana">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="proveedores">← Proveedores</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Facturas de la semana</div>
+      <div class="home-title">Facturas por apuntar</div>
       <div class="home-sub">Todas las facturas por recibir en una sola pantalla: escribe el número y los importes de cada una (y adjunta el PDF o la foto) y guárdalas todas de una vez</div>
+    </div>
+    <div class="product-row" style="gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <button class="chip-btn" data-ir="facturas-dia">📅 Ver día a día</button>
+      <button class="chip-btn" id="btnFsFacturaSuelta">＋ Una factura suelta</button>
     </div>
     <div class="card__meta" id="fsResumen" style="margin-bottom:8px;"></div>
     <label class="btn-secondary" for="fsArchivos" style="display:block; text-align:center; cursor:pointer; margin:0 0 4px;">📄 Subir varias facturas (PDF o foto) a Drive de una vez</label>
@@ -697,7 +729,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-cuadrar">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="proveedores">← Proveedores</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Listado mensual del proveedor</div>
       <div class="home-sub">Pega el listado que te manda el proveedor (una línea por factura: número, fecha, base, IVA y total). Lo compara con lo que tienes apuntado y, si quieres, apunta de golpe las que faltan.</div>

@@ -2419,7 +2419,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.55';
+const VERSION_APP = '2026.10.56';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -3817,7 +3817,8 @@ async function descargarLibroFacturas() {
   const ini = document.getElementById('resFechaIni').value;
   const fin = document.getElementById('resFechaFin').value;
   if (!ini || !fin) { alert('Elige las dos fechas primero.'); return; }
-  const r = await apiGet('libroFacturasPdf', { fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }).catch((err) => ({ ok: false, error: errorDeRed(err) }));
+  const clienteId = document.getElementById('selectClienteFacturas').value;   // con un cliente elegido, el libro es solo suyo
+  const r = await apiGet('libroFacturasPdf', Object.assign({ fechaIni: formatoFechaES(ini), fechaFin: formatoFechaES(fin) }, clienteId ? { clienteId } : {})).catch((err) => ({ ok: false, error: errorDeRed(err) }));
   if (!r.ok) { alert('Error: ' + (r.error || 'inténtalo de nuevo')); return; }
   await descargarPDF(r.base64, r.nombre);
 }
@@ -5598,7 +5599,8 @@ async function descargarXlsxGestor() {
   const r = await apiGet('gestorXlsx', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
   if (!r.ok) { mensajeGestor('No se pudo preparar: ' + (r.error || 'inténtalo de nuevo'), 'error'); return; }
   await descargarPDF(r.base64, r.nombre, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  mensajeGestor(`${r.nombre}: ${r.filas} fila${r.filas === 1 ? '' : 's'} en 3 hojas (emitidas, recibidas e IVA).`, 'ok');
+  const rango = (x) => (x ? `${x.n}${x.desde ? ` (del ${x.desde} al ${x.hasta})` : ''}` : '');   // un servidor antiguo no lo manda
+  mensajeGestor(`${r.nombre}: ${r.filas} fila${r.filas === 1 ? '' : 's'} en 3 hojas (emitidas, recibidas e IVA).` + (r.emitidas ? ` Facturas emitidas: ${rango(r.emitidas)}. Facturas recibidas: ${rango(r.recibidas)}.` : ''), 'ok');
 }
 
 async function descargarLibroGestor(accion) {
@@ -5647,15 +5649,32 @@ async function generarPdfsEmitidasGestor(boton) {
   if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
   generandoPdfsGestor = true;
   boton.disabled = true;
+  const saltar = [];     // las facturas que han dado error: se dejan aparte para seguir con las demás (y no repetirlas)
+  const fallidas = [];   // { id, error }
+  let sinRespuesta = 0;
   try {
-    for (let vuelta = 0; vuelta < 300; vuelta++) {
-      const r = await apiGet('gestorPdfsEmitidas', { anio: m.anio, mes: m.mes, lote: '8' }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
-      if (!r.ok) { mensajeGestor('No se pudo seguir: ' + (r.error || 'inténtalo de nuevo (lo ya hecho se conserva)'), 'error'); return; }
-      if (r.errores && r.errores.length) { mensajeGestor(`No se pudo generar la factura nº ${r.errores[0].id}: ${r.errores[0].error}`, 'error'); return; }
+    for (let vuelta = 0; vuelta < 400; vuelta++) {
+      // lotes de 4: cada PDF tarda varios segundos y Google corta las llamadas largas; lo ya hecho queda en Drive
+      const r = await apiGet('gestorPdfsEmitidas', { anio: m.anio, mes: m.mes, lote: '4', saltar: saltar.join(',') }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
+      if (!r.ok) {
+        sinRespuesta++;
+        if (sinRespuesta >= 3) { mensajeGestor('No se pudo seguir: ' + (r.error || 'inténtalo de nuevo') + ' Lo ya generado se conserva: vuelve a pulsar el botón para continuar.', 'error'); return; }
+        mensajeGestor(`Se cortó la conexión. Reintentando… (${sinRespuesta} de 2)`, '');
+        await new Promise((res) => setTimeout(res, 2000));
+        continue;
+      }
+      sinRespuesta = 0;
       if (r.total === 0) { mensajeGestor('No hay facturas emitidas en ese mes.', ''); return; }
-      mensajeGestor(`Generando los PDF de las facturas emitidas… ${r.total - r.restantes} de ${r.total}`, '');
-      if (r.restantes === 0) { mensajeGestor(`Listos los PDF de las ${r.total} facturas emitidas. Están en la carpeta del mes.`, 'ok'); return; }
-      if (r.hechas === 0) { mensajeGestor('No se ha podido avanzar. Inténtalo de nuevo.', 'error'); return; }
+      (r.errores || []).forEach((e) => { if (!saltar.includes(String(e.id))) { saltar.push(String(e.id)); fallidas.push(e); } });
+      const hechas = r.total - r.restantes - fallidas.length;
+      if (r.restantes === 0) {
+        if (!fallidas.length) { mensajeGestor(`Listos los PDF de las ${r.total} facturas emitidas. Están en la carpeta del mes.`, 'ok'); return; }
+        const quienes = fallidas.slice(0, 5).map((e) => `nº ${e.id}`).join(', ') + (fallidas.length > 5 ? ` y ${fallidas.length - 5} más` : '');
+        mensajeGestor(`Listos ${hechas} de ${r.total} PDF. ${fallidas.length === 1 ? 'No se pudo generar la factura' : 'No se pudieron generar las facturas'} ${quienes} (${fallidas[0].error}). Las demás están en la carpeta del mes.`, 'error');
+        return;
+      }
+      if (r.hechas === 0 && !(r.errores && r.errores.length)) { mensajeGestor('No se ha podido avanzar. Inténtalo de nuevo.', 'error'); return; }
+      mensajeGestor(`Generando los PDF de las facturas emitidas… ${hechas} de ${r.total}`, '');
     }
   } finally {
     generandoPdfsGestor = false;

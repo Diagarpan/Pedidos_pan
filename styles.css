@@ -954,7 +954,7 @@ html[data-tema="oscuro"] { --ambar: #E8AE4A; }
 .lanzador__texto small { font-weight: 400; color: var(--ink-muted); font-size: 11.5px; margin-top: 2px; }
 .lanzador__item .home-btn__badge { position: absolute; top: 8px; right: 8px; margin: 0; }
 @media (min-width: 900px) {
-  .lanzador { display: none; }                       /* en pantalla grande el menú ya está en la barra lateral */
+  .lanzador__grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }   /* en pantalla ancha: 3 o 4 accesos por fila según el ancho */
   .inicio-panel { grid-template-columns: 1fr 1fr 1.4fr; }
   .inicio-card--ventas { grid-column: auto; }
 }

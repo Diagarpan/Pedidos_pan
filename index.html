@@ -27,11 +27,11 @@
       <button class="sidebar__item" data-tab="reparto"><span class="sidebar__icon" data-icon="reparto"></span>Reparto</button>
       <button class="sidebar__item" data-tab="pedidos"><span class="sidebar__icon" data-icon="pedidos"></span>Pedidos</button>
       <button class="sidebar__item" data-tab="nuevo" data-solo-admin="1"><span class="sidebar__icon" data-icon="nuevo"></span>Nuevo pedido</button>
-      <button class="sidebar__item" data-tab="factura" data-solo-admin="1"><span class="sidebar__icon" data-icon="facturas"></span>Facturas</button>
-      <button class="sidebar__item" data-tab="compras" data-solo-admin="1"><span class="sidebar__icon" data-icon="compras"></span>Compras</button>
       <button class="sidebar__item" data-tab="clientes" data-solo-admin="1"><span class="sidebar__icon" data-icon="clientes"></span>Clientes</button>
+      <button class="sidebar__item" data-tab="factura" data-solo-admin="1"><span class="sidebar__icon" data-icon="facturas"></span>Facturas emitidas</button>
+      <button class="sidebar__item" data-tab="compras" data-solo-admin="1"><span class="sidebar__icon" data-icon="compras"></span>Compras</button>
+      <button class="sidebar__item" data-tab="resultados" data-solo-admin="1"><span class="sidebar__icon" data-icon="estadisticas"></span>Resultados</button>
       <button class="sidebar__item" data-tab="productos" data-solo-admin="1"><span class="sidebar__icon" data-icon="productos"></span>Productos</button>
-      <button class="sidebar__item" data-tab="estadisticas" data-solo-admin="1"><span class="sidebar__icon" data-icon="estadisticas"></span>Estadísticas</button>
       <button class="sidebar__item" data-tab="empresa" data-solo-admin="1"><span class="sidebar__icon" data-icon="empresa"></span>Empresa</button>
     </nav>
     <button class="sidebar__item sidebar__item--settings" id="btnAjustesSidebar"><span class="sidebar__icon" data-icon="ajustes"></span>Ajustes</button>
@@ -70,54 +70,70 @@
 
   <!-- INICIO -->
   <section class="tab" id="tab-inicio">
-    <div class="home-welcome">
-      <div class="home-title">¿Qué quieres hacer?</div>
+    <div class="inicio-hero">
+      <div class="inicio-hero__saludo" id="inicioSaludo">Hola</div>
+      <div class="inicio-hero__fecha" id="inicioFechaLarga"></div>
       <div class="home-sub" id="homeSub"></div>
+      <div class="inicio-hero__frase" id="inicioFrase"></div>
     </div>
-
-    <div class="resumen-inicio" id="resumenInicio">
-      <div class="resumen-inicio__item">
-        <span class="resumen-inicio__label">Recaudado hoy</span>
-        <span class="resumen-inicio__num" id="riRecaudado">—</span>
+    <div class="inicio-panel" id="resumenInicio">
+      <div class="inicio-card inicio-card--reparto">
+        <div class="anillo" id="anilloReparto">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="anillo__fondo" cx="60" cy="60" r="52"></circle><circle class="anillo__valor" id="anilloValor" cx="60" cy="60" r="52"></circle></svg>
+          <div class="anillo__centro"><span class="anillo__num" id="riEntregados">—</span><span class="anillo__txt">entregados</span></div>
+        </div>
+        <button class="chip-btn" data-ir="reparto">Abrir el reparto →</button>
       </div>
-      <div class="resumen-inicio__item">
-        <span class="resumen-inicio__label">Pedidos hoy</span>
-        <span class="resumen-inicio__num" id="riPedidos">—</span>
+      <div class="inicio-card inicio-card--cobro">
+        <div class="inicio-card__t">Cobrado hoy</div>
+        <div class="inicio-card__v" id="riRecaudado">—</div>
+        <div class="barra" aria-hidden="true"><div class="barra__valor" id="barraCobro"></div></div>
+        <div class="inicio-card__s">Pendiente de cobro <b class="resumen-inicio__num--alerta" id="riPendiente">—</b></div>
+        <div class="inicio-card__s">Pedidos de hoy <b id="riPedidos">—</b></div>
       </div>
-      <div class="resumen-inicio__item">
-        <span class="resumen-inicio__label">Entregados</span>
-        <span class="resumen-inicio__num" id="riEntregados">—</span>
-      </div>
-      <div class="resumen-inicio__item">
-        <span class="resumen-inicio__label">Pendiente de cobro</span>
-        <span class="resumen-inicio__num resumen-inicio__num--alerta" id="riPendiente">—</span>
-      </div>
-    </div>
-
-    <button class="aviso-incidencias tab--hidden" id="avisoIncidencias" data-solo-admin="1"></button>
-    <div class="aviso-cierre tab--hidden" id="avisoCierreMes" data-solo-admin="1">
-      <div class="aviso-cierre__texto" id="avisoCierreTexto"></div>
-      <div class="aviso-cierre__acciones">
-        <button class="btn-primary" id="btnCierreRevisar">Revisar y cerrar el mes</button>
-        <button class="chip-btn" id="btnCierreMasTarde">Más tarde</button>
+      <div class="inicio-card inicio-card--ventas tab--hidden" id="tarjetaVentas7">
+        <div class="inicio-card__t">Ventas · últimos 7 días</div>
+        <div class="inicio-card__v" id="ventas7Total">—</div>
+        <svg id="ventas7Grafico" viewBox="0 0 260 84" role="img" aria-label="Ventas de los últimos 7 días"></svg>
       </div>
     </div>
-
+    <div class="inicio-atencion tab--hidden" id="inicioAtencion">
+      <div class="inicio-seccion">Requiere tu atención</div>
+      <button class="aviso-fila aviso-fila--alerta tab--hidden" id="avisoIncidencias" data-solo-admin="1"></button>
+      <button class="aviso-fila aviso-fila--alerta tab--hidden" id="avisoAtrasadosInicio"></button>
+      <button class="aviso-fila aviso-fila--info tab--hidden solo-admin" id="avisoPorApuntar"></button>
+      <div class="aviso-cierre tab--hidden" id="avisoCierreMes" data-solo-admin="1">
+        <div class="aviso-cierre__texto" id="avisoCierreTexto"></div>
+        <div class="aviso-cierre__acciones">
+          <button class="btn-primary" id="btnCierreRevisar">Revisar y cerrar el mes</button>
+          <button class="chip-btn" id="btnCierreMasTarde">Más tarde</button>
+        </div>
+      </div>
+    </div>
+    <div class="inicio-todo-bien tab--hidden" id="inicioTodoBien">✓ Todo al día: no hay nada pendiente.</div>
     <div class="global-search">
       <input type="search" id="buscarGlobal" class="search-input" placeholder="Buscar cliente, pedido o factura…" style="margin-bottom:0;">
     </div>
     <div id="resultadosBusquedaGlobal"></div>
-
-    <div class="home-grid">
-      <button class="home-btn home-btn--reparto" data-tab="reparto">Reparto<span class="home-btn__badge" id="badgeReparto"></span></button>
-      <button class="home-btn home-btn--pedidos" data-tab="pedidos">Pedidos<span class="home-btn__badge" id="badgePedidos"></span></button>
-      <button class="home-btn home-btn--nuevo" data-tab="nuevo" data-solo-admin="1">Nuevo pedido</button>
-      <button class="home-btn home-btn--clientes" data-tab="clientes" data-solo-admin="1">Clientes</button>
-      <button class="home-btn home-btn--factura" data-tab="factura" data-solo-admin="1">Facturas</button>
-      <button class="home-btn home-btn--factura" data-tab="compras" data-solo-admin="1">Compras</button>
-      <button class="home-btn home-btn--productos" data-tab="productos" data-solo-admin="1">Productos</button>
-      <button class="home-btn home-btn--stats" data-tab="estadisticas" data-solo-admin="1">Estadísticas</button>
-      <button class="home-btn home-btn--empresa" data-tab="empresa" data-solo-admin="1">Empresa</button>
+    <div class="lanzador" id="lanzadorInicio">
+      <div class="inicio-seccion">Día a día</div>
+      <div class="lanzador__grid">
+        <button class="home-btn lanzador__item " data-tab="reparto"><span class="lanzador__icono" data-icon="reparto"></span><span class="lanzador__texto">Reparto<small>Qué llevar hoy y a quién</small></span><span class="home-btn__badge" id="badgeReparto"></span></button>
+        <button class="home-btn lanzador__item " data-tab="pedidos"><span class="lanzador__icono" data-icon="pedidos"></span><span class="lanzador__texto">Pedidos<small>Ver y marcar entregas</small></span><span class="home-btn__badge" id="badgePedidos"></span></button>
+        <button class="home-btn lanzador__item " data-tab="nuevo" data-solo-admin="1"><span class="lanzador__icono" data-icon="nuevo"></span><span class="lanzador__texto">Nuevo pedido<small>Apuntar un pedido</small></span></button>
+        <button class="home-btn lanzador__item " data-tab="clientes" data-solo-admin="1"><span class="lanzador__icono" data-icon="clientes"></span><span class="lanzador__texto">Clientes<small>Fichas, rutas y teléfonos</small></span></button>
+      </div>
+      <div class="inicio-seccion solo-admin">Dinero</div>
+      <div class="lanzador__grid">
+        <button class="home-btn lanzador__item " data-tab="factura" data-solo-admin="1"><span class="lanzador__icono" data-icon="facturas"></span><span class="lanzador__texto">Facturas emitidas<small>Lo que facturas</small></span></button>
+        <button class="home-btn lanzador__item " data-tab="compras" data-solo-admin="1"><span class="lanzador__icono" data-icon="compras"></span><span class="lanzador__texto">Compras<small>Proveedores y gastos</small></span></button>
+        <button class="home-btn lanzador__item " data-tab="resultados" data-solo-admin="1"><span class="lanzador__icono" data-icon="estadisticas"></span><span class="lanzador__texto">Resultados<small>Cifras, IVA y gestor</small></span></button>
+      </div>
+      <div class="inicio-seccion solo-admin">Datos</div>
+      <div class="lanzador__grid">
+        <button class="home-btn lanzador__item " data-tab="productos" data-solo-admin="1"><span class="lanzador__icono" data-icon="productos"></span><span class="lanzador__texto">Productos<small>Catálogo y precios</small></span></button>
+        <button class="home-btn lanzador__item " data-tab="empresa" data-solo-admin="1"><span class="lanzador__icono" data-icon="empresa"></span><span class="lanzador__texto">Empresa<small>Tus datos y ajustes</small></span></button>
+      </div>
     </div>
   </section>
 
@@ -180,7 +196,8 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-pedidos-lista">
-    <button class="link-btn" data-volver="pedidos">← Pedidos</button>
+    <button class="link-btn" data-volver="inicio">← Inicio</button>
+    <button class="btn-primary solo-admin" data-ir="nuevo" style="width:100%; margin:8px 0 12px;">+ Nuevo pedido</button>
     <button class="link-btn solo-admin" id="btnBuscarDuplicados" style="float:right;">Buscar pedidos duplicados</button>
     <div class="date-nav">
       <button class="date-nav__btn" id="btnPedidosAnterior" aria-label="Periodo anterior">←</button>
@@ -334,7 +351,7 @@
 
 
   <section class="tab tab--hidden" id="tab-clientes-lista">
-    <button class="link-btn" data-volver="clientes">← Clientes</button>
+    <button class="link-btn" data-volver="inicio">← Inicio</button>
     <div id="clientesListaVista">
       <button class="btn-primary" id="btnNuevoCliente" style="margin-bottom:12px;">+ Nuevo cliente</button>
       <button class="btn-secondary" id="btnRevisarTelefonos" style="width:100%; margin-bottom:8px;">Revisar teléfonos de los clientes</button>
@@ -437,15 +454,24 @@
       <div class="home-grupo">Gastos que no son de un proveedor</div>
       <button class="home-btn home-btn--factura" data-tab="gasto-nuevo"><span class="home-btn__icon" data-icon="nuevo"></span><span class="home-btn__texto">Otro gasto<small>Gasoil, alquiler, suministros…: lo que no es mercancía</small></span></button>
       <div class="home-grupo">Todo lo apuntado</div>
-      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Gastos y facturas<small>Buscar entre todo, editar, marcar pagadas y ver los archivos</small></span></button>
+      <button class="home-btn home-btn--factura" data-tab="gastos-ver"><span class="home-btn__icon" data-icon="compras"></span><span class="home-btn__texto">Facturas recibidas y gastos<small>Buscar entre todo, editar, marcar pagadas y ver los archivos</small></span></button>
+    </div>
+  </section>
+
+  <section class="tab tab--hidden" id="tab-resultados">
+    <div class="home-welcome">
+      <div class="home-title">Resultados</div>
+      <div class="home-sub">Cómo va el negocio y lo que necesita tu gestor</div>
+    </div>
+    <div class="home-grid">
       <div class="home-grupo">Cómo va el negocio</div>
       <button class="home-btn home-btn--factura" data-tab="panel"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Panel de resultados<small>Ventas, gastos, IVA y lo pendiente de cobrar y de pagar</small></span></button>
       <button class="home-btn home-btn--factura" data-tab="balance"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Balance: ventas y coste<small>Lo que vendes frente a lo que te cuesta, por día</small></span></button>
-      <div class="home-grupo">Fin de mes</div>
+      <button class="home-btn home-btn--factura" data-tab="estadisticas"><span class="home-btn__icon" data-icon="estadisticas"></span><span class="home-btn__texto">Estadísticas<small>Productos, clientes y evolución en el periodo que elijas</small></span></button>
+      <div class="home-grupo">IVA y gestor</div>
+      <button class="home-btn home-btn--factura" data-tab="factura-periodo"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Resumen por periodo e IVA<small>Facturación y IVA por mes o trimestre, y el modelo 347</small></span></button>
       <button class="home-btn home-btn--factura" data-tab="cierre-mes"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cierre de mes<small>Qué falta por revisar antes de pasar el mes al gestor</small></span><span class="home-btn__badge home-btn__badge--alerta" id="badgeCierreMes"></span></button>
       <button class="home-btn home-btn--factura" data-tab="gestor"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Zona del gestor<small>El Excel y la carpeta del mes con todo lo que necesita</small></span></button>
-      <div class="home-grupo">Ajustes</div>
-      <button class="home-btn home-btn--factura" data-tab="cerrar-anio"><span class="home-btn__icon" data-icon="facturas"></span><span class="home-btn__texto">Cerrar año (archivar)<small>Una vez al año, en enero</small></span></button>
     </div>
   </section>
 
@@ -509,7 +535,7 @@
     </div>
     <div class="card__meta" id="pfResumen" style="margin-bottom:8px;"></div>
     <div id="pfApuntadas" class="stack"></div>
-    <button class="btn-secondary" id="btnPfVerTodo" style="width:100%; margin-top:10px;">Ver todo en Gastos y facturas →</button>
+    <button class="btn-secondary" id="btnPfVerTodo" style="width:100%; margin-top:10px;">Ver todo en Facturas recibidas y gastos →</button>
     <div class="form-msg" id="pfMsg"></div>
   </section>
 
@@ -645,7 +671,7 @@
   <section class="tab tab--hidden" id="tab-gastos-ver">
     <button class="link-btn" data-volver="compras">← Compras</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
-      <div class="home-title">Gastos y facturas</div>
+      <div class="home-title">Facturas recibidas y gastos</div>
     </div>
     <div class="date-range">
       <input type="date" id="gastosFechaIni">
@@ -746,7 +772,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-panel">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="resultados">← Resultados</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Panel de resultados</div>
       <div class="home-sub">Ventas, gastos, lo pendiente de cobrar y de pagar, y el resultado provisional del mes</div>
@@ -760,7 +786,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-gestor">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="resultados">← Resultados</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Zona del gestor</div>
       <div class="home-sub">Todo lo del mes para tu gestor: facturas emitidas y recibidas, IVA, retenciones y justificantes</div>
@@ -789,7 +815,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-cierre-mes">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="resultados">← Resultados</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Cierre de mes</div>
       <div class="home-sub">Qué falta por revisar antes de pasar el mes al gestor</div>
@@ -805,7 +831,7 @@
 
 
   <section class="tab tab--hidden" id="tab-balance">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="resultados">← Resultados</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Balance: ventas y coste</div>
       <div class="home-sub">Lo que vendes frente a lo que te cuesta de fábrica (por fecha de entrega, sin IVA)</div>
@@ -826,7 +852,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-cerrar-anio">
-    <button class="link-btn" data-volver="compras">← Compras</button>
+    <button class="link-btn" data-volver="empresa">← Empresa</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Cerrar año (archivar)</div>
       <div class="home-sub">Mueve los pedidos, facturas y gastos de un año ya terminado a sus propias pestañas, para que el Sheet no crezca sin límite. No borra nada — todo se conserva, solo se organiza.</div>
@@ -870,7 +896,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-factura-periodo">
-    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <button class="link-btn" data-volver="resultados">← Resultados</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Resumen por periodo e IVA</div>
       <div class="home-sub">Ventas de cada mes o trimestre y el IVA a liquidar (IVA de ventas menos IVA de compras)</div>
@@ -891,7 +917,7 @@
   </section>
 
   <section class="tab tab--hidden" id="tab-factura-lista">
-    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <button class="link-btn" data-volver="inicio">← Inicio</button>
     <select id="selectClienteFacturas" class="select-input" data-placeholder="Todos los clientes — escribe para elegir uno">
       <option value="">Todos los clientes</option>
     </select>
@@ -923,7 +949,7 @@
 
 
   <section class="tab tab--hidden" id="tab-factura-editar">
-    <button class="link-btn" data-volver="factura">← Facturas</button>
+    <button class="link-btn" data-volver="factura-lista">← Facturas emitidas</button>
     <div class="home-welcome" style="padding-top:0; text-align:left;">
       <div class="home-title">Editar factura</div>
       <div class="home-sub" id="editarFacturaCliente"></div>
@@ -1012,6 +1038,9 @@
       <button class="btn-secondary" id="btnComprobarServidor" style="width:100%; margin-top:10px;">Comprobar ahora</button>
     </div>
     <div class="form-msg" id="empresaMsg"></div>
+    <div class="field-label" style="margin-top:22px;">Archivo anual</div>
+    <div class="card__meta" style="margin-bottom:8px;">Una vez al año, en enero, puedes archivar el año anterior para que la app vaya más ligera.</div>
+    <button class="btn-secondary" data-ir="cerrar-anio" style="width:100%;">Cerrar año (archivar)…</button>
   </section>
 
   <!-- ==================== PRODUCTOS ==================== -->
@@ -1066,7 +1095,8 @@
   <!-- ==================== ESTADÍSTICAS ==================== -->
   <section class="tab tab--hidden" id="tab-estadisticas">
     <div class="home-welcome">
-      <div class="home-title">Estadísticas</div>
+      <button class="link-btn" data-volver="resultados" style="display:block; margin-bottom:6px;">← Resultados</button>
+    <div class="home-title">Estadísticas</div>
       <div class="home-sub">Análisis de ventas, clientes, productos y márgenes</div>
     </div>
     <div class="rutas-chips" id="statsRapidos">

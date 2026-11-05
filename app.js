@@ -796,35 +796,36 @@ const BREADCRUMBS = {
   reparto: [{ label: 'Reparto', tab: 'reparto' }],
   'reparto-dia': [{ label: 'Reparto', tab: 'reparto' }, { label: 'Detalle', tab: 'reparto-dia' }],
   pedidos: [{ label: 'Pedidos', tab: 'pedidos' }],
-  'pedidos-lista': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Ver pedidos', tab: 'pedidos-lista' }],
-  'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos' }, { label: 'Ver pedidos', tab: 'pedidos-lista' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
-  'factura-347': [{ label: 'Facturas', tab: 'factura' }, { label: 'Modelo 347', tab: 'factura-347' }],
+  'pedidos-lista': [{ label: 'Pedidos', tab: 'pedidos-lista' }],
+  'pedido-editar': [{ label: 'Pedidos', tab: 'pedidos-lista' }, { label: 'Editar pedido', tab: 'pedido-editar' }],
+  'factura-347': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Modelo 347', tab: 'factura-347' }],
   'proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }],
   'pedido-proveedores': [{ label: 'Compras', tab: 'compras' }, { label: 'Pedido a proveedores', tab: 'pedido-proveedores' }],
   'proveedor-form': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Editar', tab: 'proveedor-form' }],
   'gasto-nuevo': [{ label: 'Compras', tab: 'compras' }, { label: 'Otro gasto', tab: 'gasto-nuevo' }],
-  'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }],
-  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Gastos y facturas', tab: 'gastos-ver' }, { label: 'Apuntar factura', tab: 'gasto-factura' }],
+  'gastos-ver': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas recibidas y gastos', tab: 'gastos-ver' }],
+  'gasto-factura': [{ label: 'Compras', tab: 'compras' }, { label: 'Facturas recibidas y gastos', tab: 'gastos-ver' }, { label: 'Apuntar factura', tab: 'gasto-factura' }],
   'proveedor-ficha': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Ficha', tab: 'proveedor-ficha' }],
-  'panel': [{ label: 'Compras', tab: 'compras' }, { label: 'Panel de resultados', tab: 'panel' }],
+  'panel': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Panel de resultados', tab: 'panel' }],
   'facturas-dia': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Facturas día a día', tab: 'facturas-dia' }],
   'facturas-semana': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Facturas por apuntar', tab: 'facturas-semana' }],
   'cuadrar': [{ label: 'Compras', tab: 'compras' }, { label: 'Proveedores', tab: 'proveedores' }, { label: 'Importar resumen', tab: 'cuadrar' }],
-  'gestor': [{ label: 'Compras', tab: 'compras' }, { label: 'Zona del gestor', tab: 'gestor' }],
-  'cierre-mes': [{ label: 'Compras', tab: 'compras' }, { label: 'Cierre de mes', tab: 'cierre-mes' }],
-  'cerrar-anio': [{ label: 'Compras', tab: 'compras' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
-  'balance': [{ label: 'Compras', tab: 'compras' }, { label: 'Balance', tab: 'balance' }],
-  'factura-periodo': [{ label: 'Facturas', tab: 'factura' }, { label: 'Resumen por periodo e IVA', tab: 'factura-periodo' }],
+  'gestor': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Zona del gestor', tab: 'gestor' }],
+  'cierre-mes': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Cierre de mes', tab: 'cierre-mes' }],
+  'cerrar-anio': [{ label: 'Empresa', tab: 'empresa' }, { label: 'Cerrar año', tab: 'cerrar-anio' }],
+  'balance': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Balance', tab: 'balance' }],
+  'factura-periodo': [{ label: 'Resultados', tab: 'resultados' }, { label: 'Resumen por periodo e IVA', tab: 'factura-periodo' }],
   nuevo: [{ label: 'Nuevo pedido', tab: 'nuevo' }],
   clientes: [{ label: 'Clientes', tab: 'clientes' }],
-  'clientes-lista': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }],
-  'cliente-form': [{ label: 'Clientes', tab: 'clientes' }, { label: 'Ver clientes', tab: 'clientes-lista' }, { label: 'Cliente', tab: 'cliente-form' }],
+  'clientes-lista': [{ label: 'Clientes', tab: 'clientes-lista' }],
+  'cliente-form': [{ label: 'Clientes', tab: 'clientes-lista' }, { label: 'Cliente', tab: 'cliente-form' }],
   factura: [{ label: 'Facturas', tab: 'factura' }],
-  'factura-lista': [{ label: 'Facturas', tab: 'factura' }, { label: 'Lista', tab: 'factura-lista' }],
-  'factura-editar': [{ label: 'Facturas', tab: 'factura' }, { label: 'Editar factura', tab: 'factura-editar' }],
+  'factura-lista': [{ label: 'Facturas emitidas', tab: 'factura-lista' }],
+  'factura-editar': [{ label: 'Facturas emitidas', tab: 'factura-lista' }, { label: 'Editar factura', tab: 'factura-editar' }],
   productos: [{ label: 'Productos', tab: 'productos' }],
   'producto-form': [{ label: 'Productos', tab: 'productos' }, { label: 'Producto', tab: 'producto-form' }],
-  estadisticas: [{ label: 'Estadísticas', tab: 'estadisticas' }],
+  estadisticas: [{ label: 'Resultados', tab: 'resultados' }, { label: 'Estadísticas', tab: 'estadisticas' }],
+  resultados: [{ label: 'Resultados', tab: 'resultados' }],
   empresa: [{ label: 'Empresa', tab: 'empresa' }],
 };
 
@@ -873,8 +874,13 @@ function cablearNavegacion() {
 
 // Las subpáginas (ej. "pedidos-lista") resaltan el menú padre ("pedidos") en
 // el menú lateral y en la barra inferior, no un ítem propio (no existe).
+const FAMILIA_RESULTADOS = ['resultados', 'panel', 'balance', 'estadisticas', 'factura-periodo', 'factura-347', 'cierre-mes', 'gestor'];
+const FAMILIA_COMPRAS = ['compras', 'pedido-proveedores', 'proveedores', 'proveedor-ficha', 'proveedor-form', 'gasto-nuevo', 'gasto-factura', 'gastos-ver', 'facturas-dia', 'facturas-semana', 'cuadrar'];
 function claveMenuPadre(nombre) {
-  if (nombre.startsWith('pedidos')) return 'pedidos';
+  if (FAMILIA_RESULTADOS.includes(nombre)) return 'resultados';
+  if (FAMILIA_COMPRAS.includes(nombre)) return 'compras';
+  if (nombre === 'cerrar-anio') return 'empresa';
+  if (nombre.startsWith('pedidos') || nombre === 'pedido-editar') return 'pedidos';
   if (nombre.startsWith('clientes') || nombre === 'cliente-form') return 'clientes';
   if (nombre.startsWith('factura')) return 'factura';
   if (nombre.startsWith('reparto')) return 'reparto';
@@ -884,7 +890,10 @@ function claveMenuPadre(nombre) {
 
 let tabActualNombre = 'inicio';
 
+// Pedidos, Clientes y Facturas emitidas abren directamente su lista (antes tenían una pantalla intermedia con una o dos opciones)
+const ATAJOS_TAB = { pedidos: 'pedidos-lista', clientes: 'clientes-lista', factura: 'factura-lista' };
 function cambiarTab(nombre) {
+  nombre = ATAJOS_TAB[nombre] || nombre;
   tabActualNombre = nombre;
   ocultarEstado();
   document.querySelectorAll('.tab').forEach((t) => t.classList.add('tab--hidden'));
@@ -919,6 +928,7 @@ function cargarTabActual(nombre) {
   if (activo === 'gestor') iniciarGestor();
   if (activo === 'cierre-mes') iniciarCierreMes();
   if (activo === 'compras') pintarPendientesCompras();
+  if (activo === 'resultados') pintarResultados();
   if (activo === 'proveedor-ficha') cargarFichaProveedor();
   if (activo === 'empresa') cargarEmpresa();
   if (activo === 'productos') cargarProductosGestion();
@@ -926,6 +936,9 @@ function cargarTabActual(nombre) {
 }
 
 function pintarInicio() {
+  pintarSaludoInicio(new Date());
+  if (ROL === 'repartidor') estadoInicio.porApuntar = true;   // el estado "ya cargado" se conserva entre visitas: solo se espera en la primera
+  cargarPorApuntarInicio();
   document.getElementById('homeSub').textContent =
     ROL === 'repartidor' ? `Repartidor · Ruta ${RUTA}` : 'Administración';
   // El admin ya recibe todo en una sola petición (resumen + insignias)
@@ -938,11 +951,79 @@ async function cargarResumenInicio() {
 
 let ultimosAtrasados = null;   // pedidos de días anteriores sin marcar, del último resumen de Inicio
 
+/* ============ INICIO: cabecera, panel de cifras y avisos ============ */
+const estadoInicio = { resumen: false, porApuntar: false };
+let inicioPeticion = 0;
+function saludoInicio(hora) { return hora < 6 ? 'Buenas noches' : hora < 13 ? 'Buenos días' : hora < 21 ? 'Buenas tardes' : 'Buenas noches'; }
+function pintarSaludoInicio(ahora) {
+  document.getElementById('inicioSaludo').textContent = saludoInicio(ahora.getHours());
+  const larga = ahora.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  document.getElementById('inicioFechaLarga').textContent = larga.charAt(0).toUpperCase() + larga.slice(1);
+}
+// La frase de debajo del saludo: lo más importante del día, en una línea
+function fraseInicio(d) {
+  const total = d.pedidosHoy, hechos = d.entregados, faltan = total - hechos;
+  if (!total) return 'Hoy todavía no hay pedidos.';
+  if (!faltan && !d.pendiente) return '🎉 Reparto completo y todo cobrado. ¡Buen trabajo!';
+  if (!faltan) return `Reparto completo. Te quedan ${formatoEuros(d.pendiente)} por cobrar.`;
+  return `Llevas ${hechos} de ${total} entregas: faltan ${faltan}.`;
+}
+// Gráfico de barras de los últimos 7 días (el de hoy, resaltado). Si el servidor no manda los datos, la tarjeta no se enseña.
+function pintarVentas7(lista) {
+  const tarjeta = document.getElementById('tarjetaVentas7');
+  if (!Array.isArray(lista) || !lista.length) { tarjeta.classList.add('tab--hidden'); return; }
+  tarjeta.classList.remove('tab--hidden');
+  const total = lista.reduce((s, x) => s + x.total, 0);
+  document.getElementById('ventas7Total').textContent = formatoEuros(total);
+  const maximo = Math.max(1, ...lista.map((x) => x.total));
+  const ancho = 26, hueco = (260 - lista.length * ancho) / Math.max(1, lista.length - 1), base = 62, alto = 54;
+  document.getElementById('ventas7Grafico').innerHTML = lista.map((x, i) => {
+    const h = Math.max(2, Math.round(x.total / maximo * alto)), px = Math.round(i * (ancho + hueco)), hoy = i === lista.length - 1;
+    return `<g><rect class="v7-barra${hoy ? ' v7-hoy' : ''}" x="${px}" y="${base - h}" width="${ancho}" height="${h}" rx="3"><title>${escapeHtml(x.fecha)}: ${escapeHtml(formatoEuros(x.total))}</title></rect><text class="v7-txt${hoy ? ' v7-txt--hoy' : ''}" x="${px + ancho / 2}" y="78">${escapeHtml(x.dia)}</text></g>`;
+  }).join('');
+}
+// Los avisos de "Requiere tu atención": se enseña el bloque si hay alguno; si no hay ninguno (y ya se ha cargado todo), "Todo al día"
+function actualizarAtencionInicio() {
+  const filas = ['avisoIncidencias', 'avisoAtrasadosInicio', 'avisoPorApuntar', 'avisoCierreMes'].map((id) => document.getElementById(id));
+  const alguna = filas.some((f) => !f.classList.contains('tab--hidden'));
+  document.getElementById('inicioAtencion').classList.toggle('tab--hidden', !alguna);
+  document.getElementById('inicioTodoBien').classList.toggle('tab--hidden', alguna || !(estadoInicio.resumen && estadoInicio.porApuntar));
+}
+// "N facturas por apuntar" (solo administrador): sale de los pedidos a proveedores que aún esperan su factura
+async function cargarPorApuntarInicio() {
+  const fila = document.getElementById('avisoPorApuntar');
+  if (ROL === 'repartidor') { estadoInicio.porApuntar = true; fila.classList.add('tab--hidden'); return; }
+  const n = ++inicioPeticion;
+  const r = await apiGet('gastosEstimados', {}).catch(() => ({ ok: false }));
+  if (n !== inicioPeticion) return;
+  // el rol puede llegar DESPUÉS de lanzar la petición (al arrancar se usa el último conocido): si resulta ser repartidor, esta fila no es suya
+  const lista = ROL !== 'repartidor' && r.ok && Array.isArray(r.data) ? r.data : [];
+  if (lista.length) {
+    const por = {};
+    lista.forEach((g) => { const k = String(g.proveedorId) + '|' + g.proveedor; (por[k] = por[k] || { proveedor: g.proveedor, n: 0 }).n++; });
+    const quienes = Object.keys(por).map((k) => por[k]).sort((x, y) => y.n - x.n);
+    fila.textContent = `🧾 ${lista.length} factura${lista.length === 1 ? '' : 's'} por apuntar (${quienes.slice(0, 3).map((q) => `${q.proveedor} ${q.n}`).join(' · ')}${quienes.length > 3 ? ' · …' : ''}) — ir a Proveedores`;
+    fila.classList.remove('tab--hidden');
+  } else {
+    fila.classList.add('tab--hidden');
+  }
+  estadoInicio.porApuntar = true;
+  actualizarAtencionInicio();
+}
+
 function pintarResumenInicio(r) {
   document.getElementById('riRecaudado').textContent = formatoEuros(r.data.recaudado);
   document.getElementById('riPedidos').textContent = r.data.pedidosHoy;
   document.getElementById('riEntregados').textContent = `${r.data.entregados} / ${r.data.pedidosHoy}`;
   document.getElementById('riPendiente').textContent = formatoEuros(r.data.pendiente);
+  // anillo del reparto y barra de cobros (se animan al cargar)
+  const parteEntregada = r.data.pedidosHoy ? r.data.entregados / r.data.pedidosHoy : 0;
+  document.getElementById('anilloValor').style.strokeDashoffset = String(326.73 * (1 - parteEntregada));
+  document.getElementById('anilloReparto').classList.toggle('anillo--completo', r.data.pedidosHoy > 0 && r.data.entregados === r.data.pedidosHoy);
+  const cobrable = r.data.recaudado + r.data.pendiente;
+  document.getElementById('barraCobro').style.width = (cobrable > 0 ? Math.round(r.data.recaudado / cobrable * 100) : 0) + '%';
+  document.getElementById('inicioFrase').textContent = fraseInicio(r.data);
+  pintarVentas7(r.data.ventas7);
   const avisoInc = document.getElementById('avisoIncidencias');
   if (r.data.incidencias > 0) {
     avisoInc.textContent = `⚠ ${r.data.incidencias} pedido${r.data.incidencias === 1 ? '' : 's'} de hoy con incidencia — ver`;
@@ -965,13 +1046,18 @@ function pintarResumenInicio(r) {
   const badgeP = document.getElementById('badgePedidos');
   badgeP.classList.toggle('home-btn__badge--alerta', !!atr);
   if (atr) badgeP.textContent = `⚠ ${atr.total} sin marcar`;
-  const avisoAtr = document.getElementById('avisoAtrasados');
+  const avisoAtr = document.getElementById('avisoAtrasados'), avisoAtrIni = document.getElementById('avisoAtrasadosInicio');
   if (atr) {
     avisoAtr.textContent = `⚠ ${atr.total} pedido${atr.total === 1 ? '' : 's'} de días anteriores sin marcar (${atr.sinEntregar} sin entregar · ${atr.sinCobrar} sin cobrar) — ver`;
     avisoAtr.classList.remove('tab--hidden');
+    avisoAtrIni.textContent = avisoAtr.textContent;
+    avisoAtrIni.classList.remove('tab--hidden');
   } else {
     avisoAtr.classList.add('tab--hidden');
+    avisoAtrIni.classList.add('tab--hidden');
   }
+  estadoInicio.resumen = true;
+  actualizarAtencionInicio();
 }
 
 async function cargarBadgesInicio() {
@@ -2419,7 +2505,7 @@ async function guardarCliente() {
 /* ============ ESTADÍSTICAS ============ */
 /* ============ ESTADÍSTICAS: ANÁLISIS COMPLETO ============ */
 // Versión de la APP (la parte de GitHub). Se ve en Estadísticas y en Empresa → Estado del servidor, para saber si lo que se subió es lo que está cargado.
-const VERSION_APP = '2026.10.57';
+const VERSION_APP = '2026.10.59';
 const PALETA_GRAF = ['#C4964A', '#2E52A6', '#6FB3D9', '#E58BA8', '#4FAE7B', '#8E7CC3', '#E0A23C', '#5C6B8A'];
 let analisisActual = null;
 let statsSeccion = 'resumen', statsMetCli = 'ventas', statsMetProd = 'ventas';
@@ -3132,6 +3218,8 @@ function cablearIncidencias() {
     pedidosFiltroPendiente = { ini: at && at.desde ? iso(at.desde) : sumarDiasISO(hoyISO(), -60), fin: sumarDiasISO(hoyISO(), -1), clienteId: '', estado: 'atrasados' };
     cambiarTab('pedidos-lista');
   });
+  document.getElementById('avisoAtrasadosInicio').addEventListener('click', () => document.getElementById('avisoAtrasados').click());
+  document.getElementById('avisoPorApuntar').addEventListener('click', () => cambiarTab('proveedores'));
   // El aviso de Inicio abre la lista de pedidos de hoy con incidencia
   document.getElementById('avisoIncidencias').addEventListener('click', () => {
     pedidosFiltroPendiente = { ini: hoyISO(), fin: hoyISO(), clienteId: '', estado: 'incidencia' };
@@ -5369,7 +5457,7 @@ function pintarFichaProveedor(p, rp, rg, per) {
         ${sinFacturaOriginal(g) ? `<button class="chip-btn" data-pf-editar="${g.id}">📎 Adjuntar la factura</button>` : ''}
         <button class="chip-btn" data-pf-editar="${g.id}">Editar</button>
       </div></div>`;
-  }).join('') + (suyas.length > mostradas.length ? `<div class="card__meta">Se enseñan las ${mostradas.length} más recientes de ${suyas.length}: el resto, en "Ver todo en Gastos y facturas".</div>` : '');
+  }).join('') + (suyas.length > mostradas.length ? `<div class="card__meta">Se enseñan las ${mostradas.length} más recientes de ${suyas.length}: el resto, en "Ver todo en Facturas recibidas y gastos".</div>` : '');
   cajaAp.querySelectorAll('[data-pf-pagar]').forEach((b) => b.addEventListener('click', () => marcarGastoPagado(b.dataset.pfPagar, b.dataset.pagado === 'true', b, cargarFichaProveedor)));
   cajaAp.querySelectorAll('[data-pf-editar]').forEach((b) => b.addEventListener('click', () => { const g = fichaGastos.find((x) => String(x.id) === b.dataset.pfEditar); if (g) abrirGastoParaEditar(g, 'proveedor-ficha'); }));
 }
@@ -5387,6 +5475,10 @@ function verTodoDelProveedor() {
 
 /* ============ COMPRAS: lo pendiente, a la vista ============ */
 let comprasPeticion = 0;
+// Resultados: la insignia del cierre de mes (el dato ya viene del Inicio, sin pedir nada)
+function pintarResultados() {
+  document.getElementById('badgeCierreMes').textContent = cierreInicio && !cierreInicio.cerrado ? 'Pendiente' : '';
+}
 function abrirCierreDelAviso() {
   if (!cierreInicio) return;
   document.getElementById('cierreMes').value = `${cierreInicio.anio}-${String(cierreInicio.mes).padStart(2, '0')}`;
@@ -5395,8 +5487,6 @@ function abrirCierreDelAviso() {
 // Arriba del menú de Compras: cuántas facturas faltan por apuntar y si hay un mes por cerrar (nada si no hay nada pendiente)
 async function pintarPendientesCompras() {
   const caja = document.getElementById('comprasAhora');
-  const cierre = cierreInicio && !cierreInicio.cerrado ? cierreInicio : null;
-  document.getElementById('badgeCierreMes').textContent = cierre ? 'Pendiente' : '';
   const n = ++comprasPeticion;
   const r = await apiGet('gastosEstimados', {}).catch(() => ({ ok: false }));
   if (n !== comprasPeticion) return;
@@ -5408,11 +5498,8 @@ async function pintarPendientesCompras() {
   const quienes = Object.keys(por).map((k) => por[k]).sort((x, y) => y.n - x.n);
   const tarjetas = [];
   if (pendientes.length) tarjetas.push(`<div class="card"><div class="card__name">🧾 ${pendientes.length} factura${pendientes.length === 1 ? '' : 's'} por apuntar</div><div class="card__meta">${quienes.slice(0, 4).map((q) => `${escapeHtml(q.proveedor)} (${q.n})`).join(' · ')}${quienes.length > 4 ? ` · y ${quienes.length - 4} más` : ''}</div><div class="card__meta">Pedidos que esperan su factura: ${formatoEuros(totalEstimado)} estimados</div><div class="card__actions"><button class="chip-btn" data-ir="proveedores">Ir a Proveedores</button></div></div>`);
-  if (cierre) tarjetas.push(`<div class="card"><div class="card__name">🗓 ${escapeHtml(conMayuscula(cierre.nombre))} ya ha terminado</div><div class="card__meta">Revisa las facturas pendientes y cierra el mes.</div><div class="card__actions"><button class="chip-btn" id="btnComprasCierre">Cierre de mes</button></div></div>`);
   caja.innerHTML = tarjetas.join('');
   caja.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => cambiarTab(b.dataset.ir)));
-  const botonCierre = document.getElementById('btnComprasCierre');
-  if (botonCierre) botonCierre.addEventListener('click', abrirCierreDelAviso);
 }
 
 /* ============ HOJAS DE LECTURA DEL SHEET (botón compartido) ============ */
@@ -5550,9 +5637,10 @@ function pintarAvisoCierre(c) {
   cierreInicio = c || null;
   let pospuesto = false;
   try { pospuesto = !!c && localStorage.getItem('cierreMasTarde') === hoyLocalISO() + '|' + c.anio + '-' + c.mes; } catch (e) { pospuesto = false; }
-  if (!c || c.cerrado || pospuesto) { el.classList.add('tab--hidden'); return; }
+  if (!c || c.cerrado || pospuesto) { el.classList.add('tab--hidden'); actualizarAtencionInicio(); return; }
   document.getElementById('avisoCierreTexto').textContent = `🗓 ${conMayuscula(c.nombre)} ya ha terminado: revisa las facturas pendientes y cierra el mes.`;
   el.classList.remove('tab--hidden');
+  actualizarAtencionInicio();
 }
 
 /* ============ ZONA DEL GESTOR ============ */
@@ -5769,13 +5857,27 @@ async function cambiarGestorAuto(boton) {
   mensajeGestor(activar === '1' ? 'Activada: esta noche empezará a prepararse sola.' : 'Desactivada.', 'ok');
 }
 
+// Si Google no deja compartir desde la app, se enseña la carpeta para compartirla a mano (y qué hay que hacer)
+function pintarCompartirAMano(url, email) {
+  const cont = document.getElementById('gestorResultado');
+  if (!/^https:\/\//.test(url || '')) { cont.innerHTML = ''; return; }
+  cont.innerHTML = `<div class="card"><div class="card__name">Compártela a mano</div>
+    <div class="card__meta"><a href="${escapeHtml(url)}" target="_blank" rel="noopener">Abrir la carpeta en Google Drive</a></div>
+    <div class="card__meta" style="margin-top:6px;">Ábrela, pulsa <b>Compartir</b> y añade ${email ? '<b>' + escapeHtml(email) + '</b>' : 'el correo de tu gestor'} como <b>lector</b>.</div></div>`;
+}
 async function compartirCarpetaGestor() {
   const m = mesDelGestor();
   if (!m) { mensajeGestor('Elige el mes.', 'error'); return; }
   if (!confirm(`¿Compartir la carpeta de ${m.etiqueta} con tu gestor (solo lectura) y avisarle por correo?`)) return;
   mensajeGestor('Compartiendo…', '');
+  document.getElementById('gestorResultado').innerHTML = '';
   const r = await apiGet('gestorCompartir', { anio: m.anio, mes: m.mes }).catch((err) => ({ ok: false, error: textoDeFallo(err) }));
-  if (!r.ok) { mensajeGestor(r.error || 'No se pudo compartir.', 'error'); return; }
+  if (!r.ok) {
+    mensajeGestor(r.error || 'No se pudo compartir.', 'error');
+    if (r.compartirAMano) pintarCompartirAMano(r.url, r.email);
+    return;
+  }
+  if (r.avisoCorreo) { mensajeGestor(`Carpeta compartida con ${r.email}, pero ${r.avisoCorreo.charAt(0).toLowerCase() + r.avisoCorreo.slice(1)}`, 'error'); return; }
   mensajeGestor(`Carpeta compartida con ${r.email}. Le ha llegado un correo con el enlace.`, 'ok');
 }
 
@@ -6085,6 +6187,7 @@ function cablearCompras() {
   document.getElementById('btnCierreMasTarde').addEventListener('click', () => {
     if (cierreInicio) { try { localStorage.setItem('cierreMasTarde', hoyLocalISO() + '|' + cierreInicio.anio + '-' + cierreInicio.mes); } catch (e) { /* sin almacenamiento */ } }
     document.getElementById('avisoCierreMes').classList.add('tab--hidden');
+    actualizarAtencionInicio();
   });
   document.getElementById('gastosProveedor').addEventListener('change', (e) => { gastosProveedorSel = e.target.value; pintarGastos(); });
   document.getElementById('btnGastosEsteMes').addEventListener('click', () => {
